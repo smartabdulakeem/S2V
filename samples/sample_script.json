@@ -1,0 +1,54 @@
+{
+  "project": {
+    "title": "The Rise of Baghdad — Islamic Golden Age",
+    "output_filename": "rise_of_baghdad_sample.mp4",
+    "voice": "en-US-GuyNeural",
+    "voice_rate": "+0%",
+    "voice_pitch": "+0Hz",
+    "background_music": null,
+    "music_volume_db": -20
+  },
+  "segments": [
+    {
+      "segment_id": 1,
+      "type": "hook",
+      "narration": "In the year 762, the Caliph Al-Mansur founded a city that would become the beating heart of human civilisation — a city of canals, libraries, and scholars. He called it Madinat al-Salam. The world would know it as Baghdad.",
+      "b_roll_keyword": "ancient mesopotamia river landscape",
+      "visual_type": "stock_photo",
+      "ken_burns": "zoom_in",
+      "text_overlay": {
+        "text": "BAGHDAD — 762 CE",
+        "position": "bottom_center",
+        "duration_seconds": 4
+      },
+      "transition_in": "fade",
+      "transition_out": "fade"
+    },
+    {
+      "segment_id": 2,
+      "type": "body",
+      "narration": "At the centre of Baghdad stood the Round City — a marvel of urban planning. At its heart was the Caliph's palace and the Grand Mosque. Surrounding them, concentric rings of markets, homes, and government offices formed the most perfectly designed capital on earth. Within a generation, its population reached one million — making it the largest city in the world outside of China.",
+      "b_roll_keyword": "ancient city aerial architecture",
+      "visual_type": "stock_photo",
+      "ken_burns": "pan_right",
+      "text_overlay": null,
+      "transition_in": "cut",
+      "transition_out": "fade"
+    },
+    {
+      "segment_id": 3,
+      "type": "conclusion",
+      "narration": "But Baghdad's greatest achievement was not its walls or its wealth. It was the Bayt al-Hikmah — the House of Wisdom. Here, Muslim, Christian, Jewish, and Zoroastrian scholars worked side by side, translating every text they could find from Greek, Persian, and Sanskrit into Arabic. For over four centuries, this city preserved and advanced human knowledge in mathematics, astronomy, medicine, and philosophy — laying the foundations of the modern world.",
+      "b_roll_keyword": "ancient library manuscripts books",
+      "visual_type": "stock_photo",
+      "ken_burns": "zoom_out",
+      "text_overlay": {
+        "text": "BAYT AL-HIKMAH — HOUSE OF WISDOM",
+        "position": "top_center",
+        "duration_seconds": 5
+      },
+      "transition_in": "fade",
+      "transition_out": "fade"
+    }
+  ]
+}

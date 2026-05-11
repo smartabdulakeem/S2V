@@ -1,0 +1,33 @@
+# ── Rendered output (large files, machine-specific) ──────────────────────────
+cache/
+output/
+logs/
+
+# ── FFmpeg vendor binary (downloaded by setup.bat, ~80 MB) ───────────────────
+vendor/ffmpeg/bin/
+vendor/ffmpeg/doc/
+vendor/ffmpeg/presets/
+vendor/ffmpeg/*.txt
+
+# ── User settings / API keys ─────────────────────────────────────────────────
+config/settings.json
+
+# ── Python bytecode ───────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ── PyInstaller build artefacts ───────────────────────────────────────────────
+build/
+dist/
+*.spec
+
+# ── Common OS / editor clutter ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.vscode/
+.idea/

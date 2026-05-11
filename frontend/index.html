@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S2V — Script-to-Video Pipeline</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">▶</span>
+        <div>
+          <h1>S2V</h1>
+          <p class="subtitle">Script-to-Video Pipeline</p>
+        </div>
+      </div>
+      <span class="version" id="version-badge">v1.0.0</span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Section 1: Load Script ── -->
+    <section class="card" id="section-load">
+      <div class="card-title">1 — Load Your Script</div>
+
+      <!-- Mode tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tab-text" onclick="switchMode('text')">
+          ✏️ Paste Plain Text
+        </button>
+        <button class="mode-tab" id="tab-json" onclick="switchMode('json')">
+          📄 Load JSON File
+        </button>
+      </div>
+
+      <!-- ── Plain Text mode ── -->
+      <div id="mode-text">
+        <p class="hint" style="margin-bottom:12px;">
+          Paste your script below. The app will automatically split it into scenes
+          and find matching images for each one.
+        </p>
+
+        <div class="plain-form">
+          <div class="plain-row">
+            <label class="plain-label">Video Title</label>
+            <input type="text" id="pt-title" class="plain-input"
+              placeholder="e.g. The Rise of Baghdad" />
+          </div>
+          <div class="plain-row">
+            <label class="plain-label">Output Filename</label>
+            <input type="text" id="pt-filename" class="plain-input"
+              placeholder="e.g. rise_of_baghdad (no spaces)" />
+          </div>
+          <div class="plain-row">
+            <label class="plain-label">Voice</label>
+            <div class="voice-row">
+              <select id="pt-voice" class="plain-input" style="flex:1;">
+                <option value="en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
+                <option value="en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
+                <option value="en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
+                <option value="en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
+                <option value="en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
+                <option value="en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
+              </select>
+              <button class="btn btn-secondary" id="btn-preview-voice" onclick="previewVoice()">
+                ▶ Preview
+              </button>
+              <span id="voice-preview-status" class="voice-preview-status"></span>
+            </div>
+          </div>
+          <div class="plain-row">
+            <label class="plain-label">Your Script</label>
+            <textarea id="pt-script" class="plain-textarea"
+              placeholder="Paste your full script here. The app splits it into scenes automatically — one scene per paragraph, or every ~45 words if you have no paragraph breaks.
+
+Example:
+In the 8th century, Baghdad became the centre of the known world.
+
+The Caliph Harun al-Rashid built a city unlike any other. Scholars arrived from every corner of the earth.
+
+They translated every book they could find into Arabic. Mathematics, medicine, astronomy — all flourished here.
+
+The House of Wisdom was born. And with it, an age of discovery that would last five centuries."></textarea>
+          </div>
+          <button class="btn btn-primary" id="btn-parse" onclick="parsePlainText()">
+            Parse Script →
+          </button>
+        </div>
+      </div>
+
+      <!-- ── JSON mode ── -->
+      <div id="mode-json" class="hidden">
+        <div class="load-row">
+          <button class="btn btn-primary" id="btn-load" onclick="loadScript()">
+            Load Script (.json)
+          </button>
+          <span class="file-path" id="loaded-path">No file loaded</span>
+        </div>
+      </div>
+
+      <!-- Script summary (hidden until loaded) -->
+      <div id="script-summary" class="summary hidden">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="summary-label">Project Title</span>
+            <span class="summary-value" id="s-title">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Scenes</span>
+            <span class="summary-value" id="s-segments">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Est. Duration</span>
+            <span class="summary-value" id="s-duration">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Voice</span>
+            <span class="summary-value" id="s-voice">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Output File</span>
+            <span class="summary-value" id="s-output">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Status</span>
+            <span class="summary-value" id="s-validation">—</span>
+          </div>
+        </div>
+        <!-- Keywords preview -->
+        <div id="keywords-wrap" class="keywords-wrap hidden">
+          <span class="summary-label" style="display:block;margin-bottom:6px;">
+            Image search terms (auto-detected per scene)
+          </span>
+          <div id="keywords-list" class="keywords-list"></div>
+        </div>
+      </div>
+
+      <!-- Validation error block -->
+      <div id="validation-errors" class="error-block hidden"></div>
+    </section>
+
+    <!-- ── Section 2: Pixabay API Key ── -->
+    <section class="card" id="section-key">
+      <div class="card-title">2 — Pixabay API Key</div>
+      <p class="hint">
+        Free key from
+        <span class="link-text">pixabay.com/api</span> — required for stock photos.
+        Saved locally; never sent anywhere except Pixabay.
+      </p>
+      <div class="key-row">
+        <input
+          type="password"
+          id="pexels-key-input"
+          placeholder="Paste your Pixabay API key here"
+          autocomplete="off"
+          oninput="onKeyInput()"
+        />
+        <button class="btn btn-secondary" id="btn-save-key" onclick="saveKey()">Save</button>
+        <span class="key-status" id="key-status"></span>
+      </div>
+    </section>
+
+    <!-- ── Section 3: Render ── -->
+    <section class="card" id="section-render">
+      <div class="card-title">3 — Render</div>
+      <div class="render-row">
+        <button class="btn btn-render" id="btn-render" disabled onclick="startRender()">
+          ▶ Render Video
+        </button>
+        <button class="btn btn-cancel hidden" id="btn-cancel" onclick="cancelRender()">
+          ✕ Cancel
+        </button>
+      </div>
+      <p class="render-hint" id="render-hint">Load a valid script and enter your Pexels key to begin.</p>
+    </section>
+
+    <!-- ── Section 4: Progress (shown during render) ── -->
+    <section class="card hidden" id="section-progress">
+      <div class="card-title">Progress</div>
+
+      <div class="stage-row">
+        <span class="stage-label" id="stage-label">Initialising...</span>
+        <span class="segment-label" id="segment-label"></span>
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+
+      <div class="log-panel" id="log-panel"></div>
+    </section>
+
+    <!-- ── Section 5: Complete (shown when done) ── -->
+    <section class="card hidden" id="section-complete">
+      <div class="complete-header">✅ Render Complete</div>
+      <p class="complete-path" id="complete-path"></p>
+      <div class="complete-actions">
+        <button class="btn btn-primary" onclick="openOutputFolder()">Open Output Folder</button>
+        <button class="btn btn-secondary" onclick="renderAnother()">Render Another</button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
