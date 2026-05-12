@@ -59,6 +59,7 @@ jobs:
             --hidden-import "pipeline.orchestrator" `
             --hidden-import "pipeline.text_parser" `
             --hidden-import "webview" `
+            --hidden-import "webview.platforms.edgechromium" `
             --hidden-import "edge_tts" `
             --hidden-import "whisper" `
             --hidden-import "PIL" `

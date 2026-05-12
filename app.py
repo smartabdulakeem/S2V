@@ -284,7 +284,7 @@ def main():
 
     api.set_window(window)
 
-    webview.start(debug=False)
+    webview.start(debug=False, gui='edgechromium')
 
 
 if __name__ == "__main__":
