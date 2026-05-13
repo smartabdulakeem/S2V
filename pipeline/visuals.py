@@ -51,6 +51,7 @@ def _fetch_ai_image(
     keyword: str,
     narration: str,
     output_path: str,
+    seed: int = 0,
     on_progress=None,
 ) -> bool:
     """
@@ -59,7 +60,7 @@ def _fetch_ai_image(
     """
     prompt = _build_ai_prompt(keyword, narration)
     encoded_prompt = urllib.parse.quote(prompt)
-    url = POLLINATIONS_URL.format(prompt=encoded_prompt, seed=segment_id * 42)
+    url = POLLINATIONS_URL.format(prompt=encoded_prompt, seed=seed)
 
     if on_progress:
         on_progress(f'Segment {segment_id} — generating AI image for "{keyword}"')
@@ -196,6 +197,7 @@ def fetch_visual(
     visual_type: str,
     api_key: str,
     cache_dir: str,
+    render_id: str = "",
     on_progress=None,
 ) -> str:
     """
@@ -206,8 +208,11 @@ def fetch_visual(
       "stock_photo" → Pixabay (requires api_key)
       other         → black frame
 
+    render_id: unique string per render session — ensures different images
+               each time even for the same script.
+
     Returns path to the saved JPG.
-    Skips if already cached.
+    Skips if already cached (within the same render session).
     """
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_visual.jpg")
 
@@ -221,11 +226,16 @@ def fetch_visual(
     success = False
 
     if visual_type == "ai_image":
+        import random, hashlib
+        # Mix segment_id + render_id into a seed so every render is unique
+        seed_str = f"{render_id}-{segment_id}"
+        seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16) % 99999 + 1
         success = _fetch_ai_image(
             segment_id=segment_id,
             keyword=keyword,
             narration=narration,
             output_path=output_path,
+            seed=seed,
             on_progress=on_progress,
         )
 

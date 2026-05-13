@@ -7,6 +7,7 @@ import os
 import json
 import logging
 import traceback
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -75,6 +76,18 @@ class RenderOrchestrator:
         self._cancelled = False
         self.logger = _setup_logger(self.logs_dir)
 
+        # Unique ID for this render — ensures fresh AI images every run
+        render_id = uuid.uuid4().hex
+
+        # Clear old visual cache so new renders get fresh AI images
+        if os.path.exists(self.cache_dir):
+            for f in os.listdir(self.cache_dir):
+                if f.endswith("_visual.jpg"):
+                    try:
+                        os.remove(os.path.join(self.cache_dir, f))
+                    except Exception:
+                        pass
+
         # ── Stage 1: Validate ──────────────────────────────────────────────────
         self._emit("stage", name="Validating script", stage_num=1, total_stages=7)
         script, errors = validate_file(script_path)
@@ -141,6 +154,7 @@ class RenderOrchestrator:
                     visual_type=seg.get("visual_type", "ai_image"),
                     api_key=pexels_api_key,
                     cache_dir=self.cache_dir,
+                    render_id=render_id,
                     on_progress=progress,
                 )
 
