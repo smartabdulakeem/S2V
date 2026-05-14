@@ -112,25 +112,36 @@ class Api:
         """Generate a short audio sample for the chosen voice and return it as base64."""
         import base64
         import tempfile
-        import asyncio
-        import edge_tts
 
         sample_text = (
             "Welcome. This is a preview of the selected voice. "
             "You are listening to the voice that will narrate your video."
         )
 
-        async def _gen(path):
-            communicate = edge_tts.Communicate(sample_text, voice_id)
-            await communicate.save(path)
-
         try:
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 tmp_path = f.name
 
-            loop = asyncio.new_event_loop()
-            loop.run_until_complete(_gen(tmp_path))
-            loop.close()
+            if voice_id.startswith("gemini:"):
+                # Gemini TTS preview
+                from pipeline.voiceover import _generate_with_gemini
+                google_key = self._settings.get("google_api_key", "")
+                if not google_key:
+                    return {"success": False, "error": "Google API key not saved."}
+                voice_name = voice_id.split(":", 1)[1]
+                _generate_with_gemini(sample_text, voice_name, google_key, tmp_path)
+            else:
+                # edge-tts preview
+                import asyncio
+                import edge_tts
+
+                async def _gen(path):
+                    communicate = edge_tts.Communicate(sample_text, voice_id)
+                    await communicate.save(path)
+
+                loop = asyncio.new_event_loop()
+                loop.run_until_complete(_gen(tmp_path))
+                loop.close()
 
             with open(tmp_path, "rb") as f:
                 audio_b64 = base64.b64encode(f.read()).decode("utf-8")

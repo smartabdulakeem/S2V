@@ -133,6 +133,7 @@ class RenderOrchestrator:
                     voice_rate=proj.get("voice_rate", "+0%"),
                     voice_pitch=proj.get("voice_pitch", "+0Hz"),
                     cache_dir=self.cache_dir,
+                    google_api_key=google_api_key,
                     on_progress=progress,
                 )
 

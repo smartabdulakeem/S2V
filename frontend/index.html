@@ -59,12 +59,24 @@
             <label class="plain-label">Voice</label>
             <div class="voice-row">
               <select id="pt-voice" class="plain-input" style="flex:1;">
-                <option value="en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
-                <option value="en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
-                <option value="en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
-                <option value="en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
-                <option value="en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
-                <option value="en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
+                <optgroup label="✨ Gemini AI Voices (requires Google API key)">
+                  <option value="gemini:Charon">Gemini — Charon (Informative Male)</option>
+                  <option value="gemini:Sadaltager">Gemini — Sadaltager (Knowledgeable Male)</option>
+                  <option value="gemini:Rasalgethi">Gemini — Rasalgethi (Authoritative Male)</option>
+                  <option value="gemini:Orus">Gemini — Orus (Firm Male)</option>
+                  <option value="gemini:Algieba">Gemini — Algieba (Smooth Male)</option>
+                  <option value="gemini:Sulafat">Gemini — Sulafat (Warm Female)</option>
+                  <option value="gemini:Aoede">Gemini — Aoede (Clear Female)</option>
+                  <option value="gemini:Kore">Gemini — Kore (Firm Female)</option>
+                </optgroup>
+                <optgroup label="🔊 Edge TTS Voices (free, no key needed)">
+                  <option value="en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
+                  <option value="en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
+                  <option value="en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
+                  <option value="en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
+                  <option value="en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
+                  <option value="en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
+                </optgroup>
               </select>
               <button class="btn btn-secondary" id="btn-preview-voice" onclick="previewVoice()">
                 ▶ Preview
