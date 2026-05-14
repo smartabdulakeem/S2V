@@ -38,44 +38,68 @@ TRANSITION_CYCLE = ["fade", "crossfade", "fade", "crossfade"]
 
 # ── Sentence / paragraph splitter ──────────────────────────────────────────────
 
-def split_into_segments(text: str, max_words: int = 45) -> list:
+def split_into_segments(text: str, max_words: int = 60) -> list:
     """
     Split a plain-text script into a list of narration strings.
 
-    Strategy
+    Strategy (in priority order)
     --------
-    1. If the text has clear paragraph breaks (blank lines), use those as scene
-       boundaries — but merge any paragraph under 8 words into the next one so
-       we don't create micro-clips.
-    2. If the text is one big block, split by sentences and group every
-       ~max_words words into a segment.
+    1. Blank-line paragraphs  — if the script has blank lines between sections,
+       each section becomes one segment. The user's formatting is respected exactly.
+    2. Single-line paragraphs — if every line is on its own line (no blank lines),
+       each non-empty line becomes one segment.
+    3. Sentence-group fallback — plain unformatted block of text, grouped into
+       ~max_words chunks at sentence boundaries.
+
+    In all cases, only truly empty lines are discarded. No content is ever
+    dropped, summarised, or merged unless a paragraph is 2 words or fewer
+    (too short to be a standalone scene).
     """
     text = text.strip()
     if not text:
         return []
 
-    # ── Paragraph split ──
+    # ── Strategy 1: blank-line paragraph split ────────────────────────────────
     paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
 
     if len(paragraphs) >= 2:
+        # Collapse internal newlines within each paragraph to a single space
+        paragraphs = [re.sub(r'\s*\n\s*', ' ', p) for p in paragraphs]
+        # Only merge paragraphs that are truly tiny (≤ 2 words)
         merged = []
         buf = ""
         for p in paragraphs:
             if not buf:
                 buf = p
+            elif len(buf.split()) <= 2:
+                buf = buf + " " + p
             else:
-                if len(buf.split()) < 8:
-                    # too short — merge forward
-                    buf = buf + " " + p
-                else:
-                    merged.append(buf)
-                    buf = p
+                merged.append(buf)
+                buf = p
         if buf:
             merged.append(buf)
         return merged
 
-    # ── Sentence-group split ──
-    # Split on . ! ? but keep the punctuation
+    # ── Strategy 2: single-line paragraph split ───────────────────────────────
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    if len(lines) >= 2:
+        # Only merge lines that are truly tiny (≤ 2 words)
+        merged = []
+        buf = ""
+        for ln in lines:
+            if not buf:
+                buf = ln
+            elif len(buf.split()) <= 2:
+                buf = buf + " " + ln
+            else:
+                merged.append(buf)
+                buf = ln
+        if buf:
+            merged.append(buf)
+        return merged
+
+    # ── Strategy 3: sentence-group fallback ───────────────────────────────────
     raw_sentences = re.split(r'(?<=[.!?])\s+', text)
     sentences = [s.strip() for s in raw_sentences if s.strip()]
 
