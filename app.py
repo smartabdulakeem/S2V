@@ -130,6 +130,13 @@ class Api:
                     return {"success": False, "error": "Google API key not saved."}
                 voice_name = voice_id.split(":", 1)[1]
                 _generate_with_gemini(sample_text, voice_name, google_key, tmp_path)
+
+            elif voice_id.startswith("piper:"):
+                # Piper offline TTS preview
+                from pipeline.voiceover import _generate_with_piper
+                voice_name = voice_id.split(":", 1)[1]
+                _generate_with_piper(sample_text, voice_name, tmp_path)
+
             else:
                 # edge-tts preview
                 import asyncio
