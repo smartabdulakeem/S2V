@@ -219,6 +219,8 @@ def build_script(
             "title": title.strip() or "My Video",
             "output_filename": safe_name,
             "voice": voice,
+            "voice_rate": "+0%",
+            "voice_pitch": "+0Hz",
             "background_music": None,
         },
         "segments": segments,
