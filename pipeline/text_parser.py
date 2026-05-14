@@ -184,7 +184,8 @@ def build_script(
     title: str,
     voice: str,
     output_filename: str,
-    max_words: int = 45,
+    visual_style: str = "",
+    max_words: int = 60,
 ) -> dict:
     """
     Convert a plain-text script into a full S2V script dict.
@@ -246,6 +247,7 @@ def build_script(
             "voice_rate": "+0%",
             "voice_pitch": "+0Hz",
             "background_music": None,
+            "visual_style": visual_style.strip(),
         },
         "segments": segments,
     }

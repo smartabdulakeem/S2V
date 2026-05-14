@@ -68,7 +68,7 @@ class RenderOrchestrator:
         if self.logger:
             self.logger.info(message)
 
-    def render(self, script_path: str, pexels_api_key: str) -> dict:
+    def render(self, script_path: str, pexels_api_key: str, google_api_key: str = "") -> dict:
         """
         Run the full render pipeline.
         Returns {"success": True, "output": path} or {"success": False, "error": message}
@@ -99,7 +99,13 @@ class RenderOrchestrator:
         proj = script["project"]
         segments = script["segments"]
         total = len(segments)
+        video_title  = proj.get("title", "")
+        visual_style = proj.get("visual_style", "")
         self._log(f"Loaded script: {proj['title']} — {total} segments")
+        if visual_style:
+            self._log(f"Visual style: {visual_style}")
+        if google_api_key:
+            self._log("Gemini prompt writer: enabled — image prompts will be AI-generated")
 
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
@@ -155,6 +161,9 @@ class RenderOrchestrator:
                     api_key=pexels_api_key,
                     cache_dir=self.cache_dir,
                     render_id=render_id,
+                    video_title=video_title,
+                    visual_style=visual_style,
+                    google_api_key=google_api_key,
                     on_progress=progress,
                 )
 

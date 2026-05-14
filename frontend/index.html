@@ -73,6 +73,11 @@
             </div>
           </div>
           <div class="plain-row">
+            <label class="plain-label">Visual Style</label>
+            <input type="text" id="pt-visual-style" class="plain-input"
+              placeholder="e.g. Islamic golden age, warm cinematic tones, photorealistic (optional)" />
+          </div>
+          <div class="plain-row">
             <label class="plain-label">Your Script</label>
             <textarea id="pt-script" class="plain-textarea"
               placeholder="Paste your full script here. The app splits it into scenes automatically — one scene per paragraph, or every ~45 words if you have no paragraph breaks.
@@ -143,19 +148,37 @@ The House of Wisdom was born. And with it, an age of discovery that would last f
       <div id="validation-errors" class="error-block hidden"></div>
     </section>
 
-    <!-- ── Section 2: Pixabay API Key ── -->
+    <!-- ── Section 2: API Keys ── -->
     <section class="card" id="section-key">
-      <div class="card-title">2 — Pixabay API Key</div>
-      <p class="hint">
-        Free key from
-        <span class="link-text">pixabay.com/api</span> — required for stock photos.
-        Saved locally; never sent anywhere except Pixabay.
+      <div class="card-title">2 — API Keys</div>
+
+      <!-- Google API Key -->
+      <p class="hint" style="margin-bottom:6px;">
+        <strong>Google API Key</strong> — enables Gemini to write a unique, detailed image prompt
+        for every scene. Get a free key at <span class="link-text">aistudio.google.com</span>.
+      </p>
+      <div class="key-row" style="margin-bottom:14px;">
+        <input
+          type="password"
+          id="google-key-input"
+          placeholder="Paste your Google AI Studio API key here"
+          autocomplete="off"
+          oninput="onGoogleKeyInput()"
+        />
+        <button class="btn btn-secondary" id="btn-save-google-key" onclick="saveGoogleKey()">Save</button>
+        <span class="key-status" id="google-key-status"></span>
+      </div>
+
+      <!-- Pixabay Key -->
+      <p class="hint" style="margin-bottom:6px;">
+        <strong>Pixabay API Key</strong> — only needed if you use
+        <code>stock_photo</code> segments. Free key at <span class="link-text">pixabay.com/api</span>.
       </p>
       <div class="key-row">
         <input
           type="password"
           id="pexels-key-input"
-          placeholder="Paste your Pixabay API key here"
+          placeholder="Paste your Pixabay API key here (optional)"
           autocomplete="off"
           oninput="onKeyInput()"
         />

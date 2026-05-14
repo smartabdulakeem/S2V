@@ -34,6 +34,10 @@ async function initApp() {
       document.getElementById("pexels-key-input").value = settings.pixabay_api_key;
       setKeyStatus("saved", "✓ Key saved");
     }
+    if (settings.google_api_key) {
+      document.getElementById("google-key-input").value = settings.google_api_key;
+      setGoogleKeyStatus("saved", "✓ Key saved");
+    }
     updateRenderButton();
   } catch (e) {
     console.error("Init error:", e);
@@ -49,7 +53,6 @@ async function previewVoice() {
   const btn    = document.getElementById('btn-preview-voice');
   const status = document.getElementById('voice-preview-status');
 
-  // Stop any playing preview
   if (_previewAudio) { _previewAudio.pause(); _previewAudio = null; }
 
   btn.disabled = true;
@@ -82,7 +85,6 @@ function switchMode(mode) {
   document.getElementById('tab-text').classList.toggle('active', isText);
   document.getElementById('tab-json').classList.toggle('active', !isText);
 
-  // Reset any loaded script when switching modes
   currentScriptPath = null;
   document.getElementById('script-summary').classList.add('hidden');
   document.getElementById('validation-errors').classList.add('hidden');
@@ -93,10 +95,11 @@ function switchMode(mode) {
 // ── Plain text parsing ────────────────────────────────────────────────────────
 
 async function parsePlainText() {
-  const text     = document.getElementById('pt-script').value.trim();
-  const title    = document.getElementById('pt-title').value.trim();
-  const filename = document.getElementById('pt-filename').value.trim();
-  const voice    = document.getElementById('pt-voice').value;
+  const text        = document.getElementById('pt-script').value.trim();
+  const title       = document.getElementById('pt-title').value.trim();
+  const filename    = document.getElementById('pt-filename').value.trim();
+  const voice       = document.getElementById('pt-voice').value;
+  const visualStyle = document.getElementById('pt-visual-style').value.trim();
 
   const errBlock = document.getElementById('validation-errors');
   const summary  = document.getElementById('script-summary');
@@ -125,7 +128,7 @@ async function parsePlainText() {
   btn.disabled = true;
 
   // Fire and forget — result comes back via window.onParseComplete()
-  await window.pywebview.api.parse_plain_text(text, title, voice, filename);
+  await window.pywebview.api.parse_plain_text(text, title, voice, filename, visualStyle);
 }
 
 // Called by Python when parse is complete (runs in background thread)
@@ -147,7 +150,6 @@ window.onParseComplete = function(result) {
     return;
   }
 
-  // Show summary
   summary.classList.remove('hidden');
   document.getElementById('s-title').textContent    = result.title;
   document.getElementById('s-segments').textContent = result.segment_count + ' scenes';
@@ -159,7 +161,6 @@ window.onParseComplete = function(result) {
   valEl.textContent = '✅ Ready';
   valEl.className = 'summary-value badge-ok';
 
-  // Show keyword chips
   if (result.keywords && result.keywords.length) {
     const list = document.getElementById('keywords-list');
     list.innerHTML = result.keywords.map(
@@ -196,7 +197,6 @@ async function loadScript() {
     return;
   }
 
-  // Show summary
   errBlock.classList.add("hidden");
   summary.classList.remove("hidden");
 
@@ -214,7 +214,33 @@ async function loadScript() {
   updateRenderButton();
 }
 
-// ── Pexels key ────────────────────────────────────────────────────────────────
+// ── Google API key ────────────────────────────────────────────────────────────
+
+let googleKeyDirty = false;
+
+function onGoogleKeyInput() {
+  googleKeyDirty = true;
+  setGoogleKeyStatus("", "");
+}
+
+async function saveGoogleKey() {
+  const key = document.getElementById("google-key-input").value.trim();
+  if (!key) {
+    setGoogleKeyStatus("err", "✗ Key is empty");
+    return;
+  }
+  await window.pywebview.api.save_google_key(key);
+  googleKeyDirty = false;
+  setGoogleKeyStatus("saved", "✓ Saved");
+}
+
+function setGoogleKeyStatus(type, msg) {
+  const el = document.getElementById("google-key-status");
+  el.textContent = msg;
+  el.className = "key-status" + (type === "saved" ? " ok" : type === "err" ? " err" : "");
+}
+
+// ── Pixabay key ───────────────────────────────────────────────────────────────
 
 let keyDirty = false;
 
@@ -243,23 +269,21 @@ function setKeyStatus(type, msg) {
 }
 
 function hasValidKey() {
-  const val = document.getElementById("pexels-key-input").value.trim();
-  return val.length > 0;
+  // Render is allowed with or without Pixabay key (AI images don't need it)
+  return true;
 }
 
 // ── Render button state ───────────────────────────────────────────────────────
 
 function updateRenderButton() {
-  const btn = document.getElementById("btn-render");
+  const btn  = document.getElementById("btn-render");
   const hint = document.getElementById("render-hint");
 
-  const ready = currentScriptPath && hasValidKey() && !isRendering;
+  const ready = currentScriptPath && !isRendering;
   btn.disabled = !ready;
 
   if (!currentScriptPath) {
-    hint.textContent = "Load a valid script (.json) to begin.";
-  } else if (!hasValidKey()) {
-    hint.textContent = "Enter and save your Pexels API key to begin.";
+    hint.textContent = "Load or parse a script to begin.";
   } else if (isRendering) {
     hint.textContent = "Render in progress…";
   } else {
@@ -272,10 +296,8 @@ function updateRenderButton() {
 async function startRender() {
   if (!currentScriptPath || isRendering) return;
 
-  // Save key if dirty
-  if (keyDirty) {
-    await saveKey();
-  }
+  if (keyDirty) await saveKey();
+  if (googleKeyDirty) await saveGoogleKey();
 
   isRendering = true;
   lastOutputPath = null;
@@ -290,7 +312,6 @@ async function startRender() {
   document.getElementById("stage-label").textContent = "Starting render…";
   document.getElementById("segment-label").textContent = "";
 
-  // Scroll the progress section into view so user can always see it
   setTimeout(() => {
     document.getElementById("section-progress").scrollIntoView({ behavior: "smooth", block: "start" });
   }, 100);
@@ -369,7 +390,6 @@ function appendLog(msg, cls) {
   panel.appendChild(line);
   panel.appendChild(document.createElement("br"));
 
-  // Auto-scroll to bottom
   panel.scrollTop = panel.scrollHeight;
 }
 
@@ -388,9 +408,9 @@ function renderAnother() {
   document.getElementById("script-summary").classList.add("hidden");
   document.getElementById("validation-errors").classList.add("hidden");
   document.getElementById("keywords-wrap").classList.add("hidden");
-  // Clear plain text fields
   document.getElementById("pt-script").value = "";
   document.getElementById("pt-title").value = "";
   document.getElementById("pt-filename").value = "";
+  document.getElementById("pt-visual-style").value = "";
   updateRenderButton();
 }

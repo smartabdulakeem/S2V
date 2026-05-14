@@ -24,6 +24,7 @@ if os.path.exists(_vendor_ffmpeg):
 def _load_settings() -> dict:
     default = {
         "pixabay_api_key": "",
+        "google_api_key": "",
         "output_dir": "output",
         "cache_dir": "cache",
         "whisper_model": "base",
@@ -59,10 +60,17 @@ class Api:
     # ── Settings ──────────────────────────────────────────────────────────────
 
     def get_settings(self) -> dict:
-        return self._settings
+        # Never expose full keys to JS — return masked versions for display only
+        s = dict(self._settings)
+        return s
 
     def save_pixabay_key(self, key: str) -> dict:
         self._settings["pixabay_api_key"] = key.strip()
+        _save_settings(self._settings)
+        return {"success": True}
+
+    def save_google_key(self, key: str) -> dict:
+        self._settings["google_api_key"] = key.strip()
         _save_settings(self._settings)
         return {"success": True}
 
@@ -132,7 +140,7 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def parse_plain_text(self, text: str, title: str, voice: str, output_filename: str) -> dict:
+    def parse_plain_text(self, text: str, title: str, voice: str, output_filename: str, visual_style: str = "") -> dict:
         """
         Start plain-text parsing in a background thread.
         Returns immediately with {"started": True}.
@@ -158,7 +166,7 @@ class Api:
                 from pipeline.validator import validate_script, estimate_duration
 
                 try:
-                    script = build_script(text, title, voice, output_filename)
+                    script = build_script(text, title, voice, output_filename, visual_style)
                 except ValueError as e:
                     _push({"success": False, "errors": [str(e)]})
                     return
@@ -200,7 +208,8 @@ class Api:
         if self._render_thread and self._render_thread.is_alive():
             return {"success": False, "error": "A render is already in progress."}
 
-        pexels_key = self._settings.get("pixabay_api_key", "")
+        pexels_key  = self._settings.get("pixabay_api_key", "")
+        google_key  = self._settings.get("google_api_key", "")
 
         from pipeline.orchestrator import RenderOrchestrator
 
@@ -226,7 +235,7 @@ class Api:
         )
 
         def run():
-            self._orchestrator.render(script_path, pexels_key)
+            self._orchestrator.render(script_path, pexels_key, google_key)
 
         self._render_thread = threading.Thread(target=run, daemon=True)
         self._render_thread.start()
