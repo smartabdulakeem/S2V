@@ -277,22 +277,22 @@ Rules:
    Every word in the original script must appear in exactly one segment's \
    "narration" field, verbatim. Do not add filler sentences.
 2. Split at natural narrative or topic breaks. Each segment should be \
-   30–60 words (one clear idea or moment).
-3. For each segment write a "b_roll_keyword": a specific 2–4 word visual \
+   30-60 words (one clear idea or moment).
+3. For each segment write a "b_roll_keyword": a specific 2-4 word visual \
    search term that describes what viewers should SEE on screen (not a quote \
-   from the narration — a concrete visual noun phrase).
+   from the narration -- a concrete visual noun phrase).
 4. If the user did not supply a visual_style, suggest one that fits the topic \
    (e.g. "Islamic golden age, warm cinematic tones, oil painting style").
 
-Return ONLY a valid JSON object — no markdown fences, no commentary — in this \
+Return ONLY a valid JSON object -- no markdown fences, no commentary -- in this \
 exact shape:
-{
+{{
   "visual_style": "<suggested style or the user-supplied one unchanged>",
   "segments": [
-    {"narration": "...", "b_roll_keyword": "..."},
+    {{"narration": "...", "b_roll_keyword": "..."}},
     ...
   ]
-}
+}}
 
 Script title: {title}
 User-supplied visual_style (empty = please suggest): {visual_style}
@@ -365,54 +365,55 @@ def build_script_with_ai(
             if not s.get("narration", "").strip():
                 raise ValueError("Gemini returned a segment with empty narration")
 
+        # ── Build the full script dict from Gemini's output ────────────────────
+        safe_name = re.sub(r'[^\w\-]', '_', output_filename.strip())
+        safe_name = re.sub(r'_+', '_', safe_name).strip('_')
+        if not safe_name:
+            safe_name = "my_video"
+        if not safe_name.lower().endswith('.mp4'):
+            safe_name += '.mp4'
+
+        total = len(ai_segments)
+        segments = []
+
+        for i, seg in enumerate(ai_segments):
+            if i == 0:
+                seg_type = "hook"
+            elif i == total - 1:
+                seg_type = "conclusion"
+            else:
+                seg_type = "body"
+
+            narration = seg.get("narration", "").strip()
+            keyword = seg.get("b_roll_keyword", "").strip()
+            if not keyword:
+                keyword = extract_keyword(narration)
+
+            segments.append({
+                "segment_id": i + 1,
+                "type": seg_type,
+                "narration": narration,
+                "b_roll_keyword": keyword,
+                "visual_type": "ai_image",
+                "ken_burns": KEN_BURNS_CYCLE[i % len(KEN_BURNS_CYCLE)],
+                "text_overlay": None,
+                "transition_in": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
+                "transition_out": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
+            })
+
+        return {
+            "project": {
+                "title": title.strip() or "My Video",
+                "output_filename": safe_name,
+                "voice": voice,
+                "voice_rate": "+0%",
+                "voice_pitch": "+0Hz",
+                "background_music": None,
+                "visual_style": ai_style or visual_style.strip(),
+            },
+            "segments": segments,
+        }
+
     except Exception:
         # Any failure → fall back silently to rule-based splitter
         return build_script(text, title, voice, output_filename, visual_style)
-
-    # ── Build the full script dict from Gemini's output ────────────────────────
-    safe_name = re.sub(r'[^\w\-]', '_', output_filename.strip())
-    safe_name = re.sub(r'_+', '_', safe_name).strip('_')
-    if not safe_name:
-        safe_name = "my_video"
-    if not safe_name.lower().endswith('.mp4'):
-        safe_name += '.mp4'
-
-    total = len(ai_segments)
-    segments = []
-
-    for i, seg in enumerate(ai_segments):
-        if i == 0:
-            seg_type = "hook"
-        elif i == total - 1:
-            seg_type = "conclusion"
-        else:
-            seg_type = "body"
-
-        keyword = seg.get("b_roll_keyword", "").strip()
-        if not keyword:
-            keyword = extract_keyword(seg["narration"])
-
-        segments.append({
-            "segment_id": i + 1,
-            "type": seg_type,
-            "narration": seg["narration"].strip(),
-            "b_roll_keyword": keyword,
-            "visual_type": "ai_image",
-            "ken_burns": KEN_BURNS_CYCLE[i % len(KEN_BURNS_CYCLE)],
-            "text_overlay": None,
-            "transition_in": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
-            "transition_out": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
-        })
-
-    return {
-        "project": {
-            "title": title.strip() or "My Video",
-            "output_filename": safe_name,
-            "voice": voice,
-            "voice_rate": "+0%",
-            "voice_pitch": "+0Hz",
-            "background_music": None,
-            "visual_style": ai_style or visual_style.strip(),
-        },
-        "segments": segments,
-    }
