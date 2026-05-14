@@ -149,7 +149,7 @@ echo    All packages installed.
 
 :: ── Step 4: Pre-download Whisper base model ───────────────────────────────────
 echo.
-echo [4/5] Pre-downloading Whisper speech-to-text model (~150 MB)...
+echo [4/6] Pre-downloading Whisper speech-to-text model (~150 MB)...
 echo    This only happens once. Future runs will use the cached model.
 echo.
 
@@ -162,9 +162,91 @@ if %errorlevel% neq 0 (
     echo.
 )
 
-:: ── Step 5: Validate sample script ───────────────────────────────────────────
+:: ── Step 5: Download Piper TTS (offline voice engine) ─────────────────────────
 echo.
-echo [5/5] Running validation test with sample script...
+echo [5/6] Checking Piper TTS (offline voice engine)...
+
+if exist "vendor\piper\piper.exe" (
+    echo    Piper already installed in vendor\piper\
+    goto piper_done
+)
+
+echo    Downloading Piper TTS for Windows (~30 MB)...
+echo    This gives you offline voice options that work without internet.
+echo.
+
+if not exist "vendor\piper" mkdir "vendor\piper"
+if not exist "vendor\piper\voices" mkdir "vendor\piper\voices"
+
+set PIPER_URL=https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip
+set PIPER_ZIP=vendor\piper_download.zip
+
+powershell -NoProfile -Command ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; ^
+    $wc = New-Object System.Net.WebClient; ^
+    $wc.DownloadFile('%PIPER_URL%', '%PIPER_ZIP%')"
+
+if not exist "%PIPER_ZIP%" (
+    echo.
+    echo  Warning: Piper download failed. Offline voices will not be available.
+    echo  You can still use Gemini and Edge TTS voices without Piper.
+    echo  To retry Piper later, delete vendor\piper\ and run setup.bat again.
+    echo.
+    goto piper_done
+)
+
+echo    Extracting Piper...
+powershell -NoProfile -Command ^
+    "Expand-Archive -Path '%PIPER_ZIP%' -DestinationPath 'vendor\piper_extract' -Force"
+
+:: Copy piper.exe and any .dll files from extracted folder
+for /d %%D in (vendor\piper_extract\*) do (
+    if exist "%%D\piper.exe" (
+        copy /Y "%%D\piper.exe" "vendor\piper\piper.exe" >nul
+        copy /Y "%%D\*.dll"    "vendor\piper\" >nul 2>&1
+        copy /Y "%%D\*.onnx"   "vendor\piper\" >nul 2>&1
+    )
+)
+:: Also handle flat zip (piper.exe at root level)
+if exist "vendor\piper_extract\piper.exe" (
+    copy /Y "vendor\piper_extract\piper.exe" "vendor\piper\piper.exe" >nul
+    copy /Y "vendor\piper_extract\*.dll"     "vendor\piper\" >nul 2>&1
+)
+
+del /q "%PIPER_ZIP%" >nul 2>&1
+rmdir /s /q "vendor\piper_extract" >nul 2>&1
+
+if not exist "vendor\piper\piper.exe" (
+    echo.
+    echo  Warning: Could not extract Piper correctly. Offline voices unavailable.
+    echo.
+    goto piper_done
+)
+
+echo    Downloading Piper voice: en_US-ryan-high (~65 MB)...
+set VOICE_BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high
+
+powershell -NoProfile -Command ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; ^
+    $wc = New-Object System.Net.WebClient; ^
+    $wc.DownloadFile('%VOICE_BASE%/en_US-ryan-high.onnx', 'vendor\piper\voices\en_US-ryan-high.onnx')" >nul 2>&1
+
+powershell -NoProfile -Command ^
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; ^
+    $wc = New-Object System.Net.WebClient; ^
+    $wc.DownloadFile('%VOICE_BASE%/en_US-ryan-high.onnx.json', 'vendor\piper\voices\en_US-ryan-high.onnx.json')" >nul 2>&1
+
+if exist "vendor\piper\voices\en_US-ryan-high.onnx" (
+    echo    Piper voice en_US-ryan-high downloaded.
+) else (
+    echo    Warning: Voice download failed. Piper will not produce audio without voice files.
+)
+
+:piper_done
+
+:: ── Step 6: Validate sample script ───────────────────────────────────────────
+echo.
+echo [6/6] Running validation test with sample script...
 
 python pipeline\validator.py samples\sample_script.json
 

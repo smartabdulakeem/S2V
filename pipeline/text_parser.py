@@ -3,9 +3,17 @@ Plain-text script parser.
 Splits a raw script into segments, extracts image search keywords automatically,
 and returns a dict matching the S2V JSON schema — ready to pass straight to the
 validator and orchestrator.
+
+When a Google API key is provided, `build_script_with_ai()` uses Gemini to
+intelligently split the script at natural narrative breaks, generate specific
+b_roll_keywords, and optionally suggest a visual_style.  Falls back to the
+rule-based `build_script()` if Gemini fails or no key is available.
 """
 
+import json
 import re
+import urllib.error
+import urllib.request
 
 # Common English words that make poor image search terms
 STOPWORDS = {
@@ -248,6 +256,163 @@ def build_script(
             "voice_pitch": "+0Hz",
             "background_music": None,
             "visual_style": visual_style.strip(),
+        },
+        "segments": segments,
+    }
+
+
+# ── AI-powered script builder (Gemini) ────────────────────────────────────────
+
+_GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-2.0-flash:generateContent?key={key}"
+)
+
+_SPLIT_PROMPT = """\
+You are a video script editor. Your job is to split a narration script into \
+individual scenes for a documentary-style YouTube video.
+
+Rules:
+1. NEVER rewrite, paraphrase, summarise, or omit any of the narrator's words. \
+   Every word in the original script must appear in exactly one segment's \
+   "narration" field, verbatim. Do not add filler sentences.
+2. Split at natural narrative or topic breaks. Each segment should be \
+   30–60 words (one clear idea or moment).
+3. For each segment write a "b_roll_keyword": a specific 2–4 word visual \
+   search term that describes what viewers should SEE on screen (not a quote \
+   from the narration — a concrete visual noun phrase).
+4. If the user did not supply a visual_style, suggest one that fits the topic \
+   (e.g. "Islamic golden age, warm cinematic tones, oil painting style").
+
+Return ONLY a valid JSON object — no markdown fences, no commentary — in this \
+exact shape:
+{
+  "visual_style": "<suggested style or the user-supplied one unchanged>",
+  "segments": [
+    {"narration": "...", "b_roll_keyword": "..."},
+    ...
+  ]
+}
+
+Script title: {title}
+User-supplied visual_style (empty = please suggest): {visual_style}
+
+Script to split:
+{script}"""
+
+
+def build_script_with_ai(
+    text: str,
+    title: str,
+    voice: str,
+    output_filename: str,
+    visual_style: str = "",
+    google_api_key: str = "",
+) -> dict:
+    """
+    Use Gemini to intelligently split the script into scenes.
+
+    Falls back to build_script() automatically if:
+    - no google_api_key is provided
+    - Gemini returns an invalid response
+    - any network or parsing error occurs
+
+    Returns the same dict structure as build_script().
+    """
+    if not google_api_key:
+        return build_script(text, title, voice, output_filename, visual_style)
+
+    prompt = _SPLIT_PROMPT.format(
+        title=title.strip() or "My Video",
+        visual_style=visual_style.strip(),
+        script=text.strip(),
+    )
+
+    body = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 8192,
+        },
+    }).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(
+            _GEMINI_URL.format(key=google_api_key),
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read())
+
+        raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+        # Strip markdown fences if Gemini wrapped the JSON anyway
+        if raw_text.startswith("```"):
+            raw_text = re.sub(r"^```[a-z]*\n?", "", raw_text)
+            raw_text = re.sub(r"\n?```$", "", raw_text.strip())
+
+        parsed = json.loads(raw_text)
+        ai_segments = parsed.get("segments", [])
+        ai_style    = parsed.get("visual_style", visual_style).strip()
+
+        if not ai_segments:
+            raise ValueError("Gemini returned empty segments list")
+
+        # Validate every segment has narration
+        for s in ai_segments:
+            if not s.get("narration", "").strip():
+                raise ValueError("Gemini returned a segment with empty narration")
+
+    except Exception:
+        # Any failure → fall back silently to rule-based splitter
+        return build_script(text, title, voice, output_filename, visual_style)
+
+    # ── Build the full script dict from Gemini's output ────────────────────────
+    safe_name = re.sub(r'[^\w\-]', '_', output_filename.strip())
+    safe_name = re.sub(r'_+', '_', safe_name).strip('_')
+    if not safe_name:
+        safe_name = "my_video"
+    if not safe_name.lower().endswith('.mp4'):
+        safe_name += '.mp4'
+
+    total = len(ai_segments)
+    segments = []
+
+    for i, seg in enumerate(ai_segments):
+        if i == 0:
+            seg_type = "hook"
+        elif i == total - 1:
+            seg_type = "conclusion"
+        else:
+            seg_type = "body"
+
+        keyword = seg.get("b_roll_keyword", "").strip()
+        if not keyword:
+            keyword = extract_keyword(seg["narration"])
+
+        segments.append({
+            "segment_id": i + 1,
+            "type": seg_type,
+            "narration": seg["narration"].strip(),
+            "b_roll_keyword": keyword,
+            "visual_type": "ai_image",
+            "ken_burns": KEN_BURNS_CYCLE[i % len(KEN_BURNS_CYCLE)],
+            "text_overlay": None,
+            "transition_in": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
+            "transition_out": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
+        })
+
+    return {
+        "project": {
+            "title": title.strip() or "My Video",
+            "output_filename": safe_name,
+            "voice": voice,
+            "voice_rate": "+0%",
+            "voice_pitch": "+0Hz",
+            "background_music": None,
+            "visual_style": ai_style or visual_style.strip(),
         },
         "segments": segments,
     }

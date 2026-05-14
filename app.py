@@ -173,11 +173,20 @@ class Api:
         def _run():
             try:
                 import tempfile
-                from pipeline.text_parser import build_script
+                from pipeline.text_parser import build_script, build_script_with_ai
                 from pipeline.validator import validate_script, estimate_duration
 
+                google_key = self._settings.get("google_api_key", "")
+
                 try:
-                    script = build_script(text, title, voice, output_filename, visual_style)
+                    if google_key:
+                        # AI-powered splitting — falls back to rule-based internally
+                        script = build_script_with_ai(
+                            text, title, voice, output_filename,
+                            visual_style, google_key,
+                        )
+                    else:
+                        script = build_script(text, title, voice, output_filename, visual_style)
                 except ValueError as e:
                     _push({"success": False, "errors": [str(e)]})
                     return
