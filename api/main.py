@@ -4,7 +4,7 @@ import json
 import asyncio
 import tempfile
 import base64
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 # Add parent directory to sys.path to import pipeline modules
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -15,9 +15,32 @@ from pipeline.voiceover import generate_voiceover
 
 app = Flask(__name__)
 
+# ── Static File Server routes ──────────────────────────────────────────────────
+
+@app.route('/')
+@app.route('/index.html')
+def serve_index():
+    """Serve index.html from the frontend folder."""
+    return send_from_directory(os.path.join(base_dir, 'frontend'), 'index.html')
+
+
+@app.route('/<path:path>')
+def serve_static(path):
+    """Serve static assets (style.css, app.js) from the frontend folder."""
+    frontend_dir = os.path.join(base_dir, 'frontend')
+    # If the file exists in the frontend folder, serve it
+    if os.path.exists(os.path.join(frontend_dir, path)):
+        return send_from_directory(frontend_dir, path)
+    # Otherwise return 404
+    return jsonify({"error": "Resource not found"}), 404
+
+
+# ── S2V Backend JSON APIs ─────────────────────────────────────────────────────
+
 @app.route('/api/get_version', methods=['GET'])
 def get_version():
     return jsonify({"version": "2.0.0 (Cloud)"})
+
 
 @app.route('/api/preview_voice', methods=['POST'])
 def preview_voice():
@@ -63,6 +86,7 @@ def preview_voice():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+
 @app.route('/api/parse_plain_text', methods=['POST'])
 def parse_plain_text():
     try:
@@ -79,7 +103,7 @@ def parse_plain_text():
             text=text,
             title=title,
             voice=voice,
-            output_filename=filename,
+            filename=filename,
             visual_style=visual_style,
             hf_token=hf_token
         )
@@ -106,9 +130,11 @@ def parse_plain_text():
     except Exception as e:
         return jsonify({"success": False, "errors": [str(e)]})
 
+
 @app.route('/api/save_edited_script', methods=['POST'])
 def save_edited_script():
     return jsonify({"success": True})
+
 
 @app.route('/api/start_render', methods=['POST'])
 def start_render():
@@ -116,9 +142,3 @@ def start_render():
         "success": False, 
         "error": "Video rendering requires intense CPU rendering and FFmpeg binaries which are blocked by Vercel cloud function timeouts. To render the final video, please run this app locally using: python app.py"
     })
-
-# fallback handler
-@app.route('/api/', defaults={'path': ''})
-@app.route('/api/<path:path>')
-def catch_all(path):
-    return jsonify({"error": "API route not found"}), 404
