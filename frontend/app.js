@@ -3,8 +3,8 @@
  * Supports running inside local desktop PyWebView and standard web browsers (cloud-mode Vercel).
  */
 
-// Detect running mode
-const isWebMode = typeof window.pywebview === "undefined" || !window.pywebview.api;
+// Detect running mode (re-evaluated dynamically in initApp)
+let isWebMode = true;
 
 // State
 let currentScriptPath = null;
@@ -36,6 +36,9 @@ setTimeout(() => {
 
 async function initApp() {
   window.scrollTo(0, 0);
+  
+  // Update mode based on presence of injected pywebview API
+  isWebMode = typeof window.pywebview === "undefined" || !window.pywebview.api;
   
   if (isWebMode) {
     console.log("S2V running in Cloud Web Mode");
