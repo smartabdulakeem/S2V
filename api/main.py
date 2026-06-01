@@ -90,11 +90,9 @@ def parse_plain_text():
         script_dict = res["script"]
         script_dict["project"]["aspect_ratio"] = aspect_ratio
         
-        # In cloud mode, we don't save to a local temp file.
-        # We just return the planned script structure directly to the client.
         return jsonify({
             "success": True,
-            "path": "cloud_script",  # Placeholder indicating cloud script
+            "path": "cloud_script",
             "title": script_dict["project"]["title"],
             "segment_count": len(script_dict["segments"]),
             "estimated_duration": round(res["estimated_duration"]),
@@ -110,8 +108,6 @@ def parse_plain_text():
 
 @app.route('/api/save_edited_script', methods=['POST'])
 def save_edited_script():
-    # Cloud editing session doesn't persist file changes on server
-    # We simply echo success to the client, as the state resides in their browser!
     return jsonify({"success": True})
 
 @app.route('/api/start_render', methods=['POST'])
@@ -122,7 +118,7 @@ def start_render():
     })
 
 # fallback handler
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
+@app.route('/api/', defaults={'path': ''})
+@app.route('/api/<path:path>')
 def catch_all(path):
-    return jsonify({"error": "Resource not found"}), 404
+    return jsonify({"error": "API route not found"}), 404
