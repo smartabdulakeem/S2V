@@ -4,7 +4,7 @@ import urllib.request
 import urllib.error
 from pipeline.text_parser import build_script
 
-HF_LLM_URL = "https://router.huggingface.co/hf-inference/models/Qwen/Qwen2.5-72B-Instruct"
+HF_LLM_URL = "https://router.huggingface.co/v1/chat/completions"
 
 _LLM_PLANNER_PROMPT = """\
 You are an AI video editor and storyboard planning agent. Your task is to split a narration script into logical, scene-by-scene storyboard steps for a short video.
@@ -109,15 +109,12 @@ def generate_storyboard_plan(
         "Content-Type": "application/json"
     }
     payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 4096,
-            "temperature": 0.1,
-            "return_full_text": False
-        },
-        "options": {
-            "wait_for_model": True
-        }
+        "model": "Qwen/Qwen2.5-72B-Instruct",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 4096
     }
     body = json.dumps(payload).encode("utf-8")
 
@@ -129,11 +126,9 @@ def generate_storyboard_plan(
             raw_response = resp.read()
             response_json = json.loads(raw_response.decode("utf-8"))
             
-            # Handle list of dict response typical of Hugging Face inference pipeline
-            if isinstance(response_json, list) and len(response_json) > 0:
-                generated_text = response_json[0].get("generated_text", "").strip()
-            elif isinstance(response_json, dict):
-                generated_text = response_json.get("generated_text", "").strip()
+            # Extract content from OpenAI chat completions format
+            if isinstance(response_json, dict) and "choices" in response_json:
+                generated_text = response_json["choices"][0]["message"]["content"].strip()
             else:
                 generated_text = str(response_json).strip()
 
