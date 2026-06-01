@@ -92,6 +92,7 @@ def generate_storyboard_plan(
         return {
             "success": True,
             "fallback": True,
+            "error_msg": "Hugging Face API key is missing in settings",
             "script": script_dict,
             "estimated_duration": duration,
             "estimated_render_time": render_time
