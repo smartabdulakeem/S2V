@@ -152,18 +152,17 @@ async function previewVoice() {
 // ── Mode switching ────────────────────────────────────────────────────────────
 
 function switchMode(mode) {
-  const isText = mode === 'text';
-  document.getElementById('mode-text').classList.toggle('hidden', !isText);
-  document.getElementById('mode-json').classList.toggle('hidden', isText);
-  document.getElementById('tab-text').classList.toggle('active', isText);
-  document.getElementById('tab-json').classList.toggle('active', !isText);
+  // Stubbed out since tabs were removed
+}
 
-  currentScriptPath = null;
-  currentScriptData = null;
-  document.getElementById('script-summary').classList.add('hidden');
-  document.getElementById('section-storyboard').classList.add('hidden');
-  document.getElementById('validation-errors').classList.add('hidden');
-  updateRenderButton();
+function toggleCustomStyleInput() {
+  const select = document.getElementById("pt-style-select");
+  const customRow = document.getElementById("custom-style-row");
+  if (select.value === "custom") {
+    customRow.classList.remove("hidden");
+  } else {
+    customRow.classList.add("hidden");
+  }
 }
 
 // ── Plain text parsing ────────────────────────────────────────────────────────
@@ -171,10 +170,18 @@ function switchMode(mode) {
 async function parsePlainText() {
   const text = document.getElementById('pt-script').value.trim();
   const title = document.getElementById('pt-title').value.trim();
-  const filename = document.getElementById('pt-filename').value.trim();
   const voice = document.getElementById('pt-voice').value;
-  const visualStyle = document.getElementById('pt-visual-style').value.trim();
   const aspectRatio = document.getElementById('pt-aspect-ratio').value;
+
+  // Automatically generate filename from title (lowercase, no spaces/special characters)
+  const filename = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'my_video';
+
+  // Get visual style based on selection
+  const styleSelect = document.getElementById('pt-style-select').value;
+  let visualStyle = styleSelect;
+  if (styleSelect === 'custom') {
+    visualStyle = document.getElementById('pt-visual-style-custom').value.trim();
+  }
 
   const errBlock = document.getElementById('validation-errors');
   const summary = document.getElementById('script-summary');
@@ -186,10 +193,6 @@ async function parsePlainText() {
   }
   if (!title) {
     showError('Please enter a video title.');
-    return;
-  }
-  if (!filename) {
-    showError('Please enter an output filename (no spaces, e.g. Baghdad_Golden_Age).');
     return;
   }
 
@@ -780,7 +783,8 @@ function renderAnother() {
   document.getElementById("validation-errors").classList.add("hidden");
   document.getElementById("pt-script").value = "";
   document.getElementById("pt-title").value = "";
-  document.getElementById("pt-filename").value = "";
-  document.getElementById("pt-visual-style").value = "";
+  document.getElementById("pt-style-select").value = document.getElementById("pt-style-select").options[0].value;
+  document.getElementById("pt-visual-style-custom").value = "";
+  toggleCustomStyleInput();
   updateRenderButton();
 }

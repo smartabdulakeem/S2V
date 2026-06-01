@@ -27,16 +27,6 @@
     <section class="card" id="section-load">
       <div class="card-title">1 — Load Your Script</div>
 
-      <!-- Mode tabs -->
-      <div class="mode-tabs">
-        <button class="mode-tab active" id="tab-text" onclick="switchMode('text')">
-          ✏️ Paste Plain Text
-        </button>
-        <button class="mode-tab" id="tab-json" onclick="switchMode('json')">
-          📄 Load JSON File
-        </button>
-      </div>
-
       <!-- ── Plain Text mode ── -->
       <div id="mode-text">
         <p class="hint" style="margin-bottom:12px;">
@@ -44,17 +34,10 @@
         </p>
 
         <div class="plain-form">
-          <div class="form-grid-2">
-            <div class="plain-row">
-              <label class="plain-label">Video Title</label>
-              <input type="text" id="pt-title" class="plain-input"
-                placeholder="e.g. The Rise of Baghdad" />
-            </div>
-            <div class="plain-row">
-              <label class="plain-label">Output Filename</label>
-              <input type="text" id="pt-filename" class="plain-input"
-                placeholder="e.g. rise_of_baghdad" />
-            </div>
+          <div class="plain-row">
+            <label class="plain-label">Video Title</label>
+            <input type="text" id="pt-title" class="plain-input"
+              placeholder="e.g. The Rise of Baghdad" />
           </div>
           
           <div class="form-grid-2">
@@ -101,9 +84,25 @@
           </div>
 
           <div class="plain-row">
-            <label class="plain-label">Visual Style Guide</label>
-            <input type="text" id="pt-visual-style" class="plain-input"
-              placeholder="e.g. historical watercolor painting style, warm cinematic lighting, photorealistic (optional)" />
+            <label class="plain-label">Visual Style Preset</label>
+            <select id="pt-style-select" class="plain-input" onchange="toggleCustomStyleInput()">
+              <option value="cinematic documentary photography, dramatic natural lighting, highly detailed, photorealistic">1. Cinematic Photograph (Default)</option>
+              <option value="historical oil painting, rich colors, detailed textures, classical art style">2. Historical Oil Painting</option>
+              <option value="epic fantasy watercolor painting, soft color washes, highly artistic, fine details">3. Epic Watercolor Art</option>
+              <option value="dark fantasy concept art, moody atmosphere, detailed digital painting, cinematic lighting">4. Dark Fantasy Concept Art</option>
+              <option value="modern 3d render, sci-fi concept design, unreal engine 5 style, highly detailed">5. Modern 3D Render (Sci-Fi)</option>
+              <option value="retro anime manga style, clean linework, vibrant cell shading, hand-drawn look">6. Retro Anime / Manga</option>
+              <option value="traditional ink sketch and charcoal drawing, high contrast, hand-crafted illustration">7. Ink Sketch & Charcoal</option>
+              <option value="cyberpunk city illustration, neon lights, dramatic backlighting, futuristic design">8. Cyberpunk Neon</option>
+              <option value="vintage comic book style, half-tone dots, bold outlines, retro color palette">9. Vintage Comic Book</option>
+              <option value="custom">10. Custom (Other) - type custom prompt...</option>
+            </select>
+          </div>
+          
+          <div class="plain-row hidden" id="custom-style-row" style="margin-top: 12px;">
+            <label class="plain-label">Custom Visual Style Description</label>
+            <input type="text" id="pt-visual-style-custom" class="plain-input"
+              placeholder="e.g. claymation style, colorful watercolor splash, 3D clay rendering, etc." />
           </div>
 
           <div class="plain-row">
@@ -115,16 +114,6 @@
           <button class="btn btn-primary" id="btn-parse" onclick="parsePlainText()">
             Generate Storyboard Plan →
           </button>
-        </div>
-      </div>
-
-      <!-- ── JSON mode ── -->
-      <div id="mode-json" class="hidden">
-        <div class="load-row">
-          <button class="btn btn-primary" id="btn-load" onclick="loadScript()">
-            Load Script (.json)
-          </button>
-          <span class="file-path" id="loaded-path">No file loaded</span>
         </div>
       </div>
 
