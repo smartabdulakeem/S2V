@@ -4,7 +4,7 @@
  */
 
 // Detect running mode (re-evaluated dynamically in initApp)
-let isWebMode = true;
+let isWebMode = typeof window.pywebview === "undefined" || !window.pywebview.api;
 
 // State
 let currentScriptPath = null;
@@ -27,9 +27,10 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// Fallback for slower init
+// Fallback for slower init or early-injection race conditions
 setTimeout(() => {
-  if (!isWebMode && window.pywebview && window.pywebview.api) {
+  const actuallyDesktop = typeof window.pywebview !== "undefined" && window.pywebview.api;
+  if (actuallyDesktop) {
     initApp();
   }
 }, 500);
