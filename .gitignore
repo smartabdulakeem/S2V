@@ -28,3 +28,5 @@ desktop.ini
 *.swo
 .vscode/
 .idea/
+
+.vercel

@@ -1,0 +1,12 @@
+# Exclude large local assets and binaries from Vercel cloud uploads
+vendor/
+cache/
+output/
+logs/
+.git/
+.github/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec

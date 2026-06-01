@@ -145,13 +145,13 @@ if %errorlevel% neq 0 (
 )
 
 :: Install the rest of the requirements
-%PYCMD% -m pip install -r requirements.txt --quiet
+%PYCMD% -m pip install -r requirements-desktop.txt --quiet
 
 if %errorlevel% neq 0 (
     echo.
     echo  ERROR: Package installation failed.
     echo  Try running this command manually to see the full error:
-    echo    %PYCMD% -m pip install -r requirements.txt
+    echo    %PYCMD% -m pip install -r requirements-desktop.txt
     echo.
     pause
     exit /b 1
