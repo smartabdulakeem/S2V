@@ -68,7 +68,7 @@ class RenderOrchestrator:
         if self.logger:
             self.logger.info(message)
 
-    def render(self, script_path: str, pexels_api_key: str, huggingface_api_key: str = "") -> dict:
+    def render(self, script_path: str, huggingface_api_key: str = "") -> dict:
         """
         Run the full render pipeline.
         Returns {"success": True, "output": path} or {"success": False, "error": message}
@@ -165,8 +165,6 @@ class RenderOrchestrator:
                     segment_id=seg_id,
                     keyword=seg["b_roll_keyword"],
                     narration=seg.get("narration", ""),
-                    visual_type=seg.get("visual_type", "ai_image"),
-                    pixabay_api_key=pexels_api_key,
                     cache_dir=self.cache_dir,
                     huggingface_api_key=huggingface_api_key,
                     aspect_ratio=aspect_ratio,
@@ -174,6 +172,7 @@ class RenderOrchestrator:
                     video_title=video_title,
                     visual_style=visual_style,
                     on_progress=progress,
+                    visual_type=seg.get("visual_type", "ai_image"),
                 )
 
                 if self._cancelled:

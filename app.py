@@ -22,7 +22,6 @@ if os.path.exists(_vendor_ffmpeg):
 
 def _load_settings() -> dict:
     default = {
-        "pixabay_api_key": "",
         "huggingface_api_key": "",
         "output_dir": "output",
         "cache_dir": "cache",
@@ -35,6 +34,9 @@ def _load_settings() -> dict:
             # Support migrating from old google_api_key settings if needed
             if "google_api_key" in stored and "huggingface_api_key" not in stored:
                 stored["huggingface_api_key"] = ""
+            # Clean up old/unused keys
+            stored.pop("pixabay_api_key", None)
+            stored.pop("google_api_key", None)
             default.update(stored)
         except Exception:
             pass
@@ -63,11 +65,6 @@ class Api:
 
     def get_settings(self) -> dict:
         return dict(self._settings)
-
-    def save_pixabay_key(self, key: str) -> dict:
-        self._settings["pixabay_api_key"] = key.strip()
-        _save_settings(self._settings)
-        return {"success": True}
 
     def save_huggingface_key(self, key: str) -> dict:
         self._settings["huggingface_api_key"] = key.strip()
@@ -241,7 +238,6 @@ class Api:
         if self._render_thread and self._render_thread.is_alive():
             return {"success": False, "error": "A render is already in progress."}
 
-        pexels_key = self._settings.get("pixabay_api_key", "")
         hf_key = self._settings.get("huggingface_api_key", "")
 
         from pipeline.orchestrator import RenderOrchestrator
@@ -265,7 +261,7 @@ class Api:
         )
 
         def run():
-            self._orchestrator.render(script_path, pexels_key, hf_key)
+            self._orchestrator.render(script_path, hf_key)
 
         self._render_thread = threading.Thread(target=run, daemon=True)
         self._render_thread.start()

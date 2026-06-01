@@ -164,82 +164,12 @@ def _fetch_pollinations_image(
     return False
 
 
-# ── Stock photo (Pixabay) ──────────────────────────────────────────────────────
-
-def _fetch_stock_photo(
-    segment_id: int,
-    keyword: str,
-    api_key: str,
-    output_path: str,
-    on_progress=None,
-) -> bool:
-    if not api_key:
-        if on_progress:
-            on_progress(f"Segment {segment_id} — no Pixabay API key, using black frame fallback")
-        return False
-
-    import requests
-
-    params = {
-        "key": api_key,
-        "q": keyword,
-        "image_type": "photo",
-        "orientation": "horizontal",
-        "per_page": 3,
-        "safesearch": "true",
-    }
-
-    for attempt in range(2):
-        try:
-            resp = requests.get(PIXABAY_SEARCH_URL, params=params, timeout=15)
-        except Exception as e:
-            if on_progress:
-                on_progress(f"Segment {segment_id} — Pixabay error: {e}, using black frame")
-            return False
-
-        if resp.status_code == 429:
-            if attempt == 0:
-                time.sleep(5)
-                continue
-            return False
-
-        if resp.status_code == 400:
-            raise ValueError("Pixabay API key is invalid.")
-
-        if resp.status_code != 200:
-            return False
-
-        hits = resp.json().get("hits", [])
-        if not hits:
-            if on_progress:
-                on_progress(f'Segment {segment_id} — no Pixabay results for "{keyword}", using black frame')
-            return False
-
-        hit = hits[0]
-        image_url = hit.get("largeImageURL") or hit.get("webformatURL")
-        if not image_url:
-            return False
-
-        img_resp = requests.get(image_url, timeout=30, stream=True)
-        if img_resp.status_code == 200:
-            with open(output_path, "wb") as f:
-                for chunk in img_resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            if on_progress:
-                on_progress(f'Segment {segment_id} — stock photo downloaded')
-            return True
-
-    return False
-
-
 # ── Public Entry Point ─────────────────────────────────────────────────────────
 
 def fetch_visual(
     segment_id: int,
     keyword: str,
     narration: str,
-    visual_type: str,
-    pixabay_api_key: str,
     cache_dir: str,
     huggingface_api_key: str = "",
     aspect_ratio: str = "16:9",
@@ -247,6 +177,7 @@ def fetch_visual(
     video_title: str = "",
     visual_style: str = "",
     on_progress=None,
+    visual_type: str = "ai_image",
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
@@ -264,58 +195,45 @@ def fetch_visual(
     width, height = _get_dimensions(aspect_ratio)
     success = False
 
-    if visual_type == "ai_image":
-        import hashlib
-        seed_str = f"{render_id}-{segment_id}"
-        seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16) % 99999 + 1
+    # We always generate an AI image (ignoring stock_photo visual_type entirely)
+    import hashlib
+    seed_str = f"{render_id}-{segment_id}"
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16) % 99999 + 1
 
-        prompt = _build_final_prompt(
-            keyword=keyword,
-            narration=narration,
-            video_title=video_title,
-            visual_style=visual_style,
-            aspect_ratio=aspect_ratio
-        )
+    prompt = _build_final_prompt(
+        keyword=keyword,
+        narration=narration,
+        video_title=video_title,
+        visual_style=visual_style,
+        aspect_ratio=aspect_ratio
+    )
 
-        if huggingface_api_key:
-            if on_progress:
-                on_progress(f"Segment {segment_id} — generating AI image via HF FLUX ({aspect_ratio})...")
-            success = _fetch_hf_flux_image(
-                segment_id=segment_id,
-                prompt=prompt,
-                width=width,
-                height=height,
-                hf_token=huggingface_api_key,
-                output_path=output_path,
-                on_progress=on_progress
-            )
-
-        if not success:
-            # Fallback to Pollinations.ai (using custom width/height and seed)
-            if on_progress:
-                on_progress(f"Segment {segment_id} — generating AI image via Pollinations Fallback ({aspect_ratio})...")
-            success = _fetch_pollinations_image(
-                segment_id=segment_id,
-                prompt=prompt,
-                width=width,
-                height=height,
-                output_path=output_path,
-                seed=seed,
-                on_progress=on_progress
-            )
-
-    elif visual_type == "stock_photo":
-        success = _fetch_stock_photo(
-            segment_id=segment_id,
-            keyword=keyword,
-            api_key=pixabay_api_key,
-            output_path=output_path,
-            on_progress=on_progress,
-        )
-
-    else:
+    if huggingface_api_key:
         if on_progress:
-            on_progress(f'Segment {segment_id} — unknown visual_type "{visual_type}", using black frame')
+            on_progress(f"Segment {segment_id} — generating AI image via HF FLUX ({aspect_ratio})...")
+        success = _fetch_hf_flux_image(
+            segment_id=segment_id,
+            prompt=prompt,
+            width=width,
+            height=height,
+            hf_token=huggingface_api_key,
+            output_path=output_path,
+            on_progress=on_progress
+        )
+
+    if not success:
+        # Fallback to Pollinations.ai (using custom width/height and seed)
+        if on_progress:
+            on_progress(f"Segment {segment_id} — generating AI image via Pollinations Fallback ({aspect_ratio})...")
+        success = _fetch_pollinations_image(
+            segment_id=segment_id,
+            prompt=prompt,
+            width=width,
+            height=height,
+            output_path=output_path,
+            seed=seed,
+            on_progress=on_progress
+        )
 
     if not success:
         _create_black_frame(output_path, width, height)

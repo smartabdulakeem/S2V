@@ -42,13 +42,8 @@ async function initApp() {
     document.getElementById("version-badge").textContent = `v2.0.0 (Cloud)`;
     
     // Load credentials from browser localStorage
-    const pexelsKey = localStorage.getItem("pixabay_api_key") || "";
     const hfKey = localStorage.getItem("huggingface_api_key") || "";
     
-    if (pexelsKey) {
-      document.getElementById("pexels-key-input").value = pexelsKey;
-      setKeyStatus("saved", "✓ Pixabay saved");
-    }
     if (hfKey) {
       document.getElementById("huggingface-key-input").value = hfKey;
       setHFKeyStatus("saved", "✓ Token saved");
@@ -63,10 +58,6 @@ async function initApp() {
     document.getElementById("version-badge").textContent = `v${version}`;
 
     const settings = await window.pywebview.api.get_settings();
-    if (settings.pixabay_api_key) {
-      document.getElementById("pexels-key-input").value = settings.pixabay_api_key;
-      setKeyStatus("saved", "✓ Pixabay saved");
-    }
     if (settings.huggingface_api_key) {
       document.getElementById("huggingface-key-input").value = settings.huggingface_api_key;
       setHFKeyStatus("saved", "✓ Token saved");
@@ -562,41 +553,7 @@ function setHFKeyStatus(type, msg) {
   el.className = "key-status" + (type === "saved" ? " ok" : type === "err" ? " err" : "");
 }
 
-// ── Pixabay key ───────────────────────────────────────────────────────────────
-
-let keyDirty = false;
-
-function onKeyInput() {
-  keyDirty = true;
-  setKeyStatus("", "");
-  updateRenderButton();
-}
-
-async function saveKey() {
-  const key = document.getElementById("pexels-key-input").value.trim();
-  if (!key) {
-    setKeyStatus("err", "✗ Key is empty");
-    return;
-  }
-  
-  if (isWebMode) {
-    localStorage.setItem("pixabay_api_key", key);
-    keyDirty = false;
-    setKeyStatus("saved", "✓ Saved (Local)");
-    updateRenderButton();
-  } else {
-    await window.pywebview.api.save_pixabay_key(key);
-    keyDirty = false;
-    setKeyStatus("saved", "✓ Saved");
-    updateRenderButton();
-  }
-}
-
-function setKeyStatus(type, msg) {
-  const el = document.getElementById("key-status");
-  el.textContent = msg;
-  el.className = "key-status" + (type === "saved" ? " ok" : type === "err" ? " err" : "");
-}
+// Pixabay support removed
 
 // ── Render button state ───────────────────────────────────────────────────────
 
@@ -632,7 +589,6 @@ async function approveAndRender() {
 async function startRender() {
   if (!currentScriptPath || isRendering) return;
 
-  if (keyDirty) await saveKey();
   if (hfKeyDirty) await saveHuggingFaceKey();
 
   isRendering = true;

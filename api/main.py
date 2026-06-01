@@ -103,7 +103,7 @@ def parse_plain_text():
             text=text,
             title=title,
             voice=voice,
-            filename=filename,
+            output_filename=filename,
             visual_style=visual_style,
             hf_token=hf_token
         )

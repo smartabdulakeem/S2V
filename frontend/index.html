@@ -195,23 +195,6 @@
         <button class="btn btn-secondary" id="btn-save-hf-key" onclick="saveHuggingFaceKey()">Save</button>
         <span class="key-status" id="hf-key-status"></span>
       </div>
-
-      <!-- Pixabay Key -->
-      <p class="hint" style="margin-bottom:6px;">
-        <strong>Pixabay API Key</strong> — only needed if you use
-        <code>stock_photo</code> visual segments instead of AI-generated illustrations. Free key at <span class="link-text">pixabay.com/api</span>.
-      </p>
-      <div class="key-row">
-        <input
-          type="password"
-          id="pexels-key-input"
-          placeholder="Paste your Pixabay API key here (optional)"
-          autocomplete="off"
-          oninput="onKeyInput()"
-        />
-        <button class="btn btn-secondary" id="btn-save-key" onclick="saveKey()">Save</button>
-        <span class="key-status" id="key-status"></span>
-      </div>
     </section>
 
     <!-- ── Section 4: Render (Manual triggers for loaded JSON) ── -->
