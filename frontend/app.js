@@ -87,8 +87,20 @@ async function previewVoice() {
   const status = document.getElementById('voice-preview-status');
 
   if (_previewAudio) {
-    _previewAudio.pause();
+    try {
+      _previewAudio.pause();
+    } catch(e) {}
     _previewAudio = null;
+  }
+
+  // 1. Unlocked Audio Element Trick: Create the element synchronously inside the click handler
+  // and load a tiny silent WAV placeholder. Play it to establish user-interaction context.
+  const audio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA");
+  _previewAudio = audio;
+  try {
+    await audio.play();
+  } catch (playErr) {
+    console.warn("Muted autoplay unlock failed, continuing...", playErr);
   }
 
   btn.disabled = true;
@@ -118,19 +130,22 @@ async function previewVoice() {
 
   if (!result.success) {
     status.textContent = '✗ Error: ' + (result.error || 'Failed');
+    _previewAudio = null;
     return;
   }
 
+  // 2. Swapping source to base64 audio and trigger playback. 
+  // The browser allows this because the audio element was unlocked during the initial click event.
   status.textContent = '▶ Playing…';
-  const audio = new Audio('data:audio/mp3;base64,' + result.audio_b64);
-  _previewAudio = audio;
+  audio.src = 'data:audio/mp3;base64,' + result.audio_b64;
   audio.onended = () => {
     status.textContent = '';
     _previewAudio = null;
   };
+  
   audio.play().catch(err => {
     status.textContent = '✗ Play blocked';
-    console.error("Audio play failed:", err);
+    console.error("Audio playback failed:", err);
   });
 }
 
