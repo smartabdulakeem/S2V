@@ -276,7 +276,16 @@ window.onParseComplete = function(result) {
   }
 
   document.getElementById('sb-style-guide').textContent = currentScriptData.project.visual_style || "cinematic";
-  document.getElementById('sb-status').textContent = result.fallback ? "⚠️ Planned (Rule Fallback)" : "🤖 AI Structured";
+  if (result.fallback) {
+    let cleanErr = result.error_msg || "Token missing or API call failed";
+    if (cleanErr.length > 50) {
+      cleanErr = cleanErr.substring(0, 50) + "...";
+    }
+    document.getElementById('sb-status').textContent = `⚠️ Planned (Rule Fallback) — ${cleanErr}`;
+    console.warn("AI Storyboard Planner fell back to rules. Error details:", result.error_msg);
+  } else {
+    document.getElementById('sb-status').textContent = "🤖 AI Structured";
+  }
   document.getElementById('sb-status').className = result.fallback ? "badge-err" : "badge-ok";
 
   // Build the list of scene editors
