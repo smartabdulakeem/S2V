@@ -4,7 +4,7 @@ import urllib.request
 import urllib.error
 from pipeline.text_parser import build_script
 
-HF_LLM_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
+HF_LLM_URL = "https://router.huggingface.co/hf-inference/models/Qwen/Qwen2.5-72B-Instruct"
 
 _LLM_PLANNER_PROMPT = """\
 You are an AI video editor and storyboard planning agent. Your task is to split a narration script into logical, scene-by-scene storyboard steps for a short video.

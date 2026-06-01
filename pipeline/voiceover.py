@@ -130,7 +130,7 @@ def _generate_with_hf(
     if not hf_token:
         raise ValueError("Hugging Face API Token is required for premium cloud voices.")
 
-    url = f"https://api-inference.huggingface.co/models/{model_id}"
+    url = f"https://router.huggingface.co/hf-inference/models/{model_id}"
     headers = {
         "Authorization": f"Bearer {hf_token}",
         "Content-Type": "application/json"

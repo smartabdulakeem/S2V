@@ -17,7 +17,7 @@ import urllib.parse
 from pathlib import Path
 
 PIXABAY_SEARCH_URL = "https://pixabay.com/api/"
-HF_FLUX_URL        = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+HF_FLUX_URL        = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
 POLLINATIONS_URL   = "https://image.pollinations.ai/prompt/{prompt}?width={width}&height={height}&nologo=true&seed={seed}&model=flux"
 
 ASPECT_RATIOS = {
