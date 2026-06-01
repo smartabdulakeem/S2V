@@ -1,7 +1,7 @@
 """
 Stage 5 — Segment composition.
 Combines image + audio + Ken Burns motion + burned-in captions + text overlay + transitions.
-Outputs a 1920x1080 30fps H.264 MP4 per segment.
+Outputs an MP4 per segment with dynamic width/height aspect ratios.
 """
 
 import os
@@ -12,8 +12,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 from pipeline.captions import parse_srt
 
-OUTPUT_W = 1920
-OUTPUT_H = 1080
 FPS = 30
 
 # ── Font loading ───────────────────────────────────────────────────────────────
@@ -37,71 +35,70 @@ def _get_font(size: int):
 
 # ── Image preparation ──────────────────────────────────────────────────────────
 
-def _load_and_fit(img_path: str) -> Image.Image:
-    """Load image and resize/crop to exactly fill 1920x1080 (cover, not letterbox)."""
+def _load_and_fit(img_path: str, width: int, height: int) -> Image.Image:
+    """Load image and resize/crop to exactly fill width x height (cover, not letterbox)."""
     img = Image.open(img_path).convert("RGB")
     iw, ih = img.size
 
-    scale = max(OUTPUT_W / iw, OUTPUT_H / ih)
+    scale = max(width / iw, height / ih)
     new_w = math.ceil(iw * scale)
     new_h = math.ceil(ih * scale)
     img = img.resize((new_w, new_h), Image.LANCZOS)
 
-    left = (new_w - OUTPUT_W) // 2
-    top = (new_h - OUTPUT_H) // 2
-    img = img.crop((left, top, left + OUTPUT_W, top + OUTPUT_H))
+    left = (new_w - width) // 2
+    top = (new_h - height) // 2
+    img = img.crop((left, top, left + width, top + height))
     return img
 
 
 # ── Ken Burns ─────────────────────────────────────────────────────────────────
 
-def _ken_burns_crop(img: Image.Image, t: float, duration: float, effect: str) -> Image.Image:
+def _ken_burns_crop(img: Image.Image, t: float, duration: float, effect: str, width: int, height: int) -> Image.Image:
     """
-    Return the 1920x1080 crop of img at time t for the given Ken Burns effect.
-    Works on an image already sized to at least 1920x1080 (use _load_and_fit first).
+    Return the width x height crop of img at time t for the given Ken Burns effect.
+    Works on an image already sized to at least width x height.
     """
     iw, ih = img.size
     progress = t / duration if duration > 0 else 0
 
     if effect == "zoom_in":
-        # Crop shrinks from 100% to 85% — creates zoom-in illusion
         scale_start, scale_end = 1.0, 0.85
         scale = scale_start + (scale_end - scale_start) * progress
-        cw = int(OUTPUT_W * scale)
-        ch = int(OUTPUT_H * scale)
+        cw = int(width * scale)
+        ch = int(height * scale)
         left = (iw - cw) // 2
         top = (ih - ch) // 2
 
     elif effect == "zoom_out":
         scale_start, scale_end = 0.85, 1.0
         scale = scale_start + (scale_end - scale_start) * progress
-        cw = int(OUTPUT_W * scale)
-        ch = int(OUTPUT_H * scale)
+        cw = int(width * scale)
+        ch = int(height * scale)
         left = (iw - cw) // 2
         top = (ih - ch) // 2
 
     elif effect == "pan_right":
-        cw = int(OUTPUT_W * 0.9)
-        ch = int(OUTPUT_H * 0.9)
+        cw = int(width * 0.9)
+        ch = int(height * 0.9)
         max_left = iw - cw
         left = int(max_left * progress)
         top = (ih - ch) // 2
 
     elif effect == "pan_left":
-        cw = int(OUTPUT_W * 0.9)
-        ch = int(OUTPUT_H * 0.9)
+        cw = int(width * 0.9)
+        ch = int(height * 0.9)
         max_left = iw - cw
         left = int(max_left * (1.0 - progress))
         top = (ih - ch) // 2
 
     else:  # "none"
         return img.crop((
-            (iw - OUTPUT_W) // 2, (ih - OUTPUT_H) // 2,
-            (iw + OUTPUT_W) // 2, (ih + OUTPUT_H) // 2
-        )).resize((OUTPUT_W, OUTPUT_H), Image.LANCZOS)
+            (iw - width) // 2, (ih - height) // 2,
+            (iw + width) // 2, (ih + height) // 2
+        )).resize((width, height), Image.LANCZOS)
 
     cropped = img.crop((left, top, left + cw, top + ch))
-    return cropped.resize((OUTPUT_W, OUTPUT_H), Image.LANCZOS)
+    return cropped.resize((width, height), Image.LANCZOS)
 
 
 # ── Caption drawing ────────────────────────────────────────────────────────────
@@ -109,19 +106,20 @@ def _ken_burns_crop(img: Image.Image, t: float, duration: float, effect: str) ->
 _CAPTION_FONT = None
 _OVERLAY_FONT = None
 
-def _draw_caption(draw: ImageDraw.Draw, text: str, font):
+def _draw_caption(draw: ImageDraw.Draw, text: str, font, width: int, height: int):
     """Draw white text with black outline at bottom-third position."""
     if not text.strip():
         return
 
-    # Wrap long lines
+    # Wrap long lines based on canvas width
     words = text.split()
     lines = []
     current = []
+    max_line_w = width - 120
     for word in words:
         test = " ".join(current + [word])
         bbox = draw.textbbox((0, 0), test, font=font)
-        if bbox[2] > OUTPUT_W - 120:
+        if bbox[2] > max_line_w:
             if current:
                 lines.append(" ".join(current))
             current = [word]
@@ -132,14 +130,20 @@ def _draw_caption(draw: ImageDraw.Draw, text: str, font):
 
     line_height = draw.textbbox((0, 0), "A", font=font)[3] + 8
     total_h = line_height * len(lines)
-    y_start = int(OUTPUT_H * 0.78) - total_h // 2
+    
+    # Adjust position slightly for vertical screens (9:16)
+    vertical_ratio = height / width
+    if vertical_ratio > 1.2:
+        y_start = int(height * 0.72) - total_h // 2
+    else:
+        y_start = int(height * 0.78) - total_h // 2
 
     outline_offsets = [(-2, -2), (2, -2), (-2, 2), (2, 2), (0, -3), (0, 3), (-3, 0), (3, 0)]
 
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
         line_w = bbox[2] - bbox[0]
-        x = (OUTPUT_W - line_w) // 2
+        x = (width - line_w) // 2
 
         for dx, dy in outline_offsets:
             draw.text((x + dx, y_start + dy), line, font=font, fill=(0, 0, 0))
@@ -147,37 +151,53 @@ def _draw_caption(draw: ImageDraw.Draw, text: str, font):
         y_start += line_height
 
 
-_OVERLAY_POSITIONS = {
-    "top_left":     (60, 60),
-    "top_center":   (OUTPUT_W // 2, 60),
-    "top_right":    (OUTPUT_W - 60, 60),
-    "bottom_left":  (60, OUTPUT_H - 120),
-    "bottom_center":(OUTPUT_W // 2, OUTPUT_H - 120),
-    "bottom_right": (OUTPUT_W - 60, OUTPUT_H - 120),
-    "center":       (OUTPUT_W // 2, OUTPUT_H // 2),
-}
-
-def _draw_text_overlay(draw: ImageDraw.Draw, overlay: dict, t: float, font):
+def _draw_text_overlay(draw: ImageDraw.Draw, overlay: dict, t: float, font, width: int, height: int):
     """Draw text overlay if t is within its duration."""
     if not overlay or t > overlay.get("duration_seconds", 0):
         return
     text = overlay.get("text", "")
     position_key = overlay.get("position", "bottom_center")
-    x, y = _OVERLAY_POSITIONS.get(position_key, _OVERLAY_POSITIONS["bottom_center"])
 
-    # Semi-transparent background pill — drawn as a filled rectangle
+    # Calculate dynamic overlay coordinates based on current width/height
+    overlay_positions = {
+        "top_left":      (60, 60),
+        "top_center":    (width // 2, 60),
+        "top_right":     (width - 60, 60),
+        "bottom_left":   (60, height - 120),
+        "bottom_center": (width // 2, height - 120),
+        "bottom_right":  (width - 60, height - 120),
+        "center":        (width // 2, height // 2),
+    }
+    
+    x, y = overlay_positions.get(position_key, overlay_positions["bottom_center"])
+
+    # Draw background pill
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
     pad = 16
-    rx = x - tw // 2 - pad
+
+    # Constrain positioning so text doesn't flow off screen
+    if "center" in position_key:
+        rx = x - tw // 2 - pad
+        tx = x - tw // 2
+    elif "left" in position_key:
+        rx = x - pad
+        tx = x
+    else: # right
+        rx = x - tw - pad
+        tx = x - tw
+
     ry = y - th // 2 - pad
-    draw.rectangle([rx, ry, rx + tw + pad * 2, ry + th + pad * 2], fill=(0, 0, 0, 160))
+    ty = y - th // 2
+
+    # Draw rounded rectangle behind overlay
+    draw.rounded_rectangle([rx, ry, rx + tw + pad * 2, ry + th + pad * 2], radius=8, fill=(0, 0, 0, 160))
 
     outline_offsets = [(-2, -2), (2, -2), (-2, 2), (2, 2)]
     for dx, dy in outline_offsets:
-        draw.text((x - tw // 2 + dx, y - th // 2 + dy), text, font=font, fill=(0, 0, 0))
-    draw.text((x - tw // 2, y - th // 2), text, font=font, fill=(255, 230, 100))
+        draw.text((tx + dx, ty + dy), text, font=font, fill=(0, 0, 0))
+    draw.text((tx, ty), text, font=font, fill=(255, 230, 100))
 
 
 # ── Transition helpers ─────────────────────────────────────────────────────────
@@ -205,48 +225,56 @@ def compose_segment(
     transition_in: str,
     transition_out: str,
     cache_dir: str,
+    width: int = 1920,
+    height: int = 1080,
     on_progress=None,
 ) -> str:
     """
-    Compose a single segment into a 1080p MP4.
+    Compose a single segment into an MP4 of resolution width x height.
     Returns the path to the rendered MP4.
     Skips if already cached.
     """
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_final.mp4")
 
     if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-        if on_progress:
-            on_progress(f"Segment {segment_id} — video already cached, skipping")
-        return output_path
+        # Check if the cached file has the correct video dimensions
+        # Simple safeguard to re-render if ratio changed in settings
+        try:
+            from moviepy.editor import VideoFileClip
+            with VideoFileClip(output_path) as clip:
+                if clip.size[0] == width and clip.size[1] == height:
+                    if on_progress:
+                        on_progress(f"Segment {segment_id} — video already cached with correct dimensions, skipping")
+                    return output_path
+        except Exception:
+            pass
 
     if on_progress:
-        on_progress(f"Segment {segment_id} — composing video")
+        on_progress(f"Segment {segment_id} — composing video ({width}x{height})")
 
     from moviepy.editor import AudioFileClip, VideoClip
 
     audio = AudioFileClip(audio_path)
     duration = audio.duration
 
-    # Load base image (fitted to 1920x1080)
-    base_img = _load_and_fit(visual_path)
+    # Load base image (fitted to target canvas size)
+    base_img = _load_and_fit(visual_path, width, height)
     # Enlarge slightly so Ken Burns crops don't go out of bounds
-    pad_w = int(OUTPUT_W * 1.25)
-    pad_h = int(OUTPUT_H * 1.25)
+    pad_w = int(width * 1.25)
+    pad_h = int(height * 1.25)
     base_img = base_img.resize((pad_w, pad_h), Image.LANCZOS)
 
     captions = parse_srt(srt_path) if srt_path and os.path.exists(srt_path) else []
 
-    global _CAPTION_FONT, _OVERLAY_FONT
-    if _CAPTION_FONT is None:
-        _CAPTION_FONT = _get_font(52)
-    if _OVERLAY_FONT is None:
-        _OVERLAY_FONT = _get_font(64)
+    # Dynamic font size based on width (e.g. 52px for 1920w, smaller for vertical/squares)
+    caption_font_size = max(24, int(width * 0.027))
+    overlay_font_size = max(28, int(width * 0.033))
 
-    cap_font = _CAPTION_FONT
-    ovl_font = _OVERLAY_FONT
+    cap_font = _get_font(caption_font_size)
+    ovl_font = _get_font(overlay_font_size)
 
     def make_frame(t):
-        frame = _ken_burns_crop(base_img, t, duration, ken_burns)
+        frame = _ken_burns_crop(base_img, t, duration, ken_burns, width, height)
 
         # Draw captions and overlay onto a PIL Image
         frame_rgba = frame.convert("RGBA")
@@ -260,11 +288,11 @@ def compose_segment(
                 active_caption = text
                 break
         if active_caption:
-            _draw_caption(draw, active_caption, cap_font)
+            _draw_caption(draw, active_caption, cap_font, width, height)
 
         # Text overlay (timed)
         if text_overlay:
-            _draw_text_overlay(draw, text_overlay, t, ovl_font)
+            _draw_text_overlay(draw, text_overlay, t, ovl_font, width, height)
 
         # Composite caption layer onto frame
         frame_rgba = Image.alpha_composite(frame_rgba, overlay_layer)

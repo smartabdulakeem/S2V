@@ -11,10 +11,10 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from pipeline.validator import validate_file, estimate_duration
-from pipeline.voiceover import generate_voiceover, get_audio_duration
+from pipeline.validator import validate_file
+from pipeline.voiceover import generate_voiceover
 from pipeline.captions import generate_captions
-from pipeline.visuals import fetch_visual
+from pipeline.visuals import fetch_visual, _get_dimensions
 from pipeline.composer import compose_segment
 from pipeline.stitcher import stitch_segments
 
@@ -68,7 +68,7 @@ class RenderOrchestrator:
         if self.logger:
             self.logger.info(message)
 
-    def render(self, script_path: str, pexels_api_key: str, google_api_key: str = "") -> dict:
+    def render(self, script_path: str, pexels_api_key: str, huggingface_api_key: str = "") -> dict:
         """
         Run the full render pipeline.
         Returns {"success": True, "output": path} or {"success": False, "error": message}
@@ -101,11 +101,18 @@ class RenderOrchestrator:
         total = len(segments)
         video_title  = proj.get("title", "")
         visual_style = proj.get("visual_style", "")
+        aspect_ratio = proj.get("aspect_ratio", "16:9")
+        if aspect_ratio not in ("16:9", "9:16", "1:1", "4:3"):
+            aspect_ratio = "16:9"
+
+        width, height = _get_dimensions(aspect_ratio)
+
         self._log(f"Loaded script: {proj['title']} — {total} segments")
+        self._log(f"Aspect Ratio: {aspect_ratio} ({width}x{height})")
         if visual_style:
             self._log(f"Visual style: {visual_style}")
-        if google_api_key:
-            self._log("Gemini prompt writer: enabled — image prompts will be AI-generated")
+        if huggingface_api_key:
+            self._log("Hugging Face API integrations enabled for visuals and premium voiceovers")
 
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
@@ -133,7 +140,7 @@ class RenderOrchestrator:
                     voice_rate=proj.get("voice_rate", "+0%"),
                     voice_pitch=proj.get("voice_pitch", "+0Hz"),
                     cache_dir=self.cache_dir,
-                    google_api_key=google_api_key,
+                    huggingface_api_key=huggingface_api_key,
                     on_progress=progress,
                 )
 
@@ -159,12 +166,13 @@ class RenderOrchestrator:
                     keyword=seg["b_roll_keyword"],
                     narration=seg.get("narration", ""),
                     visual_type=seg.get("visual_type", "ai_image"),
-                    api_key=pexels_api_key,
+                    pixabay_api_key=pexels_api_key,
                     cache_dir=self.cache_dir,
+                    huggingface_api_key=huggingface_api_key,
+                    aspect_ratio=aspect_ratio,
                     render_id=render_id,
                     video_title=video_title,
                     visual_style=visual_style,
-                    google_api_key=google_api_key,
                     on_progress=progress,
                 )
 
@@ -183,6 +191,8 @@ class RenderOrchestrator:
                     transition_in=seg.get("transition_in", "cut"),
                     transition_out=seg.get("transition_out", "cut"),
                     cache_dir=self.cache_dir,
+                    width=width,
+                    height=height,
                     on_progress=progress,
                 )
                 segment_paths.append(seg_video)

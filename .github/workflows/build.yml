@@ -40,24 +40,6 @@ jobs:
           Copy-Item "$($inner.FullName)\bin\ffplay.exe"  "vendor\ffmpeg\bin\"
         shell: powershell
 
-      - name: Download Piper TTS
-        run: |
-          New-Item -ItemType Directory -Force -Path "vendor\piper\voices"
-          $piperUrl = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
-          Invoke-WebRequest -Uri $piperUrl -OutFile "piper.zip"
-          Expand-Archive -Path "piper.zip" -DestinationPath "piper_tmp" -Force
-          # Handle nested folder or flat zip
-          $piperExe = Get-ChildItem -Path "piper_tmp" -Filter "piper.exe" -Recurse | Select-Object -First 1
-          if ($piperExe) {
-            Copy-Item $piperExe.FullName "vendor\piper\piper.exe"
-            Get-ChildItem $piperExe.Directory -Filter "*.dll" | Copy-Item -Destination "vendor\piper\"
-          }
-          # Download en_US-ryan-high voice model
-          $voiceBase = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high"
-          Invoke-WebRequest -Uri "$voiceBase/en_US-ryan-high.onnx"      -OutFile "vendor\piper\voices\en_US-ryan-high.onnx"
-          Invoke-WebRequest -Uri "$voiceBase/en_US-ryan-high.onnx.json" -OutFile "vendor\piper\voices\en_US-ryan-high.onnx.json"
-        shell: powershell
-
       - name: Build with PyInstaller
         run: |
           pyinstaller `

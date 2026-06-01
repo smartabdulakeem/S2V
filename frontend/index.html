@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>S2V — Script-to-Video Pipeline</title>
+  <title>S2V — Script-to-Video Pipeline v2.0</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -14,10 +14,10 @@
         <span class="logo-icon">▶</span>
         <div>
           <h1>S2V</h1>
-          <p class="subtitle">Script-to-Video Pipeline</p>
+          <p class="subtitle">AI Script-to-Video Agent</p>
         </div>
       </div>
-      <span class="version" id="version-badge">v1.0.0</span>
+      <span class="version" id="version-badge">v2.0.0</span>
     </div>
   </header>
 
@@ -40,75 +40,77 @@
       <!-- ── Plain Text mode ── -->
       <div id="mode-text">
         <p class="hint" style="margin-bottom:12px;">
-          Paste your script below. The app will automatically split it into scenes
-          and find matching images for each one.
+          Paste your script below. The AI Agent will split it into scenes, write detailed image generation prompts, and estimate speech/render times.
         </p>
 
         <div class="plain-form">
-          <div class="plain-row">
-            <label class="plain-label">Video Title</label>
-            <input type="text" id="pt-title" class="plain-input"
-              placeholder="e.g. The Rise of Baghdad" />
-          </div>
-          <div class="plain-row">
-            <label class="plain-label">Output Filename</label>
-            <input type="text" id="pt-filename" class="plain-input"
-              placeholder="e.g. rise_of_baghdad (no spaces)" />
-          </div>
-          <div class="plain-row">
-            <label class="plain-label">Voice</label>
-            <div class="voice-row">
-              <select id="pt-voice" class="plain-input" style="flex:1;">
-                <optgroup label="✨ Gemini AI Voices (requires Google API key)">
-                  <option value="gemini:Charon">Gemini — Charon (Informative Male)</option>
-                  <option value="gemini:Sadaltager">Gemini — Sadaltager (Knowledgeable Male)</option>
-                  <option value="gemini:Rasalgethi">Gemini — Rasalgethi (Authoritative Male)</option>
-                  <option value="gemini:Orus">Gemini — Orus (Firm Male)</option>
-                  <option value="gemini:Algieba">Gemini — Algieba (Smooth Male)</option>
-                  <option value="gemini:Sulafat">Gemini — Sulafat (Warm Female)</option>
-                  <option value="gemini:Aoede">Gemini — Aoede (Clear Female)</option>
-                  <option value="gemini:Kore">Gemini — Kore (Firm Female)</option>
-                </optgroup>
-                <optgroup label="🔊 Edge TTS Voices (free, no key needed)">
-                  <option value="en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
-                  <option value="en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
-                  <option value="en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
-                  <option value="en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
-                  <option value="en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
-                  <option value="en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
-                </optgroup>
-                <optgroup label="🖥️ Piper Offline Voices (download via setup.bat)">
-                  <option value="piper:en_US-ryan-high">Piper — US Male Ryan (High Quality)</option>
-                  <option value="piper:en_GB-alan-medium">Piper — British Male Alan (Medium)</option>
-                </optgroup>
-              </select>
-              <button class="btn btn-secondary" id="btn-preview-voice" onclick="previewVoice()">
-                ▶ Preview
-              </button>
-              <span id="voice-preview-status" class="voice-preview-status"></span>
+          <div class="form-grid-2">
+            <div class="plain-row">
+              <label class="plain-label">Video Title</label>
+              <input type="text" id="pt-title" class="plain-input"
+                placeholder="e.g. The Rise of Baghdad" />
+            </div>
+            <div class="plain-row">
+              <label class="plain-label">Output Filename</label>
+              <input type="text" id="pt-filename" class="plain-input"
+                placeholder="e.g. rise_of_baghdad" />
             </div>
           </div>
-          <div class="plain-row">
-            <label class="plain-label">Visual Style</label>
-            <input type="text" id="pt-visual-style" class="plain-input"
-              placeholder="e.g. Islamic golden age, warm cinematic tones, photorealistic (optional)" />
+          
+          <div class="form-grid-2">
+            <div class="plain-row">
+              <label class="plain-label">Voice Engine</label>
+              <div class="voice-row">
+                <select id="pt-voice" class="plain-input" style="flex:1;">
+                  <optgroup label="🔊 Edge Neural Voices (free, cloud, fast)">
+                    <option value="edge:en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
+                    <option value="edge:en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
+                    <option value="edge:en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
+                    <option value="edge:en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
+                    <option value="edge:en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
+                    <option value="edge:en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
+                  </optgroup>
+                  <optgroup label="✨ Premium Cloud Voices (requires Hugging Face token)">
+                    <option value="hf:suno/bark">🎭 Suno Bark (Emotional/Expressive)</option>
+                    <option value="hf:suno/bark-small">🎭 Suno Bark Small (Fast/Expressive)</option>
+                    <option value="hf:coqui/XTTS-v2">👤 Coqui XTTS-v2 (Neural Speech)</option>
+                  </optgroup>
+                  <optgroup label="💻 Offline Local Voices (completely offline)">
+                    <option value="local:piper">💻 Local Piper (en_US-lessac-medium)</option>
+                  </optgroup>
+                </select>
+                <button class="btn btn-secondary" id="btn-preview-voice" onclick="previewVoice()">
+                  ▶ Preview
+                </button>
+                <span id="voice-preview-status" class="voice-preview-status"></span>
+              </div>
+            </div>
+            
+            <div class="plain-row">
+              <label class="plain-label">Aspect Ratio</label>
+              <select id="pt-aspect-ratio" class="plain-input">
+                <option value="16:9">16:9 (Widescreen for YouTube/Desktop)</option>
+                <option value="9:16">9:16 (Vertical for Shorts/TikTok/Reels)</option>
+                <option value="1:1">1:1 (Square for Instagram/Socials)</option>
+                <option value="4:3">4:3 (Fullscreen Standard)</option>
+              </select>
+            </div>
           </div>
+
+          <div class="plain-row">
+            <label class="plain-label">Visual Style Guide</label>
+            <input type="text" id="pt-visual-style" class="plain-input"
+              placeholder="e.g. historical watercolor painting style, warm cinematic lighting, photorealistic (optional)" />
+          </div>
+
           <div class="plain-row">
             <label class="plain-label">Your Script</label>
             <textarea id="pt-script" class="plain-textarea"
-              placeholder="Paste your full script here. The app splits it into scenes automatically — one scene per paragraph, or every ~45 words if you have no paragraph breaks.
-
-Example:
-In the 8th century, Baghdad became the centre of the known world.
-
-The Caliph Harun al-Rashid built a city unlike any other. Scholars arrived from every corner of the earth.
-
-They translated every book they could find into Arabic. Mathematics, medicine, astronomy — all flourished here.
-
-The House of Wisdom was born. And with it, an age of discovery that would last five centuries."></textarea>
+              placeholder="Paste your script text here. Separate scenes with blank lines for precise manual control, or paste raw text to let the AI agent structure it automatically."></textarea>
           </div>
+          
           <button class="btn btn-primary" id="btn-parse" onclick="parsePlainText()">
-            Parse Script →
+            Generate Storyboard Plan →
           </button>
         </div>
       </div>
@@ -143,20 +145,13 @@ The House of Wisdom was born. And with it, an age of discovery that would last f
             <span class="summary-value" id="s-voice">—</span>
           </div>
           <div class="summary-item">
-            <span class="summary-label">Output File</span>
-            <span class="summary-value" id="s-output">—</span>
+            <span class="summary-label">Aspect Ratio</span>
+            <span class="summary-value" id="s-aspect-ratio">—</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">Status</span>
             <span class="summary-value" id="s-validation">—</span>
           </div>
-        </div>
-        <!-- Keywords preview -->
-        <div id="keywords-wrap" class="keywords-wrap hidden">
-          <span class="summary-label" style="display:block;margin-bottom:6px;">
-            Image search terms (auto-detected per scene)
-          </span>
-          <div id="keywords-list" class="keywords-list"></div>
         </div>
       </div>
 
@@ -164,31 +159,55 @@ The House of Wisdom was born. And with it, an age of discovery that would last f
       <div id="validation-errors" class="error-block hidden"></div>
     </section>
 
-    <!-- ── Section 2: API Keys ── -->
-    <section class="card" id="section-key">
-      <div class="card-title">2 — API Keys</div>
+    <!-- ── Section 2: Storyboard Review Screen (Hidden until parsed/loaded) ── -->
+    <section class="card hidden card-fade-in" id="section-storyboard">
+      <div class="card-title">🤖 AI Agent Storyboard Planner</div>
+      
+      <div class="storyboard-summary">
+        <div><strong>Est. Video Duration:</strong> <span id="sb-est-duration">-</span></div>
+        <div><strong>Est. Render Duration:</strong> <span id="sb-est-render">-</span></div>
+        <div><strong>Visual Style:</strong> <span id="sb-style-guide">-</span></div>
+        <div><strong>Status:</strong> <span id="sb-status">Pending Review</span></div>
+      </div>
 
-      <!-- Google API Key -->
+      <div id="storyboard-scenes-container" class="scenes-list">
+        <!-- Scene cards rendered dynamically -->
+      </div>
+
+      <div class="storyboard-actions">
+        <button class="btn btn-secondary" onclick="saveStoryboardEdits(true)" style="margin-right:12px;">
+          💾 Save Changes
+        </button>
+        <button class="btn btn-primary btn-render" id="btn-approve-render" onclick="approveAndRender()">
+          ▶ Approve & Start Render
+        </button>
+      </div>
+    </section>
+
+    <!-- ── Section 3: Credentials / API Keys ── -->
+    <section class="card" id="section-key">
+      <div class="card-title">2 — Credentials & API Keys</div>
+
+      <!-- Hugging Face Token -->
       <p class="hint" style="margin-bottom:6px;">
-        <strong>Google API Key</strong> — enables Gemini to write a unique, detailed image prompt
-        for every scene. Get a free key at <span class="link-text">aistudio.google.com</span>.
+        <strong>Hugging Face Access Token</strong> — enables LLM planning, Flux high-fidelity image rendering, and premium Suno Bark / Coqui voiceovers. Get a token at <span class="link-text">huggingface.co/settings/tokens</span>.
       </p>
       <div class="key-row" style="margin-bottom:14px;">
         <input
           type="password"
-          id="google-key-input"
-          placeholder="Paste your Google AI Studio API key here"
+          id="huggingface-key-input"
+          placeholder="Paste your Hugging Face read or write access token here"
           autocomplete="off"
-          oninput="onGoogleKeyInput()"
+          oninput="onHuggingFaceKeyInput()"
         />
-        <button class="btn btn-secondary" id="btn-save-google-key" onclick="saveGoogleKey()">Save</button>
-        <span class="key-status" id="google-key-status"></span>
+        <button class="btn btn-secondary" id="btn-save-hf-key" onclick="saveHuggingFaceKey()">Save</button>
+        <span class="key-status" id="hf-key-status"></span>
       </div>
 
       <!-- Pixabay Key -->
       <p class="hint" style="margin-bottom:6px;">
         <strong>Pixabay API Key</strong> — only needed if you use
-        <code>stock_photo</code> segments. Free key at <span class="link-text">pixabay.com/api</span>.
+        <code>stock_photo</code> visual segments instead of AI-generated illustrations. Free key at <span class="link-text">pixabay.com/api</span>.
       </p>
       <div class="key-row">
         <input
@@ -203,23 +222,23 @@ The House of Wisdom was born. And with it, an age of discovery that would last f
       </div>
     </section>
 
-    <!-- ── Section 3: Render ── -->
+    <!-- ── Section 4: Render (Manual triggers for loaded JSON) ── -->
     <section class="card" id="section-render">
-      <div class="card-title">3 — Render</div>
+      <div class="card-title">3 — Render Pipeline Control</div>
       <div class="render-row">
         <button class="btn btn-render" id="btn-render" disabled onclick="startRender()">
           ▶ Render Video
         </button>
         <button class="btn btn-cancel hidden" id="btn-cancel" onclick="cancelRender()">
-          ✕ Cancel
+          ✕ Cancel Rendering
         </button>
       </div>
-      <p class="render-hint" id="render-hint">Load a valid script and enter your Pexels key to begin.</p>
+      <p class="render-hint" id="render-hint">Plan a script or load a JSON file to render.</p>
     </section>
 
-    <!-- ── Section 4: Progress (shown during render) ── -->
+    <!-- ── Section 5: Progress (shown during render) ── -->
     <section class="card hidden" id="section-progress">
-      <div class="card-title">Progress</div>
+      <div class="card-title">Render Progress Tracker</div>
 
       <div class="stage-row">
         <span class="stage-label" id="stage-label">Initialising...</span>
@@ -233,13 +252,13 @@ The House of Wisdom was born. And with it, an age of discovery that would last f
       <div class="log-panel" id="log-panel"></div>
     </section>
 
-    <!-- ── Section 5: Complete (shown when done) ── -->
+    <!-- ── Section 6: Complete (shown when done) ── -->
     <section class="card hidden" id="section-complete">
-      <div class="complete-header">✅ Render Complete</div>
+      <div class="complete-header">✅ Rendering Completed Successfully!</div>
       <p class="complete-path" id="complete-path"></p>
       <div class="complete-actions">
         <button class="btn btn-primary" onclick="openOutputFolder()">Open Output Folder</button>
-        <button class="btn btn-secondary" onclick="renderAnother()">Render Another</button>
+        <button class="btn btn-secondary" onclick="renderAnother()">Create Another Video</button>
       </div>
     </section>
 

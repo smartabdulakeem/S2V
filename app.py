@@ -17,14 +17,13 @@ SETTINGS_PATH = os.path.join(BASE_DIR, "config", "settings.json")
 _vendor_ffmpeg = os.path.join(BASE_DIR, "vendor", "ffmpeg", "bin")
 if os.path.exists(_vendor_ffmpeg):
     os.environ["PATH"] = _vendor_ffmpeg + os.pathsep + os.environ.get("PATH", "")
-    # Tell moviepy explicitly where ffmpeg is
     os.environ["IMAGEIO_FFMPEG_EXE"] = os.path.join(_vendor_ffmpeg, "ffmpeg.exe")
 
 
 def _load_settings() -> dict:
     default = {
         "pixabay_api_key": "",
-        "google_api_key": "",
+        "huggingface_api_key": "",
         "output_dir": "output",
         "cache_dir": "cache",
         "whisper_model": "base",
@@ -33,6 +32,9 @@ def _load_settings() -> dict:
         try:
             with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
                 stored = json.load(f)
+            # Support migrating from old google_api_key settings if needed
+            if "google_api_key" in stored and "huggingface_api_key" not in stored:
+                stored["huggingface_api_key"] = ""
             default.update(stored)
         except Exception:
             pass
@@ -60,17 +62,15 @@ class Api:
     # ── Settings ──────────────────────────────────────────────────────────────
 
     def get_settings(self) -> dict:
-        # Never expose full keys to JS — return masked versions for display only
-        s = dict(self._settings)
-        return s
+        return dict(self._settings)
 
     def save_pixabay_key(self, key: str) -> dict:
         self._settings["pixabay_api_key"] = key.strip()
         _save_settings(self._settings)
         return {"success": True}
 
-    def save_google_key(self, key: str) -> dict:
-        self._settings["google_api_key"] = key.strip()
+    def save_huggingface_key(self, key: str) -> dict:
+        self._settings["huggingface_api_key"] = key.strip()
         _save_settings(self._settings)
         return {"success": True}
 
@@ -105,62 +105,59 @@ class Api:
             "estimated_duration": est,
             "voice": proj.get("voice", ""),
             "output_filename": proj.get("output_filename", ""),
+            "aspect_ratio": proj.get("aspect_ratio", "16:9"),
             "path": json_path,
+            "script_data": script
         }
 
     def preview_voice(self, voice_id: str) -> dict:
         """Generate a short audio sample for the chosen voice and return it as base64."""
         import base64
         import tempfile
+        from pipeline.voiceover import generate_voiceover
 
         sample_text = (
             "Welcome. This is a preview of the selected voice. "
-            "You are listening to the voice that will narrate your video."
+            "You are listening to the narration quality."
         )
 
         try:
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 tmp_path = f.name
 
-            if voice_id.startswith("gemini:"):
-                # Gemini TTS preview
-                from pipeline.voiceover import _generate_with_gemini
-                google_key = self._settings.get("google_api_key", "")
-                if not google_key:
-                    return {"success": False, "error": "Google API key not saved."}
-                voice_name = voice_id.split(":", 1)[1]
-                _generate_with_gemini(sample_text, voice_name, google_key, tmp_path)
+            hf_key = self._settings.get("huggingface_api_key", "")
+            
+            # Generate voiceover using the unified cloud TTS module
+            generate_voiceover(
+                segment_id=0,
+                narration=sample_text,
+                voice=voice_id,
+                voice_rate="+0%",
+                voice_pitch="+0Hz",
+                cache_dir=os.path.dirname(tmp_path),
+                huggingface_api_key=hf_key,
+            )
 
-            elif voice_id.startswith("piper:"):
-                # Piper offline TTS preview
-                from pipeline.voiceover import _generate_with_piper
-                voice_name = voice_id.split(":", 1)[1]
-                _generate_with_piper(sample_text, voice_name, tmp_path)
-
-            else:
-                # edge-tts preview
-                import asyncio
-                import edge_tts
-
-                async def _gen(path):
-                    communicate = edge_tts.Communicate(sample_text, voice_id)
-                    await communicate.save(path)
-
-                loop = asyncio.new_event_loop()
-                loop.run_until_complete(_gen(tmp_path))
-                loop.close()
-
-            with open(tmp_path, "rb") as f:
+            # Look for the generated output segment
+            generated_file = os.path.join(os.path.dirname(tmp_path), "segment_0_audio.mp3")
+            
+            with open(generated_file, "rb") as f:
                 audio_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-            os.unlink(tmp_path)
+            # Clean up
+            try:
+                os.unlink(generated_file)
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
             return {"success": True, "audio_b64": audio_b64}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def parse_plain_text(self, text: str, title: str, voice: str, output_filename: str, visual_style: str = "") -> dict:
+    def parse_plain_text(self, text: str, title: str, voice: str, output_filename: str, visual_style: str = "", aspect_ratio: str = "16:9") -> dict:
         """
-        Start plain-text parsing in a background thread.
+        Start plain-text parsing using the AI storyboard planner in a background thread.
         Returns immediately with {"started": True}.
         Result is delivered to JS via window.onParseComplete(result).
         """
@@ -180,53 +177,62 @@ class Api:
         def _run():
             try:
                 import tempfile
-                from pipeline.text_parser import build_script, build_script_with_ai
-                from pipeline.validator import validate_script, estimate_duration
+                from pipeline.ai_agent import generate_storyboard_plan
 
-                google_key = self._settings.get("google_api_key", "")
+                hf_token = self._settings.get("huggingface_api_key", "")
 
-                try:
-                    if google_key:
-                        # AI-powered splitting — falls back to rule-based internally
-                        script = build_script_with_ai(
-                            text, title, voice, output_filename,
-                            visual_style, google_key,
-                        )
-                    else:
-                        script = build_script(text, title, voice, output_filename, visual_style)
-                except ValueError as e:
-                    _push({"success": False, "errors": [str(e)]})
+                res = generate_storyboard_plan(
+                    text=text,
+                    title=title,
+                    voice=voice,
+                    output_filename=output_filename,
+                    visual_style=visual_style,
+                    hf_token=hf_token
+                )
+
+                if not res.get("success"):
+                    _push({"success": False, "errors": [res.get("error_msg", "Failed to plan storyboard")]})
                     return
 
-                errors = validate_script(script)
-                if errors:
-                    _push({"success": False, "errors": errors})
-                    return
+                script_dict = res["script"]
+                script_dict["project"]["aspect_ratio"] = aspect_ratio
 
+                # Save the planned script to a temporary file
                 tmp = tempfile.NamedTemporaryFile(
                     mode="w", suffix=".json", delete=False, encoding="utf-8"
                 )
-                json.dump(script, tmp, ensure_ascii=False, indent=2)
+                json.dump(script_dict, tmp, ensure_ascii=False, indent=2)
                 tmp.close()
 
-                est = estimate_duration(script)
-                segs = script["segments"]
+                segs = script_dict["segments"]
 
                 _push({
                     "success": True,
                     "path": tmp.name,
-                    "title": script["project"]["title"],
+                    "title": script_dict["project"]["title"],
                     "segment_count": len(segs),
-                    "estimated_duration": round(est),
-                    "voice": script["project"]["voice"],
-                    "output_filename": script["project"]["output_filename"],
-                    "keywords": [s["b_roll_keyword"] for s in segs],
+                    "estimated_duration": round(res["estimated_duration"]),
+                    "estimated_render_time": res["estimated_render_time"],
+                    "voice": script_dict["project"]["voice"],
+                    "output_filename": script_dict["project"]["output_filename"],
+                    "aspect_ratio": aspect_ratio,
+                    "fallback": res.get("fallback", False),
+                    "script_data": script_dict
                 })
             except Exception as e:
-                _push({"success": False, "errors": [f"Internal error: {type(e).__name__}: {e}"]})
+                _push({"success": False, "errors": [f"Internal planning error: {type(e).__name__}: {e}"]})
 
         threading.Thread(target=_run, daemon=True).start()
         return {"started": True}
+
+    def save_edited_script(self, path: str, script_data: dict) -> dict:
+        """Save edited storyboard script from frontend back to JSON file."""
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(script_data, f, ensure_ascii=False, indent=2)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     # ── Rendering ──────────────────────────────────────────────────────────────
 
@@ -235,15 +241,12 @@ class Api:
         if self._render_thread and self._render_thread.is_alive():
             return {"success": False, "error": "A render is already in progress."}
 
-        pexels_key  = self._settings.get("pixabay_api_key", "")
-        google_key  = self._settings.get("google_api_key", "")
+        pexels_key = self._settings.get("pixabay_api_key", "")
+        hf_key = self._settings.get("huggingface_api_key", "")
 
         from pipeline.orchestrator import RenderOrchestrator
 
         def on_event(event: dict):
-            # Push event to the JavaScript frontend.
-            # Use JSON.parse with a base64-encoded payload to avoid any
-            # backslash / quote escaping issues with Windows paths.
             import base64
             payload = base64.b64encode(
                 json.dumps(event, ensure_ascii=False).encode("utf-8")
@@ -254,7 +257,7 @@ class Api:
                     f"JSON.parse(atob('{payload}')))"
                 )
             except Exception:
-                pass  # never crash the render thread on a UI update failure
+                pass
 
         self._orchestrator = RenderOrchestrator(
             base_dir=BASE_DIR,
@@ -262,12 +265,11 @@ class Api:
         )
 
         def run():
-            self._orchestrator.render(script_path, pexels_key, google_key)
+            self._orchestrator.render(script_path, pexels_key, hf_key)
 
         self._render_thread = threading.Thread(target=run, daemon=True)
         self._render_thread.start()
 
-        # Send an immediate confirmation so the UI knows the render started
         on_event({"type": "log", "message": "Render started — loading pipeline modules…"})
 
         return {"success": True}
@@ -286,7 +288,7 @@ class Api:
         return {"success": True}
 
     def get_version(self) -> str:
-        return "1.0.0"
+        return "2.0.0"
 
 
 # ── Window bootstrap ───────────────────────────────────────────────────────────
@@ -294,7 +296,6 @@ class Api:
 def main():
     import webview
 
-    # Check FFmpeg is available before starting
     vendor_ffmpeg = os.path.join(BASE_DIR, "vendor", "ffmpeg", "bin", "ffmpeg.exe")
     if not os.path.exists(vendor_ffmpeg):
         import shutil
@@ -309,12 +310,12 @@ def main():
     api = Api()
 
     window = webview.create_window(
-        title="S2V — Script-to-Video Pipeline",
+        title="S2V — Script-to-Video Pipeline v2.0",
         url=os.path.join(BASE_DIR, "frontend", "index.html"),
         js_api=api,
-        width=960,
-        height=860,
-        min_size=(820, 700),
+        width=1000,
+        height=900,
+        min_size=(900, 750),
         resizable=True,
     )
 

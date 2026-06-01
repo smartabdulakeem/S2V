@@ -3,11 +3,8 @@ cache/
 output/
 logs/
 
-# ── FFmpeg vendor binary (downloaded by setup.bat, ~80 MB) ───────────────────
-vendor/ffmpeg/bin/
-vendor/ffmpeg/doc/
-vendor/ffmpeg/presets/
-vendor/ffmpeg/*.txt
+# ── FFmpeg and Piper binaries (downloaded by setup.bat) ──────────────────────
+vendor/
 
 # ── User settings / API keys ─────────────────────────────────────────────────
 config/settings.json

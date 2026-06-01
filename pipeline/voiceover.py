@@ -2,244 +2,216 @@
 Stage 2 — Voiceover generation.
 
 Engine routing (based on voice ID prefix):
-  "gemini:<Name>"   → Gemini 2.5 Flash TTS — natural, human-sounding
-  "piper:<Name>"    → Piper TTS — offline, free, no internet needed
-  anything else     → edge-tts — free, 400+ voices, reliable fallback
-
-Gemini voices:
-  gemini:Charon       informative, authoritative  ← best for documentary
-  gemini:Sadaltager   knowledgeable, measured
-  gemini:Rasalgethi   informative, clear
-  gemini:Orus         firm, confident
-  gemini:Algieba      smooth, professional
-  gemini:Sulafat      warm (female)
-  gemini:Aoede        clear (female)
-  gemini:Kore         firm (female)
-
-Piper voices (must be downloaded via setup.bat first):
-  piper:en_US-ryan-high    US male, high quality
-  piper:en_GB-alan-medium  British male
+  "edge:<Name>"    → edge-tts — free, 400+ voices, reliable (default fallback)
+  "hf:suno/bark"   → Suno Bark on Hugging Face Serverless
+  "hf:coqui/XTTS"  → Coqui XTTS-v2 on Hugging Face Serverless
+  "local:piper"    → local offline Piper TTS using lessac-medium model
 """
 
 import asyncio
-import base64
 import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
-import urllib.error
 import urllib.request
-import wave
+import urllib.error
 from pathlib import Path
 
-GEMINI_TTS_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash-preview-tts:generateContent?key={key}"
-)
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _get_base_dir() -> str:
-    """Return the S2V root directory — works in both dev and PyInstaller builds."""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    # voiceover.py lives in pipeline/, so go up one level
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
+# ── FFmpeg Finder ─────────────────────────────────────────────────────────────
 
 def _find_ffmpeg() -> str:
     env_path = os.environ.get("IMAGEIO_FFMPEG_EXE", "")
     if env_path and os.path.exists(env_path):
         return env_path
+    
+    # Check default vendor path
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    vendor_ffmpeg = os.path.join(base_dir, "vendor", "ffmpeg", "bin", "ffmpeg.exe")
+    if os.path.exists(vendor_ffmpeg):
+        return vendor_ffmpeg
+
     found = shutil.which("ffmpeg")
     if found:
         return found
     raise RuntimeError("FFmpeg not found. Please run setup.bat first.")
 
 
-def _pcm_to_mp3(pcm_bytes: bytes, sample_rate: int, output_path: str):
-    """Convert raw 16-bit mono PCM to MP3 via FFmpeg."""
+def _transcode_to_mp3(input_bytes: bytes, output_path: str):
+    """Write bytes to a temp file and transcode to MP3 using FFmpeg."""
     ffmpeg = _find_ffmpeg()
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        wav_path = tmp.name
+    with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as tmp:
+        tmp_path = tmp.name
+        tmp.write(input_bytes)
+
     try:
-        with wave.open(wav_path, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(sample_rate)
-            wf.writeframes(pcm_bytes)
-        subprocess.run(
-            [ffmpeg, "-y", "-i", wav_path,
-             "-codec:a", "libmp3lame", "-q:a", "2", output_path],
-            check=True, capture_output=True,
-        )
+        cmd = [
+            ffmpeg, "-y",
+            "-i", tmp_path,
+            "-codec:a", "libmp3lame",
+            "-q:a", "2",
+            output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"FFmpeg transcoding failed: {result.stderr}")
     finally:
         try:
-            os.unlink(wav_path)
+            os.unlink(tmp_path)
         except OSError:
             pass
 
+# ── Local Piper TTS ───────────────────────────────────────────────────────────
 
-def _wav_to_mp3(wav_path: str, output_path: str):
-    """Convert WAV to MP3 via FFmpeg."""
-    ffmpeg = _find_ffmpeg()
-    subprocess.run(
-        [ffmpeg, "-y", "-i", wav_path,
-         "-codec:a", "libmp3lame", "-q:a", "2", output_path],
-        check=True, capture_output=True,
-    )
+def _generate_with_local_piper(narration: str, output_path: str, on_progress=None, segment_id: int = 0):
+    """Generate audio offline using local Piper executable and model."""
+    piper_exe = r"C:\Users\HomePC\Downloads\piper_extracted\piper\piper.exe"
+    model_path = r"C:\Users\HomePC\Documents\GitHub\piper-desktop-skill\models\en_US-lessac-medium.onnx"
 
+    if not os.path.exists(piper_exe):
+        raise FileNotFoundError(f"Local Piper executable not found at: {piper_exe}")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Local Piper model ONNX file not found at: {model_path}")
 
-# ── Gemini TTS ────────────────────────────────────────────────────────────────
+    if on_progress:
+        on_progress(f"Segment {segment_id} — Generating offline voiceover via local Piper (lessac-medium)")
 
-def _generate_with_gemini(
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        temp_wav = tmp.name
+
+    try:
+        cmd = [
+            piper_exe,
+            "--model", model_path,
+            "--output_file", temp_wav
+        ]
+        
+        # Run Piper process and pipe narration to stdin
+        result = subprocess.run(
+            cmd,
+            input=narration.encode("utf-8"),
+            capture_output=True,
+            check=False
+        )
+        
+        if result.returncode != 0:
+            err_details = result.stderr.decode("utf-8", errors="replace")
+            raise RuntimeError(f"Piper execution failed: {err_details}")
+
+        if not os.path.exists(temp_wav) or os.path.getsize(temp_wav) < 1000:
+            raise RuntimeError("Piper generated an empty or invalid WAV file.")
+
+        # Transcode WAV to MP3
+        with open(temp_wav, "rb") as f:
+            wav_bytes = f.read()
+        _transcode_to_mp3(wav_bytes, output_path)
+
+    finally:
+        try:
+            os.unlink(temp_wav)
+        except OSError:
+            pass
+
+# ── Hugging Face TTS API ──────────────────────────────────────────────────────
+
+def _generate_with_hf(
     narration: str,
-    voice_name: str,
-    google_api_key: str,
+    model_id: str,
+    hf_token: str,
     output_path: str,
     on_progress=None,
-    segment_id: int = 0,
+    segment_id: int = 0
 ):
     """
-    Generate voiceover using Gemini 2.5 Flash TTS.
-    Automatically retries on rate-limit (429) with exponential backoff.
+    Generate voiceover using Hugging Face serverless inference.
+    Automatically retries on rate limits (429) or model loading (503).
     """
-    url = GEMINI_TTS_URL.format(key=google_api_key)
-    body = json.dumps({
-        "contents": [{"parts": [{"text": narration}]}],
-        "generationConfig": {
-            "response_modalities": ["AUDIO"],
-            "speech_config": {
-                "voice_config": {
-                    "prebuilt_voice_config": {"voice_name": voice_name}
-                }
-            },
-        },
-    }).encode("utf-8")
+    if not hf_token:
+        raise ValueError("Hugging Face API Token is required for premium cloud voices.")
 
-    max_attempts = 5
+    url = f"https://api-inference.huggingface.co/models/{model_id}"
+    headers = {
+        "Authorization": f"Bearer {hf_token}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "inputs": narration,
+        "options": {"wait_for_model": True}
+    }
+    body = json.dumps(payload).encode("utf-8")
+
+    max_attempts = 4
+    last_error = None
+
     for attempt in range(max_attempts):
         try:
             req = urllib.request.Request(
-                url, data=body,
-                headers={"Content-Type": "application/json"},
-                method="POST",
+                url, data=body, headers=headers, method="POST"
             )
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                data = json.loads(resp.read())
-            break  # success — exit retry loop
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                content_type = resp.headers.get("Content-Type", "")
+                data = resp.read()
+
+                if "application/json" in content_type:
+                    try:
+                        err_json = json.loads(data.decode("utf-8"))
+                        if "error" in err_json:
+                            raise RuntimeError(err_json["error"])
+                    except json.JSONDecodeError:
+                        pass
+
+                if len(data) < 100:
+                    try:
+                        txt = data.decode("utf-8")
+                        raise RuntimeError(f"Unexpected response text: {txt}")
+                    except UnicodeDecodeError:
+                        pass
+
+                _transcode_to_mp3(data, output_path)
+                return
 
         except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt < max_attempts - 1:
-                # Rate limit — wait with exponential backoff: 5s, 10s, 20s, 40s
-                wait = 5 * (2 ** attempt)
+            try:
+                err_text = e.read().decode("utf-8")
+                err_json = json.loads(err_text)
+                last_error = err_json.get("error", err_text)
+            except Exception:
+                last_error = str(e)
+            
+            if e.code in (503, 504, 429) and attempt < max_attempts - 1:
+                wait = 5 * (attempt + 1)
                 if on_progress:
                     on_progress(
-                        f"Segment {segment_id} — Gemini rate limit hit, "
-                        f"waiting {wait}s before retry…"
+                        f"Segment {segment_id} — Hugging Face API temporary error {e.code} ({last_error}). "
+                        f"Retrying in {wait}s..."
                     )
                 time.sleep(wait)
                 continue
-            raise  # non-429 error or exhausted retries
+            raise urllib.error.HTTPError(e.url, e.code, f"HF API Error: {last_error}", e.headers, None)
+        except Exception as e:
+            last_error = str(e)
+            if attempt < max_attempts - 1:
+                wait = 5 * (attempt + 1)
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Connection error ({e}). Retrying in {wait}s...")
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f"Hugging Face TTS call failed: {last_error}")
 
-    # Parse response
-    parts     = data["candidates"][0]["content"]["parts"]
-    audio_part = next(p for p in parts if "inlineData" in p)
-    mime_type  = audio_part["inlineData"]["mimeType"]
-    pcm_b64    = audio_part["inlineData"]["data"]
+    raise RuntimeError(f"Hugging Face TTS API failed after {max_attempts} attempts: {last_error}")
 
-    sample_rate = 24000
-    if "rate=" in mime_type:
-        try:
-            sample_rate = int(mime_type.split("rate=")[1].split(";")[0])
-        except (ValueError, IndexError):
-            pass
+# ── Microsoft Edge TTS ────────────────────────────────────────────────────────
 
-    _pcm_to_mp3(base64.b64decode(pcm_b64), sample_rate, output_path)
-
-
-# ── Piper TTS (offline) ────────────────────────────────────────────────────────
-
-def _find_piper_exe() -> str | None:
-    """Return path to piper.exe, or None if not installed."""
-    base = _get_base_dir()
-    candidate = os.path.join(base, "vendor", "piper", "piper.exe")
-    if os.path.exists(candidate):
-        return candidate
-    return shutil.which("piper")
-
-
-def _find_piper_voice(voice_name: str) -> str | None:
-    """Return path to the .onnx model for a Piper voice, or None if not found."""
-    base = _get_base_dir()
-    voices_dir = os.path.join(base, "vendor", "piper", "voices")
-    model_path = os.path.join(voices_dir, f"{voice_name}.onnx")
-    return model_path if os.path.exists(model_path) else None
-
-
-def _generate_with_piper(
-    narration: str,
-    voice_name: str,
-    output_path: str,
-    on_progress=None,
-    segment_id: int = 0,
-):
-    """
-    Generate voiceover using Piper TTS (offline, no internet needed).
-    Requires: vendor/piper/piper.exe + vendor/piper/voices/<voice>.onnx
-    Run setup.bat to download these automatically.
-    """
-    piper_exe = _find_piper_exe()
-    if not piper_exe:
-        raise RuntimeError(
-            "Piper TTS not found. Run setup.bat to download it, "
-            "or choose a different voice."
-        )
-
-    voice_model = _find_piper_voice(voice_name)
-    if not voice_model:
-        raise RuntimeError(
-            f"Piper voice '{voice_name}' not found. "
-            f"Run setup.bat to download voices, "
-            f"or check vendor/piper/voices/ for available models."
-        )
-
-    if on_progress:
-        on_progress(f"Segment {segment_id} — Piper TTS generating offline…")
-
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        wav_path = tmp.name
-
-    try:
-        subprocess.run(
-            [piper_exe,
-             "--model", voice_model,
-             "--output_file", wav_path],
-            input=narration.encode("utf-8"),
-            check=True,
-            capture_output=True,
-        )
-        _wav_to_mp3(wav_path, output_path)
-    finally:
-        try:
-            os.unlink(wav_path)
-        except OSError:
-            pass
-
-
-# ── edge-tts ──────────────────────────────────────────────────────────────────
-
-async def _edge_tts_async(text, voice, rate, pitch, output_path):
+async def _edge_tts_async(text: str, voice: str, rate: str, pitch: str, output_path: str):
     import edge_tts
+    if voice.startswith("edge:"):
+        voice = voice.split(":", 1)[1]
     communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate, pitch=pitch)
     await communicate.save(output_path)
 
 
-def _generate_with_edge_tts(narration, voice, voice_rate, voice_pitch, output_path):
+def _generate_with_edge_tts(narration: str, voice: str, voice_rate: str, voice_pitch: str, output_path: str):
     try:
         asyncio.run(_edge_tts_async(narration, voice, voice_rate, voice_pitch, output_path))
     except RuntimeError:
@@ -252,7 +224,6 @@ def _generate_with_edge_tts(narration, voice, voice_rate, voice_pitch, output_pa
         finally:
             loop.close()
 
-
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def generate_voiceover(
@@ -262,7 +233,7 @@ def generate_voiceover(
     voice_rate: str,
     voice_pitch: str,
     cache_dir: str,
-    google_api_key: str = "",
+    huggingface_api_key: str = "",
     on_progress=None,
 ) -> str:
     """
@@ -270,9 +241,10 @@ def generate_voiceover(
     Skips if already cached (resume support).
 
     Voice ID formats:
-      "gemini:Charon"       Gemini TTS (requires google_api_key)
-      "piper:en_US-ryan-high"  Piper offline TTS
-      "en-US-GuyNeural"     edge-tts (default fallback)
+      "edge:en-US-GuyNeural"  edge-tts (free)
+      "hf:suno/bark"          Suno Bark (Hugging Face)
+      "hf:coqui/XTTS-v2"      Coqui XTTS-v2 (Hugging Face)
+      "local:piper"           local Piper offline (Free)
     """
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_audio.mp3")
 
@@ -283,54 +255,64 @@ def generate_voiceover(
 
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
-    # ── Route to the right engine ──────────────────────────────────────────────
-    if voice.startswith("gemini:") and google_api_key:
-        voice_name = voice.split(":", 1)[1]
-        if on_progress:
-            on_progress(f"Segment {segment_id} — Gemini TTS ({voice_name})")
-        try:
-            _generate_with_gemini(
-                narration, voice_name, google_api_key, output_path,
-                on_progress=on_progress, segment_id=segment_id,
-            )
-        except Exception as e:
-            if on_progress:
-                on_progress(
-                    f"Segment {segment_id} — Gemini TTS failed ({e}), "
-                    f"falling back to edge-tts"
-                )
-            _generate_with_edge_tts(
-                narration, "en-US-GuyNeural", voice_rate, voice_pitch, output_path
-            )
+    voice_lower = voice.lower()
+    
+    # Determine routing
+    is_hf = voice_lower.startswith("hf:") or "bark" in voice_lower or "xtts" in voice_lower
+    is_piper = voice_lower.startswith("local:piper") or voice_lower.startswith("piper:")
 
-    elif voice.startswith("piper:"):
-        voice_name = voice.split(":", 1)[1]
+    if is_piper:
+        # Run local offline Piper
+        _generate_with_local_piper(
+            narration=narration,
+            output_path=output_path,
+            on_progress=on_progress,
+            segment_id=segment_id
+        )
+
+    elif is_hf:
+        # Determine Hugging Face model repository path
+        model_id = voice
+        if voice_lower == "hf:suno/bark" or voice_lower == "suno/bark":
+            model_id = "suno/bark"
+        elif voice_lower == "hf:suno/bark-small" or voice_lower == "suno/bark-small":
+            model_id = "suno/bark-small"
+        elif voice_lower == "hf:coqui/xtts-v2" or voice_lower == "coqui/xtts-v2" or "xtts-v2" in voice_lower:
+            model_id = "coqui/XTTS-v2"
+        elif model_id.startswith("hf:"):
+            model_id = model_id.split(":", 1)[1]
+
         if on_progress:
-            on_progress(f"Segment {segment_id} — Piper TTS offline ({voice_name})")
-        try:
-            _generate_with_piper(
-                narration, voice_name, output_path,
-                on_progress=on_progress, segment_id=segment_id,
-            )
-        except Exception as e:
-            if on_progress:
-                on_progress(
-                    f"Segment {segment_id} — Piper failed ({e}), "
-                    f"falling back to edge-tts"
-                )
-            _generate_with_edge_tts(
-                narration, "en-US-GuyNeural", voice_rate, voice_pitch, output_path
-            )
+            on_progress(f"Segment {segment_id} — Generating cloud voiceover (HF: {model_id})")
+
+        _generate_with_hf(
+            narration=narration,
+            model_id=model_id,
+            hf_token=huggingface_api_key,
+            output_path=output_path,
+            on_progress=on_progress,
+            segment_id=segment_id
+        )
 
     else:
+        # Fallback to Microsoft Edge neural voices
+        clean_voice = voice
+        if voice.startswith("edge:"):
+            clean_voice = voice.split(":", 1)[1]
+        elif voice.startswith("gemini:"):
+            clean_voice = "en-US-GuyNeural"
+            if on_progress:
+                on_progress(f"Segment {segment_id} — legacy Gemini voice found. Routing to edge:en-US-GuyNeural")
+
         if on_progress:
-            on_progress(f"Segment {segment_id} — edge-tts ({voice})")
-        _generate_with_edge_tts(narration, voice, voice_rate, voice_pitch, output_path)
+            on_progress(f"Segment {segment_id} — Generating Edge Neural voiceover ({clean_voice})")
+            
+        _generate_with_edge_tts(narration, clean_voice, voice_rate, voice_pitch, output_path)
 
     if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError(
             f"Segment {segment_id}: voiceover file was not created. "
-            "Check your internet connection and try again."
+            "Check network connection or API status and try again."
         )
 
     return output_path
