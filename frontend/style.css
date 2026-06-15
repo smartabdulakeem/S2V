@@ -156,6 +156,11 @@
   font-family: 'Inter', sans-serif;
 }
 .form-select:focus { border-color: rgba(99,102,241,0.6); outline: none; }
+.form-select option,
+.form-select optgroup {
+  background-color: #111827;
+  color: #dfe2f1;
+}
 .form-textarea {
   width: 100%; padding: 10px 12px; border-radius: 10px;
   border: 1px solid var(--border);
