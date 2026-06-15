@@ -14,6 +14,127 @@ let lastOutputPath = null;
 const MAX_LOG_LINES = 100;
 let logLines = [];
 
+const ALL_DIALECTS = [
+    { code: 'Standard English', label: 'Standard English', flag: '🇺🇸' },
+    { code: 'Nigerian English', label: 'Nigerian English', flag: '🇳🇬' },
+    { code: 'British English', label: 'British English (UK)', flag: '🇬🇧' },
+    { code: 'Arabic Storytelling', label: 'Arabic Storytelling', flag: '🇸🇦' },
+    { code: 'Spanish Dialect', label: 'Spanish Dialect', flag: '🇪🇸' },
+    { code: 'French Dialect', label: 'French Dialect', flag: '🇫🇷' }
+];
+let enabledLanguages = ['Standard English', 'Nigerian English', 'British English', 'Arabic Storytelling', 'Spanish Dialect', 'French Dialect'];
+
+window.renderLanguageCheckboxes = function() {
+    const container = document.getElementById("language-selection-list");
+    if (!container) return;
+    container.innerHTML = "";
+    
+    ALL_DIALECTS.forEach((dialect) => {
+        const isChecked = enabledLanguages.includes(dialect.code);
+        const wrapper = document.createElement("label");
+        wrapper.className = "flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-white/5 text-[#dfe2f1]";
+        wrapper.innerHTML = `
+            <input type="checkbox" value="${dialect.code}" ${isChecked ? 'checked' : ''} onchange="toggleLanguagePreference(this)" class="rounded border-white/10 bg-[#171b26] text-[#8083ff] focus:ring-0 focus:ring-offset-0" />
+            <span>${dialect.flag} ${dialect.label}</span>
+        `;
+        container.appendChild(wrapper);
+    });
+};
+
+window.toggleLanguagePreference = function(checkbox) {
+    const lang = checkbox.value;
+    if (checkbox.checked) {
+        if (!enabledLanguages.includes(lang)) {
+            enabledLanguages.push(lang);
+        }
+    } else {
+        enabledLanguages = enabledLanguages.filter(l => l !== lang);
+    }
+    localStorage.setItem("enabled_languages", JSON.stringify(enabledLanguages));
+    rebuildDialectSelect();
+};
+
+window.rebuildDialectSelect = function() {
+    const dialectSelect = document.getElementById("pt-voice-dialect");
+    if (!dialectSelect) return;
+    
+    const currentVal = dialectSelect.value;
+    dialectSelect.innerHTML = "";
+    
+    const filtered = ALL_DIALECTS.filter(d => enabledLanguages.includes(d.code));
+    filtered.forEach((dialect) => {
+        const opt = document.createElement("option");
+        opt.value = dialect.code;
+        opt.textContent = dialect.label;
+        dialectSelect.appendChild(opt);
+    });
+    
+    if (filtered.some(d => d.code === currentVal)) {
+        dialectSelect.value = currentVal;
+    } else if (filtered.length > 0) {
+        dialectSelect.value = filtered[0].code;
+    }
+
+    rebuildVoiceSelect();
+};
+
+window.rebuildVoiceSelect = function() {
+    const voiceSelect = document.getElementById("pt-voice");
+    if (!voiceSelect) return;
+
+    const currentVoice = voiceSelect.value;
+    let selectedStillValid = false;
+
+    const options = voiceSelect.querySelectorAll("option");
+    options.forEach(opt => {
+        const val = opt.value;
+        let dialect = "";
+        if (val.startsWith("edge:en-US-") || val.startsWith("google:gemini-3.1-flash-tts-preview:") || val.startsWith("google:en-US-")) {
+            dialect = "Standard English";
+        } else if (val.startsWith("edge:en-GB-") || val.startsWith("edge:en-AU-") || val.startsWith("google:en-GB-")) {
+            dialect = "British English";
+        } else if (val === "local:supertonic-f3") {
+            dialect = "Arabic Storytelling";
+        } else if (val.startsWith("local:supertonic-")) {
+            dialect = "Nigerian English";
+        }
+
+        if (dialect) {
+            const isEnabled = enabledLanguages.includes(dialect);
+            if (isEnabled) {
+                opt.style.display = "";
+                opt.disabled = false;
+                if (val === currentVoice) selectedStillValid = true;
+            } else {
+                opt.style.display = "none";
+                opt.disabled = true;
+            }
+        } else {
+            opt.style.display = "";
+            opt.disabled = false;
+            if (val === currentVoice) selectedStillValid = true;
+        }
+    });
+
+    const optgroups = voiceSelect.querySelectorAll("optgroup");
+    optgroups.forEach(group => {
+        const totalOpts = group.querySelectorAll("option").length;
+        const hiddenOpts = group.querySelectorAll("option[disabled]").length;
+        if (totalOpts === hiddenOpts) {
+            group.style.display = "none";
+        } else {
+            group.style.display = "";
+        }
+    });
+
+    if (!selectedStillValid) {
+        const firstEnabled = voiceSelect.querySelector("option:not([disabled])");
+        if (firstEnabled) {
+            voiceSelect.value = firstEnabled.value;
+        }
+    }
+};
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 window.addEventListener("pywebviewready", () => {
@@ -37,6 +158,13 @@ setTimeout(() => {
 
 async function initApp() {
   window.scrollTo(0, 0);
+  
+  const savedLangs = localStorage.getItem("enabled_languages");
+  if (savedLangs) {
+      enabledLanguages = JSON.parse(savedLangs);
+  }
+  renderLanguageCheckboxes();
+  rebuildDialectSelect();
   
   // Update mode based on presence of injected pywebview API
   isWebMode = typeof window.pywebview === "undefined" || !window.pywebview.api;
