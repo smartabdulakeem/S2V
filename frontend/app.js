@@ -506,15 +506,15 @@ async function saveStoryboardEdits(showNotification = false) {
   }
 }
 
-async function openProjectFolder() {
-  if (!currentScriptData) return;
-  const title = currentScriptData.project.title;
-  if (isWebMode) {
-    alert("Project folder is only accessible in Desktop mode.");
-  } else {
-    await window.pywebview.api.open_project_folder(title);
-  }
-}
+window.openProjectFolder = async function() {
+    if (!currentScriptData) return;
+    const title = currentScriptData.project.title;
+    if (isWebMode) {
+        alert("Project folder is only accessible in Desktop mode.");
+    } else {
+        await window.pywebview.api.open_project_folder(title);
+    }
+};
 
 // ── JSON file loading ─────────────────────────────────────────────────────────
 
@@ -753,6 +753,8 @@ async function startRender() {
   
   document.getElementById("log-panel").innerHTML = "";
   document.getElementById("progress-fill").style.width = "0%";
+  const progText = document.getElementById("progress-text");
+  if (progText) progText.textContent = "0%";
   document.getElementById("stage-label").textContent = "Starting render…";
   document.getElementById("segment-label").textContent = "";
 
@@ -824,6 +826,8 @@ window.onPipelineEvent = function(event) {
       document.getElementById("stage-label").textContent = event.name;
       const pct = Math.round((event.stage_num / event.total_stages) * 100);
       document.getElementById("progress-fill").style.width = pct + "%";
+      const progText = document.getElementById("progress-text");
+      if (progText) progText.textContent = pct + "%";
       break;
 
     case "progress":
@@ -845,6 +849,8 @@ window.onPipelineEvent = function(event) {
       lastOutputPath = event.output_path;
       appendLog("✅ Render complete: " + event.output_path, "ok");
       document.getElementById("progress-fill").style.width = "100%";
+      const progTextComplete = document.getElementById("progress-text");
+      if (progTextComplete) progTextComplete.textContent = "100%";
       document.getElementById("stage-label").textContent = "Complete ✅";
       finishRender(true);
       break;
@@ -893,21 +899,21 @@ function renderAnother() {
   updateRenderButton();
 }
 
-async function clearCache() {
-  if (isWebMode) {
-    alert("Clear Cache is not available in Web mode.");
-    return;
-  }
-  const status = document.getElementById("render-hint");
-  status.textContent = "Clearing cache...";
-  try {
-    const res = await window.pywebview.api.clear_cache();
-    if (res.success) {
-      status.textContent = "Cache cleared successfully!";
-    } else {
-      status.textContent = "Failed to clear cache: " + res.error;
+window.clearCache = async function() {
+    if (isWebMode) {
+        alert("Clear Cache is not available in Web mode.");
+        return;
     }
-  } catch (e) {
-    status.textContent = "Error clearing cache: " + e;
-  }
-}
+    const hint = document.getElementById("render-hint");
+    if (hint) hint.textContent = "Clearing cache...";
+    try {
+        const res = await window.pywebview.api.clear_cache();
+        if (res.success) {
+            if (hint) hint.textContent = "Cache cleared successfully!";
+        } else {
+            if (hint) hint.textContent = "Failed to clear cache: " + res.error;
+        }
+    } catch (e) {
+        if (hint) hint.textContent = "Error clearing cache: " + e;
+    }
+};

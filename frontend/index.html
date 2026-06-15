@@ -418,48 +418,59 @@
     </section>
 
 
-    <!-- ── Section 4: Render (Manual triggers for loaded JSON) ── -->
-    <section class="card" id="section-render">
-      <div class="card-title">3 — Render Pipeline Control</div>
-      <div class="render-row">
-        <button class="btn btn-render" id="btn-render" disabled onclick="startRender()">
-          ▶ Render Video
-        </button>
-        <button class="btn btn-cancel hidden" id="btn-cancel" onclick="cancelRender()">
-          ✕ Cancel Rendering
-        </button>
-        <button class="btn btn-secondary" id="btn-clear-cache" onclick="clearCache()">
-          🗑 Clear Cache
-        </button>
-      </div>
-      <p class="render-hint" id="render-hint">Plan a script or load a JSON file to render.</p>
-    </section>
+     <!-- ── Section 4: Video Preview & Render Progress ── -->
+     <section class="relative mt-8" id="section-preview-container">
+       <div class="glass-card rounded-2xl overflow-hidden aspect-[16/9] relative group">
+         <img id="video-preview-placeholder" class="w-full h-full object-cover opacity-60" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrOMxkkUr7gyAAaFpYdy_Qa-MWC0Cza7D8huCyKrvyNhLdWBsN43Tm3GqS3qH6EB0He3hW3lLpamh7ULKd-2T4dmyZwoE22OvWQYZYeNaR0lPBElUlvWFbB5X9fIbIYBvO5TPYM2fyBKbklwAG1Jis4VkSvSbgE5XhXqbM45OCQkrt5C4iXI9YBg9RKWK67tpg7aHBuSG5NBCgzHz1v5qZnBSp2OkVo6GGNBz_It042jlByTnn5_-kWA" alt="Video stage preview"/>
+         
+         <!-- Live Render Progress Overlay -->
+         <div id="section-progress" class="absolute inset-0 bg-[#0f131d]/95 backdrop-blur-md p-6 flex flex-col justify-between hidden">
+           <div class="flex justify-between items-center border-b border-white/10 pb-2">
+             <span class="text-xs uppercase font-bold tracking-widest text-[#c0c1ff]">Render Progress Tracker</span>
+             <span class="text-[10px] font-mono text-[#4cd7f6]" id="segment-label">Segment -/-</span>
+           </div>
+           
+           <div class="flex-grow my-4 flex flex-col justify-center gap-2">
+             <div class="flex justify-between items-end text-xs">
+               <span id="stage-label" class="font-medium text-[#dfe2f1]">Initializing render...</span>
+               <span class="text-[#c7c4d7]" id="progress-text">0%</span>
+             </div>
+             <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+               <div id="progress-fill" class="h-full cosmic-gradient" style="width: 0%"></div>
+             </div>
+           </div>
+           <div id="log-panel" class="h-24 bg-[#0a0e18] border border-white/10 rounded-lg p-2 font-mono text-[10px] overflow-y-auto text-[#c7c4d7] hide-scrollbar"></div>
+         </div>
+       </div>
 
-    <!-- ── Section 5: Progress (shown during render) ── -->
-    <section class="card hidden" id="section-progress">
-      <div class="card-title">Render Progress Tracker</div>
+       <!-- Quick Action Row -->
+       <div class="mt-4 space-y-3">
+         <div class="flex gap-3">
+           <button id="btn-render" onclick="startRender()" class="flex-1 h-12 rounded-xl cosmic-gradient cosmic-glow flex items-center justify-center gap-2 text-[#0d0096] font-bold active:scale-95 transition-all">
+             <span class="material-symbols-outlined">memory</span> Render Video
+           </button>
+           <button id="btn-cancel" onclick="cancelRender()" class="h-12 px-6 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 font-bold active:scale-95 transition-all hidden">✕ Cancel</button>
+         </div>
+         <div class="grid grid-cols-3 gap-3">
+           <button onclick="saveStoryboardEdits(true)" class="h-10 rounded-xl glass-card text-xs font-bold hover:bg-white/5 active:scale-95 transition-colors flex items-center justify-center gap-1 text-[#dfe2f1]">💾 Save Edits</button>
+           <button id="btn-clear-cache" onclick="clearCache()" class="h-10 rounded-xl glass-card text-xs font-bold hover:bg-white/5 active:scale-95 transition-colors flex items-center justify-center gap-1 text-[#dfe2f1]">🗑 Clear Cache</button>
+           <button onclick="openProjectFolder()" class="h-10 rounded-xl glass-card text-xs font-bold hover:bg-white/5 active:scale-95 transition-colors flex items-center justify-center gap-1 text-[#dfe2f1]">📂 Open Project</button>
+         </div>
+         <p class="text-[11px] text-[#c7c4d7] text-center" id="render-hint">Plan a script or load a JSON file to render.</p>
+       </div>
+     </section>
 
-      <div class="stage-row">
-        <span class="stage-label" id="stage-label">Initialising...</span>
-        <span class="segment-label" id="segment-label"></span>
-      </div>
-
-      <div class="progress-bar-wrap">
-        <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
-      </div>
-
-      <div class="log-panel" id="log-panel"></div>
-    </section>
-
-    <!-- ── Section 6: Complete (shown when done) ── -->
-    <section class="card hidden" id="section-complete">
-      <div class="complete-header">✅ Rendering Completed Successfully!</div>
-      <p class="complete-path" id="complete-path"></p>
-      <div class="complete-actions">
-        <button class="btn btn-primary" onclick="openOutputFolder()">Open Output Folder</button>
-        <button class="btn btn-secondary" onclick="renderAnother()">Create Another Video</button>
-      </div>
-    </section>
+     <!-- ── Section 5: Complete (shown when done) ── -->
+     <section class="card hidden mt-8" id="section-complete">
+       <div class="text-center space-y-4">
+         <div class="text-2xl">✅ Rendering Completed Successfully!</div>
+         <p class="text-xs text-[#c7c4d7] break-all font-mono bg-black/20 p-3 rounded-xl border border-white/5" id="complete-path"></p>
+         <div class="flex gap-4 justify-center">
+           <button class="px-5 py-2.5 bg-[#8083ff] hover:bg-[#6366f1] text-[#0d0096] rounded-xl text-xs font-bold transition-colors active:scale-95" onclick="openOutputFolder()">Open Output Folder</button>
+           <button class="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-[#dfe2f1] transition-colors active:scale-95" onclick="renderAnother()">Create Another Video</button>
+         </div>
+       </div>
+     </section>
 
   </main>
 
