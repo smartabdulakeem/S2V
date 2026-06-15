@@ -97,6 +97,10 @@ window.rebuildVoiceSelect = function() {
             dialect = "Arabic Storytelling";
         } else if (val.startsWith("local:supertonic-")) {
             dialect = "Nigerian English";
+        } else if (val.startsWith("edge:es-") || val.startsWith("google:es-")) {
+            dialect = "Spanish Dialect";
+        } else if (val.startsWith("edge:fr-") || val.startsWith("google:fr-")) {
+            dialect = "French Dialect";
         }
 
         if (dialect) {
@@ -549,37 +553,26 @@ async function saveStoryboardEdits(showNotification = false) {
   const steerings = document.querySelectorAll(".scene-input-steering");
 
   // Client-side validation: ensure no narration or keyword fields are empty
-  let emptyNarrationScene = null;
-  let emptyKeywordScene = null;
-
-  narrations.forEach((el) => {
+  for (let el of narrations) {
     const idx = parseInt(el.getAttribute("data-index"));
     const val = el.value.trim();
     currentScriptData.segments[idx].narration = val;
-    if (!val && emptyNarrationScene === null) {
-      emptyNarrationScene = idx + 1;
+    if (!val) {
+      alert(`Scene ${idx + 1} Voice Narration cannot be empty. Please enter some text before saving or starting render.`);
       el.focus();
+      return false;
     }
-  });
+  }
 
-  keywords.forEach((el) => {
+  for (let el of keywords) {
     const idx = parseInt(el.getAttribute("data-index"));
     const val = el.value.trim();
     currentScriptData.segments[idx].b_roll_keyword = val;
-    if (!val && emptyKeywordScene === null) {
-      emptyKeywordScene = idx + 1;
+    if (!val) {
+      alert(`Scene ${idx + 1} Visual Generation Prompt cannot be empty. Please enter a visual description before saving or starting render.`);
       el.focus();
+      return false;
     }
-  });
-
-  if (emptyNarrationScene !== null) {
-    alert(`Scene ${emptyNarrationScene} Voice Narration cannot be empty. Please enter some text before saving or starting render.`);
-    return false;
-  }
-
-  if (emptyKeywordScene !== null) {
-    alert(`Scene ${emptyKeywordScene} Visual Generation Prompt cannot be empty. Please enter a visual description before saving or starting render.`);
-    return false;
   }
 
   motions.forEach((el) => {
@@ -861,6 +854,9 @@ async function approveAndRender() {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 async function startRender() {
+  const validationPassed = await saveStoryboardEdits(false);
+  if (!validationPassed) return;
+
   if (!currentScriptPath || isRendering) return;
 
   if (googleKeyDirty) await saveGoogleKey();
