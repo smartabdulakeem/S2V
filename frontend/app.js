@@ -46,11 +46,20 @@ async function initApp() {
     document.getElementById("version-badge").textContent = `v2.0.0 (Cloud)`;
     
     // Load credentials from browser localStorage
-    const hfKey = localStorage.getItem("huggingface_api_key") || "";
-    
-    if (hfKey) {
-      document.getElementById("huggingface-key-input").value = hfKey;
-      setHFKeyStatus("saved", "✓ Token saved");
+    const googleKey = localStorage.getItem("google_api_key") || "";
+    if (googleKey) {
+      document.getElementById("google-key-input").value = googleKey;
+      setGoogleKeyStatus("saved", "✓ Key saved");
+    }
+    const googleTtsKey = localStorage.getItem("google_tts_api_key") || "";
+    if (googleTtsKey) {
+      document.getElementById("google-tts-key-input").value = googleTtsKey;
+      setGoogleTtsKeyStatus("saved", "✓ Key saved");
+    }
+    const deepseekKey = localStorage.getItem("deepseek_api_key") || "";
+    if (deepseekKey) {
+      document.getElementById("deepseek-key-input").value = deepseekKey;
+      setDeepseekKeyStatus("saved", "✓ Key saved");
     }
     updateRenderButton();
     return;
@@ -62,15 +71,30 @@ async function initApp() {
     document.getElementById("version-badge").textContent = `v${version}`;
 
     const settings = await window.pywebview.api.get_settings();
-    if (settings.huggingface_api_key) {
-      document.getElementById("huggingface-key-input").value = settings.huggingface_api_key;
-      setHFKeyStatus("saved", "✓ Token saved");
+    if (settings.google_api_key) {
+      document.getElementById("google-key-input").value = settings.google_api_key;
+      setGoogleKeyStatus("saved", "✓ Key saved");
+    }
+    if (settings.google_tts_api_key) {
+      document.getElementById("google-tts-key-input").value = settings.google_tts_api_key;
+      setGoogleTtsKeyStatus("saved", "✓ Key saved");
+    }
+    if (settings.deepseek_api_key) {
+      document.getElementById("deepseek-key-input").value = settings.deepseek_api_key;
+      setDeepseekKeyStatus("saved", "✓ Key saved");
     }
     updateRenderButton();
   } catch (e) {
     console.error("Init desktop app failed:", e);
   }
 }
+
+window.toggleSettingsModal = function() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.classList.toggle('hidden');
+    }
+};
 
 // ── Voice preview ─────────────────────────────────────────────────────────────
 
@@ -106,11 +130,10 @@ async function previewVoice() {
   
   if (isWebMode) {
     try {
-      const hfKey = localStorage.getItem("huggingface_api_key") || "";
       const resp = await fetch("/api/preview_voice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voice_id: voice, hf_token: hfKey })
+        body: JSON.stringify({ voice_id: voice })
       });
       result = await resp.json();
     } catch (err) {
@@ -150,6 +173,25 @@ function switchMode(mode) {
   // Stubbed out since tabs were removed
 }
 
+function switchPlannerTab(tabName) {
+  const tabCore = document.getElementById("tab-planner-core");
+  const tabGuidelines = document.getElementById("tab-planner-guidelines");
+  const panelCore = document.getElementById("planner-panel-core");
+  const panelGuidelines = document.getElementById("planner-panel-guidelines");
+  
+  if (tabName === "core") {
+    tabCore.classList.add("active");
+    tabGuidelines.classList.remove("active");
+    panelCore.classList.remove("hidden");
+    panelGuidelines.classList.add("hidden");
+  } else {
+    tabCore.classList.remove("active");
+    tabGuidelines.classList.add("active");
+    panelCore.classList.add("hidden");
+    panelGuidelines.classList.remove("hidden");
+  }
+}
+
 function toggleCustomStyleInput() {
   const select = document.getElementById("pt-style-select");
   const customRow = document.getElementById("custom-style-row");
@@ -167,6 +209,10 @@ async function parsePlainText() {
   const title = document.getElementById('pt-title').value.trim();
   const voice = document.getElementById('pt-voice').value;
   const aspectRatio = document.getElementById('pt-aspect-ratio').value;
+  const aiGuideline = document.getElementById('pt-ai-guideline').value.trim();
+  const voiceDialect = document.getElementById('pt-voice-dialect').value;
+  const narrativeTone = document.getElementById('pt-narrative-tone').value;
+  const speakerMode = document.getElementById('pt-speaker-mode').value;
 
   // Automatically generate filename from title (lowercase, no spaces/special characters)
   const filename = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'my_video';
@@ -199,7 +245,7 @@ async function parsePlainText() {
 
   if (isWebMode) {
     try {
-      const hfKey = localStorage.getItem("huggingface_api_key") || "";
+      const googleKey = localStorage.getItem("google_api_key") || "";
       const resp = await fetch("/api/parse_plain_text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -210,7 +256,11 @@ async function parsePlainText() {
           filename: filename,
           visual_style: visualStyle,
           aspect_ratio: aspectRatio,
-          hf_token: hfKey
+          google_api_key: googleKey,
+          ai_guideline: aiGuideline,
+          voice_dialect: voiceDialect,
+          narrative_tone: narrativeTone,
+          speaker_mode: speakerMode
         })
       });
       const result = await resp.json();
@@ -219,7 +269,9 @@ async function parsePlainText() {
       window.onParseComplete({ success: false, errors: [err.message] });
     }
   } else {
-    await window.pywebview.api.parse_plain_text(text, title, voice, filename, visualStyle, aspectRatio);
+    await window.pywebview.api.parse_plain_text(
+      text, title, voice, filename, visualStyle, aspectRatio, aiGuideline, voiceDialect, narrativeTone, speakerMode
+    );
   }
 }
 
@@ -319,6 +371,7 @@ function drawStoryboard(scriptData) {
       .join('');
 
     const overlayText = seg.text_overlay ? seg.text_overlay.text : "";
+    const voiceSteering = seg.voice_steering || "";
 
     card.innerHTML = `
       <div class="scene-header">
@@ -329,6 +382,9 @@ function drawStoryboard(scriptData) {
         <div class="scene-field">
           <label>Scene Voice Narration (verbatim)</label>
           <textarea class="scene-textarea scene-input-narration" data-index="${idx}" placeholder="Enter scene text...">${seg.narration}</textarea>
+          
+          <label style="margin-top: 8px;">Voice Steering & Tone (Optional)</label>
+          <input type="text" class="scene-input scene-input-steering" data-index="${idx}" value="${voiceSteering}" placeholder="e.g. Speak with a warm conversational Nigerian English cadence" style="width:100%; box-sizing:border-box; margin-top:4px;" />
         </div>
         <div class="scene-field">
           <label>AI Visual Generation Prompt</label>
@@ -362,20 +418,50 @@ async function saveStoryboardEdits(showNotification = false) {
   const keywords = document.querySelectorAll(".scene-input-keyword");
   const motions = document.querySelectorAll(".scene-input-kb");
   const overlays = document.querySelectorAll(".scene-input-overlay");
+  const steerings = document.querySelectorAll(".scene-input-steering");
+
+  // Client-side validation: ensure no narration or keyword fields are empty
+  let emptyNarrationScene = null;
+  let emptyKeywordScene = null;
 
   narrations.forEach((el) => {
     const idx = parseInt(el.getAttribute("data-index"));
-    currentScriptData.segments[idx].narration = el.value.trim();
+    const val = el.value.trim();
+    currentScriptData.segments[idx].narration = val;
+    if (!val && emptyNarrationScene === null) {
+      emptyNarrationScene = idx + 1;
+      el.focus();
+    }
   });
 
   keywords.forEach((el) => {
     const idx = parseInt(el.getAttribute("data-index"));
-    currentScriptData.segments[idx].b_roll_keyword = el.value.trim();
+    const val = el.value.trim();
+    currentScriptData.segments[idx].b_roll_keyword = val;
+    if (!val && emptyKeywordScene === null) {
+      emptyKeywordScene = idx + 1;
+      el.focus();
+    }
   });
+
+  if (emptyNarrationScene !== null) {
+    alert(`Scene ${emptyNarrationScene} Voice Narration cannot be empty. Please enter some text before saving or starting render.`);
+    return false;
+  }
+
+  if (emptyKeywordScene !== null) {
+    alert(`Scene ${emptyKeywordScene} Visual Generation Prompt cannot be empty. Please enter a visual description before saving or starting render.`);
+    return false;
+  }
 
   motions.forEach((el) => {
     const idx = parseInt(el.getAttribute("data-index"));
     currentScriptData.segments[idx].ken_burns = el.value;
+  });
+
+  steerings.forEach((el) => {
+    const idx = parseInt(el.getAttribute("data-index"));
+    currentScriptData.segments[idx].voice_steering = el.value.trim();
   });
 
   overlays.forEach((el) => {
@@ -417,6 +503,16 @@ async function saveStoryboardEdits(showNotification = false) {
   } else {
     alert("✗ Failed to save storyboard changes: " + res.error);
     return false;
+  }
+}
+
+async function openProjectFolder() {
+  if (!currentScriptData) return;
+  const title = currentScriptData.project.title;
+  if (isWebMode) {
+    alert("Project folder is only accessible in Desktop mode.");
+  } else {
+    await window.pywebview.api.open_project_folder(title);
   }
 }
 
@@ -533,40 +629,77 @@ async function loadScript() {
   updateRenderButton();
 }
 
-// ── Hugging Face Credentials ──────────────────────────────────────────────────
+// ── Google Credentials ─────────────────────────────────────────
 
-let hfKeyDirty = false;
+let googleKeyDirty = false;
+let googleTtsKeyDirty = false;
+let deepseekKeyDirty = false;
 
-function onHuggingFaceKeyInput() {
-  hfKeyDirty = true;
-  setHFKeyStatus("", "");
+window.saveGoogleKey = async function() {
+    const key = document.getElementById("google-key-input").value.trim();
+    if (isWebMode) {
+        localStorage.setItem("google_api_key", key);
+        setGoogleKeyStatus("saved", "✓ Saved (Local)");
+    } else {
+        await window.pywebview.api.save_google_key(key);
+        googleKeyDirty = false;
+        setGoogleKeyStatus("saved", "✓ Saved");
+    }
+};
+
+window.saveDeepseekKey = async function() {
+    const key = document.getElementById("deepseek-key-input").value.trim();
+    if (isWebMode) {
+        localStorage.setItem("deepseek_api_key", key);
+        setDeepseekKeyStatus("saved", "✓ Saved (Local)");
+    } else {
+        await window.pywebview.api.save_deepseek_key(key);
+        deepseekKeyDirty = false;
+        setDeepseekKeyStatus("saved", "✓ Saved");
+    }
+};
+
+window.saveGoogleTtsKey = async function() {
+    const key = document.getElementById("google-tts-key-input").value.trim();
+    if (isWebMode) {
+        localStorage.setItem("google_tts_api_key", key);
+        setGoogleTtsKeyStatus("saved", key ? "✓ Saved (Local)" : "✓ Cleared (Local)");
+    } else {
+        await window.pywebview.api.save_google_tts_key(key);
+        googleTtsKeyDirty = false;
+        setGoogleTtsKeyStatus("saved", key ? "✓ Saved" : "✓ Cleared");
+    }
+};
+
+window.onGoogleKeyInput = function() {
+    googleKeyDirty = true;
+    setGoogleKeyStatus("", "");
+};
+
+window.onDeepseekKeyInput = function() {
+    deepseekKeyDirty = true;
+    setDeepseekKeyStatus("", "");
+};
+
+window.onGoogleTtsKeyInput = function() {
+    googleTtsKeyDirty = true;
+    setGoogleTtsKeyStatus("", "");
+};
+
+function setGoogleKeyStatus(type, msg) {
+    const el = document.getElementById("google-key-status");
+    if (el) { el.textContent = msg; el.className = "key-status " + type; }
 }
 
-async function saveHuggingFaceKey() {
-  const key = document.getElementById("huggingface-key-input").value.trim();
-  if (!key) {
-    setHFKeyStatus("err", "✗ Token is empty");
-    return;
-  }
-  
-  if (isWebMode) {
-    localStorage.setItem("huggingface_api_key", key);
-    hfKeyDirty = false;
-    setHFKeyStatus("saved", "✓ Saved (Local)");
-  } else {
-    await window.pywebview.api.save_huggingface_key(key);
-    hfKeyDirty = false;
-    setHFKeyStatus("saved", "✓ Saved");
-  }
+function setDeepseekKeyStatus(type, msg) {
+    const el = document.getElementById("deepseek-key-status");
+    if (el) { el.textContent = msg; el.className = "key-status " + type; }
 }
 
-function setHFKeyStatus(type, msg) {
-  const el = document.getElementById("hf-key-status");
-  el.textContent = msg;
-  el.className = "key-status" + (type === "saved" ? " ok" : type === "err" ? " err" : "");
+function setGoogleTtsKeyStatus(type, msg) {
+    const el = document.getElementById("google-tts-key-status");
+    if (el) { el.textContent = msg; el.className = "key-status " + type; }
 }
-
-// Pixabay support removed
 
 // ── Render button state ───────────────────────────────────────────────────────
 
@@ -602,7 +735,9 @@ async function approveAndRender() {
 async function startRender() {
   if (!currentScriptPath || isRendering) return;
 
-  if (hfKeyDirty) await saveHuggingFaceKey();
+  if (googleKeyDirty) await saveGoogleKey();
+  if (googleTtsKeyDirty) await saveGoogleTtsKey();
+  if (deepseekKeyDirty) await saveDeepseekKey();
 
   isRendering = true;
   lastOutputPath = null;
@@ -756,4 +891,23 @@ function renderAnother() {
   document.getElementById("pt-visual-style-custom").value = "";
   toggleCustomStyleInput();
   updateRenderButton();
+}
+
+async function clearCache() {
+  if (isWebMode) {
+    alert("Clear Cache is not available in Web mode.");
+    return;
+  }
+  const status = document.getElementById("render-hint");
+  status.textContent = "Clearing cache...";
+  try {
+    const res = await window.pywebview.api.clear_cache();
+    if (res.success) {
+      status.textContent = "Cache cleared successfully!";
+    } else {
+      status.textContent = "Failed to clear cache: " + res.error;
+    }
+  } catch (e) {
+    status.textContent = "Error clearing cache: " + e;
+  }
 }
