@@ -159,7 +159,7 @@
     <div class="flex items-center gap-4">
       <div class="hidden xs:flex flex-col items-end">
         <span class="text-[9px] text-primary/60 uppercase font-bold tracking-tighter leading-none">TTS Engine</span>
-        <span class="text-[11px] text-on-surface font-medium" id="s-voice">Local Supertonic</span>
+        <span class="text-[11px] text-on-surface font-medium" id="s-voice-header">Local Supertonic</span>
       </div>
       <button class="material-symbols-outlined text-on-surface-variant active:scale-95 transition-transform hover:opacity-80" onclick="toggleSettingsModal()">settings</button>
     </div>
@@ -171,6 +171,13 @@
     <!-- ── Section 1: Load Script ── -->
     <section class="card" id="section-load">
       <div class="card-title">1 — Load Your Script</div>
+
+      <div class="flex justify-between items-center mb-4 pb-3 border-b border-white/5">
+        <button class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-[#dfe2f1] flex items-center gap-1 transition-colors" onclick="loadScript()">
+          <span class="material-symbols-outlined text-[16px]">file_open</span> Load JSON Plan
+        </button>
+        <span class="text-[11px] text-[#c7c4d7] italic" id="loaded-path">No file loaded</span>
+      </div>
 
       <!-- ── Plain Text mode ── -->
       <div id="mode-text">
