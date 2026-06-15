@@ -3,548 +3,505 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-  <title>S2V — Script-to-Video Pipeline v2.4</title>
+  <title>S2V — Script-to-Video Studio Workspace</title>
+  
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  
+  <!-- Fonts & Icon libraries (Tabler Icons CDN + Outfit/Inter Google Fonts) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  
+  <!-- Custom Studio CSS -->
   <link href="style.css" rel="stylesheet"/>
-  <style>
-    :root {
-      --obsidian-base: #0b0f19;
-      --glass-border: rgba(255, 255, 255, 0.08);
-      --glass-bg: rgba(255, 255, 255, 0.05);
-    }
-    body {
-      background-color: var(--obsidian-base);
-      color: #dfe2f1;
-      font-family: 'Inter', sans-serif;
-      overflow-x: hidden;
-      min-height: 100vh;
-    }
-    .glass-card {
-      background: var(--glass-bg);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--glass-border);
-      border-top: 1px solid rgba(255, 255, 255, 0.15);
-    }
-    .cosmic-gradient {
-      background: linear-gradient(135deg, #c0c1ff 0%, #4cd7f6 50%, #571bc1 100%);
-    }
-    .cosmic-glow:hover {
-      box-shadow: 0 0 20px rgba(192, 193, 255, 0.4);
-    }
-    .hide-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .audio-wave {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      height: 24px;
-    }
-    .wave-bar {
-      width: 3px;
-      background: #4cd7f6;
-      border-radius: 1px;
-      animation: wave-anim 1.2s ease-in-out infinite;
-    }
-    @keyframes wave-anim {
-      0%, 100% { height: 4px; }
-      50% { height: 18px; }
-    }
-  </style>
+  
   <script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
       theme: {
         extend: {
-          "colors": {
-            "on-tertiary": "#003640",
-            "primary-container": "#8083ff",
-            "on-primary": "#1000a9",
-            "background": "#0f131d",
-            "inverse-surface": "#dfe2f1",
-            "surface-container-highest": "#313540",
-            "surface-container-lowest": "#0a0e18",
-            "on-error": "#690005",
-            "on-error-container": "#ffdad6",
-            "primary-fixed": "#e1e0ff",
-            "on-surface-variant": "#c7c4d7",
-            "on-surface": "#dfe2f1",
-            "on-tertiary-fixed-variant": "#004e5c",
-            "surface-container-low": "#171b26",
-            "on-background": "#dfe2f1",
-            "on-secondary": "#3c0091",
-            "on-secondary-fixed": "#23005c",
-            "secondary-fixed-dim": "#d0bcff",
-            "surface-dim": "#0f131d",
-            "surface-tint": "#c0c1ff",
-            "surface-container-high": "#262a35",
-            "surface-container": "#1c1f2a",
-            "tertiary-fixed-dim": "#4cd7f6",
-            "inverse-primary": "#494bd6",
-            "error": "#ffb4ab",
-            "on-primary-container": "#0d0096",
-            "primary": "#c0c1ff",
-            "tertiary-container": "#009eb9",
-            "surface-variant": "#313540",
-            "outline-variant": "#464554",
-            "secondary-fixed": "#e9ddff",
-            "on-secondary-fixed-variant": "#5516be",
-            "inverse-on-surface": "#2c303b",
-            "secondary": "#d0bcff",
-            "surface": "#0f131d",
-            "on-secondary-container": "#c4abff",
-            "error-container": "#93000a",
-            "on-tertiary-fixed": "#001f26",
-            "outline": "#908fa0",
-            "surface-bright": "#353944",
-            "secondary-container": "#571bc1",
-            "tertiary": "#4cd7f6",
-            "tertiary-fixed": "#acedff",
-            "on-primary-fixed-variant": "#2f2ebe",
-            "on-tertiary-container": "#002f38",
-            "primary-fixed-dim": "#c0c1ff",
-            "on-primary-fixed": "#07006c"
-          },
-          "borderRadius": {
-            "DEFAULT": "0.25rem",
-            "lg": "0.5rem",
-            "xl": "0.75rem",
-            "full": "9999px"
-          },
-          "spacing": {
-            "gutter": "24px",
-            "md": "16px",
-            "lg": "24px",
-            "xl": "40px",
-            "container-margin": "32px",
-            "sm": "8px",
-            "xs": "4px",
-            "unit": "4px"
-          },
-          "fontFamily": {
-            "headline-lg-mobile": ["Outfit"],
-            "label-sm": ["Inter"],
-            "display-lg": ["Outfit"],
-            "body-lg": ["Inter"],
-            "caption-caps": ["Inter"],
-            "title-md": ["Outfit"],
-            "body-sm": ["Inter"],
-            "headline-lg": ["Outfit"]
-          },
-          "fontSize": {
-            "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
-            "label-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.02em", "fontWeight": "500"}],
-            "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
-            "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
-            "caption-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "600"}],
-            "title-md": ["20px", {"lineHeight": "28px", "letterSpacing": "0", "fontWeight": "500"}],
-            "body-sm": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}],
-            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+          colors: {
+            "obsidian-base": "#0b0f19",
+            "glass-border": "rgba(255, 255, 255, 0.08)",
+            "glass-bg": "rgba(255, 255, 255, 0.05)"
           }
-        },
-      },
+        }
+      }
     }
   </script>
 </head>
-<body class="flex flex-col min-h-screen pb-32 pt-16">
-  <!-- Top AppBar -->
-  <header class="fixed top-0 w-full z-50 bg-[#0f131d]/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-6 h-16 shadow-sm">
-    <div class="flex items-center gap-3">
-      <span class="material-symbols-outlined text-primary">movie_edit</span>
-      <span class="text-headline-lg-mobile font-headline-lg-mobile font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-tertiary">S2V</span>
-      <span class="bg-surface-container-highest text-on-surface-variant text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider" id="version-badge">v2.4.0</span>
+<body>
+
+<div id="s2v-root">
+  <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">S2V Script to Video Agent — three-column workspace</h2>
+
+  <!-- TOP BAR -->
+  <nav class="topbar">
+    <div class="logo-wrap">
+      <div class="logo-icon">S2V</div>
+      <span class="logo-text"><span>S2V</span> Studio</span>
+      <span class="ver-badge" id="version-badge">v2.4.0</span>
     </div>
-    <div class="flex items-center gap-4">
-      <div class="hidden xs:flex flex-col items-end">
-        <span class="text-[9px] text-primary/60 uppercase font-bold tracking-tighter leading-none">TTS Engine</span>
-        <span class="text-[11px] text-on-surface font-medium" id="s-voice-header">Local Supertonic</span>
-      </div>
-      <button class="material-symbols-outlined text-on-surface-variant active:scale-95 transition-transform hover:opacity-80" onclick="toggleSettingsModal()">settings</button>
+    <div class="topbar-center">
+      <div class="status-dot"></div>
+      <span class="status-label">TTS Engine: <span id="s-voice-header">Local Supertonic</span></span>
     </div>
-  </header>
-
-
-  <main>
-
-    <!-- ── Section 1: Load Script ── -->
-    <section class="card" id="section-load">
-      <div class="card-title">1 — Load Your Script</div>
-
-      <div class="flex justify-between items-center mb-4 pb-3 border-b border-white/5">
-        <button class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-[#dfe2f1] flex items-center gap-1 transition-colors" onclick="loadScript()">
-          <span class="material-symbols-outlined text-[16px]">file_open</span> Load JSON Plan
-        </button>
-        <span class="text-[11px] text-[#c7c4d7] italic" id="loaded-path">No file loaded</span>
-      </div>
-
-      <!-- ── Plain Text mode ── -->
-      <div id="mode-text">
-        <p class="hint" style="margin-bottom:12px;">
-          Paste your script below. The AI Agent will split it into scenes, write detailed image generation prompts, and estimate speech/render times.
-        </p>
-
-        <!-- Tab bar for Planner options -->
-        <div class="mode-tabs" id="planner-tabs" style="margin-top: 10px; margin-bottom: 16px;">
-          <div class="mode-tab active" id="tab-planner-core" onclick="switchPlannerTab('core')">⚙️ Core Settings</div>
-          <div class="mode-tab" id="tab-planner-guidelines" onclick="switchPlannerTab('guidelines')">🧠 AI Flash Guidelines</div>
-        </div>
-
-        <div class="plain-form">
-          <!-- PANEL 1: Core Settings -->
-          <div id="planner-panel-core" class="tab-panel">
-            <div class="plain-row">
-              <label class="plain-label">Video Title</label>
-              <input type="text" id="pt-title" class="plain-input"
-                placeholder="e.g. The Rise of Baghdad" />
-            </div>
-            
-            <div class="form-grid-2" style="margin-top: 12px;">
-              <div class="plain-row">
-                <label class="plain-label">Voice Engine</label>
-                <div class="voice-row">
-                  <select id="pt-voice" class="plain-input" style="flex:1;">
-                    <optgroup label="🔊 Edge Neural Voices (free, cloud, fast)">
-                      <option value="edge:en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
-                      <option value="edge:en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
-                      <option value="edge:en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
-                      <option value="edge:en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
-                      <option value="edge:en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
-                      <option value="edge:en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
-                    </optgroup>
-                    <optgroup label="🇪🇸 Spanish Voices (Edge Neural)">
-                      <option value="edge:es-ES-AlvaroNeural">🇪🇸 Spanish Spain Male (Alvaro)</option>
-                      <option value="edge:es-ES-ElviraNeural">🇪🇸 Spanish Spain Female (Elvira)</option>
-                      <option value="edge:es-MX-JorgeNeural">🇲🇽 Spanish Mexico Male (Jorge)</option>
-                      <option value="edge:es-MX-DaliaNeural">🇲🇽 Spanish Mexico Female (Dalia)</option>
-                    </optgroup>
-                    <optgroup label="🇫🇷 French Voices (Edge Neural)">
-                      <option value="edge:fr-FR-HenriNeural">🇫🇷 French Male (Henri)</option>
-                      <option value="edge:fr-FR-DeniseNeural">🇫🇷 French Female (Denise)</option>
-                    </optgroup>
-                    <optgroup label="🌟 Gemini 3.1 Flash TTS (Steerable Voices, requires Google API key)">
-                      <option value="google:gemini-3.1-flash-tts-preview:Puck" selected>🌟 Gemini Puck (Preview Voice - Recommended)</option>
-                      <option value="google:gemini-3.1-flash-tts-preview:Charon">🌟 Gemini Charon (Preview Voice)</option>
-                      <option value="google:gemini-3.1-flash-tts-preview:Kore">🌟 Gemini Kore (Preview Voice)</option>
-                      <option value="google:gemini-3.1-flash-tts-preview:Fenrir">🌟 Gemini Fenrir (Preview Voice)</option>
-                      <option value="google:gemini-3.1-flash-tts-preview:Aoede">🌟 Gemini Aoede (Preview Voice)</option>
-                    </optgroup>
-                    <optgroup label="✨ Google Premium Voices (requires Google API key)">
-                      <!-- US English - Journey (High Expressive) -->
-                      <option value="google:en-US-Journey-O">🇺🇸 Google Journey Male (en-US-Journey-O) [Premium]</option>
-                      <option value="google:en-US-Journey-D">🇺🇸 Google Journey Male (en-US-Journey-D) [Premium]</option>
-                      <option value="google:en-US-Journey-F">🇺🇸 Google Journey Female (en-US-Journey-F)</option>
-                      
-                      <!-- US English - Studio (Broadcast / Narration) -->
-                      <option value="google:en-US-Studio-Q">🇺🇸 Google Studio Male (en-US-Studio-Q) [High Fidelity]</option>
-                      
-                      <!-- US English - Neural2 (Natural Intonation) -->
-                      <option value="google:en-US-Neural2-A">🇺🇸 Google Neural2 Male (en-US-Neural2-A)</option>
-                      <option value="google:en-US-Neural2-D">🇺🇸 Google Neural2 Male (en-US-Neural2-D)</option>
-                      <option value="google:en-US-Neural2-J">🇺🇸 Google Neural2 Male (en-US-Neural2-J)</option>
-                      <option value="google:en-US-Neural2-F">🇺🇸 Google Neural2 Female (en-US-Neural2-F)</option>
-                      
-                      <!-- US English - WaveNet (Classic Deep Learning) -->
-                      <option value="google:en-US-Wavenet-B">🇺🇸 Google WaveNet Male (en-US-Wavenet-B)</option>
-                      <option value="google:en-US-Wavenet-D">🇺🇸 Google WaveNet Male (en-US-Wavenet-D)</option>
-                      <option value="google:en-US-Wavenet-J">🇺🇸 Google WaveNet Male (en-US-Wavenet-J)</option>
-
-                      <!-- GB English - Neural2 & Wavenet -->
-                      <option value="google:en-GB-Neural2-B">🇬🇧 Google Neural2 Male (en-GB-Neural2-B)</option>
-                      <option value="google:en-GB-Neural2-D">🇬🇧 Google Neural2 Male (en-GB-Neural2-D)</option>
-                      <option value="google:en-GB-Wavenet-B">🇬🇧 Google WaveNet Male (en-GB-Wavenet-B)</option>
-                      <option value="google:en-GB-Wavenet-D">🇬🇧 Google WaveNet Male (en-GB-Wavenet-D)</option>
-                    </optgroup>
-
-                    <optgroup label="💻 Supertonic Offline Voices (completely offline)">
-                      <option value="local:supertonic-m1">💻 Supertonic Male 1 (M1)</option>
-                      <option value="local:supertonic-m2">💻 Supertonic Male 2 (M2)</option>
-                      <option value="local:supertonic-m3">💻 Supertonic Male 3 (M3)</option>
-                      <option value="local:supertonic-m4">💻 Supertonic Male 4 (M4)</option>
-                      <option value="local:supertonic-m5">💻 Supertonic Male 5 (M5)</option>
-                      <option value="local:supertonic-f1">💻 Supertonic Female 1 (F1)</option>
-                      <option value="local:supertonic-f2">💻 Supertonic Female 2 (F2)</option>
-                      <option value="local:supertonic-f3">💻 Supertonic Female 3 (F3)</option>
-                      <option value="local:supertonic-f4">💻 Supertonic Female 4 (F4)</option>
-                      <option value="local:supertonic-f5">💻 Supertonic Female 5 (F5)</option>
-                    </optgroup>
-                  </select>
-                  <button class="btn btn-secondary" id="btn-preview-voice" onclick="previewVoice()">
-                    ▶ Preview
-                  </button>
-                  <span id="voice-preview-status" class="voice-preview-status"></span>
-                </div>
-              </div>
-              
-              <div class="plain-row">
-                <label class="plain-label">Aspect Ratio</label>
-                <select id="pt-aspect-ratio" class="plain-input">
-                  <option value="16:9">16:9 (Widescreen for YouTube/Desktop)</option>
-                  <option value="9:16">9:16 (Vertical for Shorts/TikTok/Reels)</option>
-                  <option value="1:1">1:1 (Square for Instagram/Socials)</option>
-                  <option value="4:3">4:3 (Fullscreen Standard)</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="plain-row" style="margin-top: 12px;">
-              <label class="plain-label">Visual Style Preset</label>
-              <select id="pt-style-select" class="plain-input" onchange="toggleCustomStyleInput()">
-                <option value="cinematic documentary photography, dramatic natural lighting, highly detailed, photorealistic">1. Cinematic Photograph (Default)</option>
-                <option value="historical oil painting, rich colors, detailed textures, classical art style">2. Historical Oil Painting</option>
-                <option value="epic fantasy watercolor painting, soft color washes, highly artistic, fine details">3. Epic Watercolor Art</option>
-                <option value="dark fantasy concept art, moody atmosphere, detailed digital painting, cinematic lighting">4. Dark Fantasy Concept Art</option>
-                <option value="modern 3d render, sci-fi concept design, unreal engine 5 style, highly detailed">5. Modern 3D Render (Sci-Fi)</option>
-                <option value="retro anime manga style, clean linework, vibrant cell shading, hand-drawn look">6. Retro Anime / Manga</option>
-                <option value="traditional ink sketch and charcoal drawing, high contrast, hand-crafted illustration">7. Ink Sketch & Charcoal</option>
-                <option value="cyberpunk city illustration, neon lights, dramatic backlighting, futuristic design">8. Cyberpunk Neon</option>
-                <option value="vintage comic book style, half-tone dots, bold outlines, retro color palette">9. Vintage Comic Book</option>
-                <option value="custom">10. Custom (Other) - type custom prompt...</option>
-              </select>
-            </div>
-            
-            <div class="plain-row hidden" id="custom-style-row" style="margin-top: 12px;">
-              <label class="plain-label">Custom Visual Style Description</label>
-              <input type="text" id="pt-visual-style-custom" class="plain-input"
-                placeholder="e.g. claymation style, colorful watercolor splash, 3D clay rendering, etc." />
-            </div>
-          </div>
-
-          <!-- PANEL 2: AI Flash Guidelines -->
-          <div id="planner-panel-guidelines" class="tab-panel hidden">
-            <div class="form-grid-2">
-              <div class="plain-row">
-                <label class="plain-label">Target Accent / Dialect</label>
-                <select id="pt-voice-dialect" class="plain-input">
-                  <option value="Standard English">Standard English</option>
-                  <option value="Nigerian English">Nigerian English</option>
-                  <option value="British English">British English (UK)</option>
-                  <option value="Arabic Storytelling">Arabic Storytelling (with Tashkeel)</option>
-                  <option value="Spanish Dialect">Spanish Dialect</option>
-                  <option value="French Dialect">French Dialect</option>
-                </select>
-              </div>
-
-              <div class="plain-row">
-                <label class="plain-label">Narrative Tone & Style</label>
-                <select id="pt-narrative-tone" class="plain-input">
-                  <option value="Dramatic Documentary">Dramatic Documentary</option>
-                  <option value="Motivational Speech">Motivational Speech</option>
-                  <option value="Suspenseful/Horror">Suspenseful / Horror</option>
-                  <option value="Conversational/Casual">Conversational / Casual</option>
-                  <option value="Energetic/Upbeat">Energetic / Upbeat</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="plain-row" style="margin-top: 12px;">
-              <label class="plain-label">Speaker Mode</label>
-              <select id="pt-speaker-mode" class="plain-input">
-                <option value="single">Single Speaker (Standard Narrator)</option>
-                <option value="conversational">Conversational (Switch Speakers Mid-Sentence)</option>
-              </select>
-            </div>
-
-            <div class="plain-row" style="margin-top: 12px;">
-              <label class="plain-label">Custom AI Guidelines / Flash Instructions</label>
-              <textarea id="pt-ai-guideline" class="plain-textarea" style="min-height: 80px;"
-                placeholder="Enter custom guidelines for Gemini. e.g. 'I want the script in Nigerian English.' or 'Make this tone should be conversational.'"></textarea>
-            </div>
-          </div>
-
-          <div class="plain-row" style="margin-top: 12px;">
-            <label class="plain-label">Your Script</label>
-            <textarea id="pt-script" class="plain-textarea"
-              placeholder="Paste your script text here. Separate scenes with blank lines for precise manual control, or paste raw text to let the AI agent structure it automatically."></textarea>
-          </div>
-          
-          <button class="btn btn-primary" id="btn-parse" onclick="parsePlainText()">
-            Generate Storyboard Plan →
-          </button>
-        </div>
-      </div>
-
-      <!-- Script summary (hidden until loaded) -->
-      <div id="script-summary" class="summary hidden">
-        <div class="summary-grid">
-          <div class="summary-item">
-            <span class="summary-label">Project Title</span>
-            <span class="summary-value" id="s-title">—</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Scenes</span>
-            <span class="summary-value" id="s-segments">—</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Est. Duration</span>
-            <span class="summary-value" id="s-duration">—</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Voice</span>
-            <span class="summary-value" id="s-voice">—</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Aspect Ratio</span>
-            <span class="summary-value" id="s-aspect-ratio">—</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">Status</span>
-            <span class="summary-value" id="s-validation">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Validation error block -->
-      <div id="validation-errors" class="error-block hidden"></div>
-    </section>
-
-    <!-- ── Section 2: Storyboard Review Screen (Hidden until parsed/loaded) ── -->
-    <section class="card hidden card-fade-in" id="section-storyboard">
-      <div class="card-title">🤖 AI Agent Storyboard Planner</div>
-      
-      <div class="storyboard-summary">
-        <div><strong>Est. Video Duration:</strong> <span id="sb-est-duration">-</span></div>
-        <div><strong>Est. Render Duration:</strong> <span id="sb-est-render">-</span></div>
-        <div><strong>Visual Style:</strong> <span id="sb-style-guide">-</span></div>
-        <div><strong>Status:</strong> <span id="sb-status">Pending Review</span></div>
-      </div>
-
-      <div id="storyboard-scenes-container" class="scenes-list">
-        <!-- Scene cards rendered dynamically -->
-      </div>
-
-      <div class="storyboard-actions">
-        <button class="btn btn-secondary" onclick="openProjectFolder()" style="margin-right:12px;">
-          📂 Open Project Folder
-        </button>
-        <button class="btn btn-secondary" onclick="saveStoryboardEdits(true)" style="margin-right:12px;">
-          💾 Save Changes
-        </button>
-        <button class="btn btn-primary btn-render" id="btn-approve-render" onclick="approveAndRender()">
-          ▶ Approve & Start Render
-        </button>
-      </div>
-    </section>
-
-
-     <!-- ── Section 4: Video Preview & Render Progress ── -->
-     <section class="relative mt-8" id="section-preview-container">
-       <div class="glass-card rounded-2xl overflow-hidden aspect-[16/9] relative group">
-         <img id="video-preview-placeholder" class="w-full h-full object-cover opacity-60" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrOMxkkUr7gyAAaFpYdy_Qa-MWC0Cza7D8huCyKrvyNhLdWBsN43Tm3GqS3qH6EB0He3hW3lLpamh7ULKd-2T4dmyZwoE22OvWQYZYeNaR0lPBElUlvWFbB5X9fIbIYBvO5TPYM2fyBKbklwAG1Jis4VkSvSbgE5XhXqbM45OCQkrt5C4iXI9YBg9RKWK67tpg7aHBuSG5NBCgzHz1v5qZnBSp2OkVo6GGNBz_It042jlByTnn5_-kWA" alt="Video stage preview"/>
-         
-         <!-- Live Render Progress Overlay -->
-         <div id="section-progress" class="absolute inset-0 bg-[#0f131d]/95 backdrop-blur-md p-6 flex flex-col justify-between hidden">
-           <div class="flex justify-between items-center border-b border-white/10 pb-2">
-             <span class="text-xs uppercase font-bold tracking-widest text-[#c0c1ff]">Render Progress Tracker</span>
-             <span class="text-[10px] font-mono text-[#4cd7f6]" id="segment-label">Segment -/-</span>
-           </div>
-           
-           <div class="flex-grow my-4 flex flex-col justify-center gap-2">
-             <div class="flex justify-between items-end text-xs">
-               <span id="stage-label" class="font-medium text-[#dfe2f1]">Initializing render...</span>
-               <span class="text-[#c7c4d7]" id="progress-text">0%</span>
-             </div>
-             <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-               <div id="progress-fill" class="h-full cosmic-gradient" style="width: 0%"></div>
-             </div>
-           </div>
-           <div id="log-panel" class="h-24 bg-[#0a0e18] border border-white/10 rounded-lg p-2 font-mono text-[10px] overflow-y-auto text-[#c7c4d7] hide-scrollbar"></div>
-         </div>
-       </div>
-
-       <!-- Quick Action Row -->
-       <div class="mt-4 space-y-3">
-         <div class="flex gap-3">
-           <button id="btn-render" onclick="startRender()" class="flex-1 h-12 rounded-xl cosmic-gradient cosmic-glow flex items-center justify-center gap-2 text-[#0d0096] font-bold active:scale-95 transition-all">
-             <span class="material-symbols-outlined">memory</span> Render Video
-           </button>
-           <button id="btn-cancel" onclick="cancelRender()" class="h-12 px-6 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 font-bold active:scale-95 transition-all hidden">✕ Cancel</button>
-         </div>
-         <div class="grid grid-cols-3 gap-3">
-           <button onclick="saveStoryboardEdits(true)" class="h-10 rounded-xl glass-card text-xs font-bold hover:bg-white/5 active:scale-95 transition-colors flex items-center justify-center gap-1 text-[#dfe2f1]">💾 Save Edits</button>
-           <button id="btn-clear-cache" onclick="clearCache()" class="h-10 rounded-xl glass-card text-xs font-bold hover:bg-white/5 active:scale-95 transition-colors flex items-center justify-center gap-1 text-[#dfe2f1]">🗑 Clear Cache</button>
-           <button onclick="openProjectFolder()" class="h-10 rounded-xl glass-card text-xs font-bold hover:bg-white/5 active:scale-95 transition-colors flex items-center justify-center gap-1 text-[#dfe2f1]">📂 Open Project</button>
-         </div>
-         <p class="text-[11px] text-[#c7c4d7] text-center" id="render-hint">Plan a script or load a JSON file to render.</p>
-       </div>
-     </section>
-
-     <!-- ── Section 5: Complete (shown when done) ── -->
-     <section class="card hidden mt-8" id="section-complete">
-       <div class="text-center space-y-4">
-         <div class="text-2xl">✅ Rendering Completed Successfully!</div>
-         <p class="text-xs text-[#c7c4d7] break-all font-mono bg-black/20 p-3 rounded-xl border border-white/5" id="complete-path"></p>
-         <div class="flex gap-4 justify-center">
-           <button class="px-5 py-2.5 bg-[#8083ff] hover:bg-[#6366f1] text-[#0d0096] rounded-xl text-xs font-bold transition-colors active:scale-95" onclick="openOutputFolder()">Open Output Folder</button>
-           <button class="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-[#dfe2f1] transition-colors active:scale-95" onclick="renderAnother()">Create Another Video</button>
-         </div>
-       </div>
-     </section>
-
-  </main>
-
-  <!-- Settings Modal Dialog Overlay -->
-  <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0b0f19]/80 backdrop-blur-md hidden" onclick="toggleSettingsModal()">
-    <div class="w-full max-w-lg bg-[#1c1f2a] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-6" onclick="event.stopPropagation()">
-      <div class="flex justify-between items-center border-b border-white/10 pb-3">
-        <h3 class="font-display text-md font-bold text-[#dfe2f1] flex items-center gap-2" style="font-family: 'Outfit', sans-serif;">
-          <span class="material-symbols-outlined text-[#c0c1ff]">settings</span>
-          S2V Studio Settings
-        </h3>
-        <button class="material-symbols-outlined hover:opacity-85 text-[#c7c4d7]" onclick="toggleSettingsModal()">close</button>
-      </div>
-
-      <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2 hide-scrollbar">
-        <!-- Credentials Section -->
-        <div class="space-y-3">
-          <h4 class="text-xs uppercase tracking-wider text-[#c0c1ff] font-bold">API Credentials</h4>
-          
-          <div class="space-y-1">
-            <label class="text-[10px] text-[#c7c4d7] uppercase font-bold">Google AI Studio / Gemini Key</label>
-            <div class="flex gap-2">
-              <input type="password" id="google-key-input" class="flex-1 bg-[#171b26] border border-white/5 rounded-xl py-2 px-3 text-xs text-[#dfe2f1]" placeholder="Paste your Google Gemini API key" oninput="onGoogleKeyInput()" />
-              <button class="px-4 py-2 bg-[#8083ff] hover:bg-[#6366f1] text-[#0d0096] rounded-xl text-xs font-bold transition-colors" id="btn-save-google-key" onclick="saveGoogleKey()">Save</button>
-            </div>
-            <span id="google-key-status" class="text-[10px] text-[#4cd7f6]"></span>
-          </div>
-
-          <div class="space-y-1">
-            <label class="text-[10px] text-[#c7c4d7] uppercase font-bold">DeepSeek API Key</label>
-            <div class="flex gap-2">
-              <input type="password" id="deepseek-key-input" class="flex-1 bg-[#171b26] border border-white/5 rounded-xl py-2 px-3 text-xs text-[#dfe2f1]" placeholder="Paste your DeepSeek API key" oninput="onDeepseekKeyInput()" />
-              <button class="px-4 py-2 bg-[#8083ff] hover:bg-[#6366f1] text-[#0d0096] rounded-xl text-xs font-bold transition-colors" id="btn-save-deepseek-key" onclick="saveDeepseekKey()">Save</button>
-            </div>
-            <span id="deepseek-key-status" class="text-[10px] text-[#4cd7f6]"></span>
-          </div>
-
-          <div class="space-y-1">
-            <label class="text-[10px] text-[#c7c4d7] uppercase font-bold">Google Cloud TTS Key (Optional)</label>
-            <div class="flex gap-2">
-              <input type="password" id="google-tts-key-input" class="flex-1 bg-[#171b26] border border-white/5 rounded-xl py-2 px-3 text-xs text-[#dfe2f1]" placeholder="Paste Google Cloud TTS API key (optional)" oninput="onGoogleTtsKeyInput()" />
-              <button class="px-4 py-2 bg-[#8083ff] hover:bg-[#6366f1] text-[#0d0096] rounded-xl text-xs font-bold transition-colors" id="btn-save-google-tts-key" onclick="saveGoogleTtsKey()">Save</button>
-            </div>
-            <span id="google-tts-key-status" class="text-[10px] text-[#4cd7f6]"></span>
-          </div>
-        </div>
-
-        <!-- Language Enablement Section -->
-        <div class="space-y-3 pt-4 border-t border-white/10">
-          <h4 class="text-xs uppercase tracking-wider text-[#c0c1ff] font-bold">Enable Languages (Studio)</h4>
-          <p class="text-[10px] text-[#c7c4d7]">Select which languages you want available in the studio dropdown list:</p>
-          <div id="language-selection-list" class="grid grid-cols-2 gap-2 text-xs">
-            <!-- Checkboxes dynamically rendered by app.js -->
-          </div>
-        </div>
-      </div>
-
-      <button onclick="toggleSettingsModal()" class="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/15 rounded-xl text-xs font-bold text-[#dfe2f1] active:scale-95 transition-all">
-        Done
+    <div class="topbar-right">
+      <button class="icon-btn" onclick="toggleSettingsModal()" title="Settings" aria-label="Open settings">
+        <i class="ti ti-settings" aria-hidden="true"></i>
       </button>
     </div>
+  </nav>
+
+  <!-- WORKSPACE -->
+  <div class="workspace">
+
+    <!-- LEFT COLUMN: SCRIPT & CONFIG PANEL -->
+    <div class="panel" style="background: linear-gradient(180deg, rgba(17,24,39,0.85) 0%, rgba(11,15,25,0.95) 100%)">
+      
+      <!-- Load JSON Card (Quick load) -->
+      <div class="card" style="padding: 10px 14px;">
+        <div class="flex justify-between items-center">
+          <button class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-[#dfe2f1] flex items-center gap-1.5 transition-colors" onclick="loadScript()">
+            <i class="ti ti-file-upload" aria-hidden="true"></i> Load JSON Plan
+          </button>
+          <span class="text-[11px] text-[#c7c4d7] italic truncate max-w-[150px]" id="loaded-path">No file loaded</span>
+        </div>
+      </div>
+
+      <!-- Config Card -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="dot"></span>Project Config</span>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Project Title</label>
+          <input class="form-input" type="text" id="pt-title" placeholder="My AI Video Script…" value="The Power of Phonics — Ep. 3">
+        </div>
+
+        <!-- Pill Tabs -->
+        <div class="tab-bar" id="tabBar">
+          <div class="tab-pill" id="tabPill" style="width: 50%; left: 3px;"></div>
+          <button class="tab-btn active" id="tab0" onclick="switchTab(0)">⚙️ Core Settings</button>
+          <button class="tab-btn" id="tab1" onclick="switchTab(1)">🧠 AI Guidelines</button>
+        </div>
+
+        <!-- Core Settings Tab -->
+        <div id="coreTab">
+          <!-- Voice selection -->
+          <div class="form-group">
+            <label class="form-label">Voice Engine</label>
+            <div class="flex gap-2 mb-2">
+              <select id="pt-voice" class="form-select flex-1">
+                <optgroup label="🔊 Edge Neural Voices (free, cloud, fast)">
+                  <option value="edge:en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
+                  <option value="edge:en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
+                  <option value="edge:en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
+                  <option value="edge:en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
+                  <option value="edge:en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
+                  <option value="edge:en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
+                </optgroup>
+                <optgroup label="🇪🇸 Spanish Voices (Edge Neural)">
+                  <option value="edge:es-ES-AlvaroNeural">🇪🇸 Spanish Spain Male (Alvaro)</option>
+                  <option value="edge:es-ES-ElviraNeural">🇪🇸 Spanish Spain Female (Elvira)</option>
+                  <option value="edge:es-MX-JorgeNeural">🇲🇽 Spanish Mexico Male (Jorge)</option>
+                  <option value="edge:es-MX-DaliaNeural">🇲🇽 Spanish Mexico Female (Dalia)</option>
+                </optgroup>
+                <optgroup label="🇫🇷 French Voices (Edge Neural)">
+                  <option value="edge:fr-FR-HenriNeural">🇫🇷 French Male (Henri)</option>
+                  <option value="edge:fr-FR-DeniseNeural">🇫🇷 French Female (Denise)</option>
+                </optgroup>
+                <optgroup label="🌟 Gemini 3.1 Flash TTS (Steerable Voices, requires Google API key)">
+                  <option value="google:gemini-3.1-flash-tts-preview:Puck" selected>🌟 Gemini Puck (Preview Voice - Recommended)</option>
+                  <option value="google:gemini-3.1-flash-tts-preview:Charon">🌟 Gemini Charon (Preview Voice)</option>
+                  <option value="google:gemini-3.1-flash-tts-preview:Kore">🌟 Gemini Kore (Preview Voice)</option>
+                  <option value="google:gemini-3.1-flash-tts-preview:Fenrir">🌟 Gemini Fenrir (Preview Voice)</option>
+                  <option value="google:gemini-3.1-flash-tts-preview:Aoede">🌟 Gemini Aoede (Preview Voice)</option>
+                </optgroup>
+                <optgroup label="✨ Google Premium Voices (requires Google API key)">
+                  <option value="google:en-US-Journey-O">🇺🇸 Google Journey Male (en-US-Journey-O) [Premium]</option>
+                  <option value="google:en-US-Journey-D">🇺🇸 Google Journey Male (en-US-Journey-D) [Premium]</option>
+                  <option value="google:en-US-Journey-F">🇺🇸 Google Journey Female (en-US-Journey-F)</option>
+                  <option value="google:en-US-Studio-Q">🇺🇸 Google Studio Male (en-US-Studio-Q) [High Fidelity]</option>
+                  <option value="google:en-US-Neural2-A">🇺🇸 Google Neural2 Male (en-US-Neural2-A)</option>
+                  <option value="google:en-US-Neural2-D">🇺🇸 Google Neural2 Male (en-US-Neural2-D)</option>
+                  <option value="google:en-US-Neural2-J">🇺🇸 Google Neural2 Male (en-US-Neural2-J)</option>
+                  <option value="google:en-US-Neural2-F">🇺🇸 Google Neural2 Female (en-US-Neural2-F)</option>
+                  <option value="google:en-US-Wavenet-B">🇺🇸 Google WaveNet Male (en-US-Wavenet-B)</option>
+                  <option value="google:en-US-Wavenet-D">🇺🇸 Google WaveNet Male (en-US-Wavenet-D)</option>
+                  <option value="google:en-US-Wavenet-J">🇺🇸 Google WaveNet Male (en-US-Wavenet-J)</option>
+                  <option value="google:en-GB-Neural2-B">🇬🇧 Google Neural2 Male (en-GB-Neural2-B)</option>
+                  <option value="google:en-GB-Neural2-D">🇬🇧 Google Neural2 Male (en-GB-Neural2-D)</option>
+                  <option value="google:en-GB-Wavenet-B">🇬🇧 Google WaveNet Male (en-GB-Wavenet-B)</option>
+                  <option value="google:en-GB-Wavenet-D">🇬🇧 Google WaveNet Male (en-GB-Wavenet-D)</option>
+                </optgroup>
+                <optgroup label="💻 Supertonic Offline Voices (completely offline)">
+                  <option value="local:supertonic-m1">💻 Supertonic Male 1 (M1)</option>
+                  <option value="local:supertonic-m2">💻 Supertonic Male 2 (M2)</option>
+                  <option value="local:supertonic-m3">💻 Supertonic Male 3 (M3)</option>
+                  <option value="local:supertonic-m4">💻 Supertonic Male 4 (M4)</option>
+                  <option value="local:supertonic-m5">💻 Supertonic Male 5 (M5)</option>
+                  <option value="local:supertonic-f1">💻 Supertonic Female 1 (F1)</option>
+                  <option value="local:supertonic-f2">💻 Supertonic Female 2 (F2)</option>
+                  <option value="local:supertonic-f3">💻 Supertonic Female 3 (F3)</option>
+                  <option value="local:supertonic-f4">💻 Supertonic Female 4 (F4)</option>
+                  <option value="local:supertonic-f5">💻 Supertonic Female 5 (F5)</option>
+                </optgroup>
+              </select>
+              <button class="px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg text-xs font-semibold text-white flex items-center justify-center gap-1 active:scale-95 transition-transform" id="btn-preview-voice" onclick="previewVoice()">
+                <i class="ti ti-volume" aria-hidden="true"></i> Preview
+              </button>
+            </div>
+            <span id="voice-preview-status" class="text-[10px] text-cyan-400 block h-4"></span>
+          </div>
+
+          <!-- Hidden Aspect Ratio Select for app.js Compatibility -->
+          <select id="pt-aspect-ratio" class="hidden">
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
+            <option value="1:1">1:1</option>
+            <option value="4:3">4:3</option>
+          </select>
+
+          <!-- Aspect Ratio Custom Selector Grid -->
+          <div class="form-group">
+            <label class="form-label">Aspect Ratio</label>
+            <div class="ratio-grid" id="aspect-ratio-grid">
+              <div class="ratio-btn active" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:28px;height:17px"></div>
+                <span class="ratio-label">16:9</span>
+              </div>
+              <div class="ratio-btn" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:17px;height:28px"></div>
+                <span class="ratio-label">9:16</span>
+              </div>
+              <div class="ratio-btn" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:22px;height:22px"></div>
+                <span class="ratio-label">1:1</span>
+              </div>
+              <div class="ratio-btn" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:25px;height:19px"></div>
+                <span class="ratio-label">4:3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Style Preset select -->
+          <div class="form-group">
+            <label class="form-label">Visual Style Preset</label>
+            <select id="pt-style-select" class="form-select" onchange="toggleCustomStyleInput()">
+              <option value="cinematic documentary photography, dramatic natural lighting, highly detailed, photorealistic">1. Cinematic Photograph (Default)</option>
+              <option value="historical oil painting, rich colors, detailed textures, classical art style">2. Historical Oil Painting</option>
+              <option value="epic fantasy watercolor painting, soft color washes, highly artistic, fine details">3. Epic Watercolor Art</option>
+              <option value="dark fantasy concept art, moody atmosphere, detailed digital painting, cinematic lighting">4. Dark Fantasy Concept Art</option>
+              <option value="modern 3d render, sci-fi concept design, unreal engine 5 style, highly detailed">5. Modern 3D Render (Sci-Fi)</option>
+              <option value="retro anime manga style, clean linework, vibrant cell shading, hand-drawn look">6. Retro Anime / Manga</option>
+              <option value="traditional ink sketch and charcoal drawing, high contrast, hand-crafted illustration">7. Ink Sketch & Charcoal</option>
+              <option value="cyberpunk city illustration, neon lights, dramatic backlighting, futuristic design">8. Cyberpunk Neon</option>
+              <option value="vintage comic book style, half-tone dots, bold outlines, retro color palette">9. Vintage Comic Book</option>
+              <option value="custom">10. Custom (Other) - type custom prompt...</option>
+            </select>
+          </div>
+
+          <!-- Custom style text box -->
+          <div class="form-group hidden" id="custom-style-row">
+            <label class="form-label">Custom Visual Style Description</label>
+            <input type="text" id="pt-visual-style-custom" class="form-input" placeholder="e.g. claymation style, colorful watercolor splash, 3D clay rendering, etc." />
+          </div>
+        </div>
+
+        <!-- AI Guidelines Tab -->
+        <div id="aiTab" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Target Accent / Dialect</label>
+            <select id="pt-voice-dialect" class="form-select">
+              <option value="Standard English">Standard English</option>
+              <option value="Nigerian English">Nigerian English</option>
+              <option value="British English">British English (UK)</option>
+              <option value="Arabic Storytelling">Arabic Storytelling (with Tashkeel)</option>
+              <option value="Spanish Dialect">Spanish Dialect</option>
+              <option value="French Dialect">French Dialect</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Narrative Tone & Style</label>
+            <select id="pt-narrative-tone" class="form-select">
+              <option value="Dramatic Documentary">Dramatic Documentary</option>
+              <option value="Motivational Speech">Motivational Speech</option>
+              <option value="Suspenseful/Horror">Suspenseful / Horror</option>
+              <option value="Conversational/Casual">Conversational / Casual</option>
+              <option value="Energetic/Upbeat">Energetic / Upbeat</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Speaker Mode</label>
+            <select id="pt-speaker-mode" class="form-select">
+              <option value="single">Single Speaker (Standard Narrator)</option>
+              <option value="conversational">Conversational (Switch Speakers Mid-Sentence)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custom Guidelines / Instructions</label>
+            <textarea id="pt-ai-guideline" class="form-textarea" placeholder="Enter custom guidelines for Gemini. e.g. 'Use Nigerian slang.' or 'Make the tone dramatic.'"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Script Textarea -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px"><span class="dot"></span>Script Input</div>
+        <textarea class="script-textarea" id="pt-script" placeholder="Paste your script text here. Separate scenes with blank lines for precise manual control, or paste raw text to let the AI agent structure it automatically."></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+          <span style="font-size:10px;color:var(--text3)" id="wordCount">0 words</span>
+          <span style="font-size:10px;color:var(--text3)" id="estimatedDuration">≈ 0.0 min</span>
+        </div>
+      </div>
+
+      <!-- Generate Button -->
+      <button class="gen-btn" id="btn-parse" onclick="parsePlainText()">
+        <i class="ti ti-sparkles" aria-hidden="true"></i> Generate Storyboard Plan
+      </button>
+
+      <!-- Summary panel -->
+      <div id="script-summary" class="card hidden" style="padding: 12px; margin-top: 4px;">
+        <div class="grid grid-cols-2 gap-2 text-[11px] text-gray-400">
+          <div>Title: <span id="s-title" class="text-white font-medium">—</span></div>
+          <div>Scenes: <span id="s-segments" class="text-white font-medium">—</span></div>
+          <div>Dur: <span id="s-duration" class="text-white font-medium">—</span></div>
+          <div>Voice: <span id="s-voice" class="text-white font-medium">—</span></div>
+          <div>Ratio: <span id="s-aspect-ratio" class="text-white font-medium">—</span></div>
+          <div>Status: <span id="s-validation" class="text-white font-semibold">—</span></div>
+        </div>
+      </div>
+
+      <!-- Validation Error Box -->
+      <div id="validation-errors" class="error-block hidden"></div>
+    </div>
+
+    <!-- CENTER COLUMN: STORYBOARD REVIEW PANEL -->
+    <div class="center-panel">
+      <!-- Storyboard Section (Hidden until planning is completed) -->
+      <section class="hidden" id="section-storyboard" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+        <div class="scene-header">
+          <span class="card-title"><span class="dot"></span>Storyboard Planner</span>
+          <span class="scene-count" id="sb-status">🤖 AI Structured</span>
+        </div>
+
+        <div class="storyboard-summary grid grid-cols-3 gap-2 text-[11px] bg-white/5 border border-white/10 rounded-xl p-3">
+          <div><strong>Est. Video:</strong> <span id="sb-est-duration">-</span></div>
+          <div><strong>Est. Render:</strong> <span id="sb-est-render">-</span></div>
+          <div><strong>Visual Style:</strong> <span id="sb-style-guide">-</span></div>
+        </div>
+
+        <!-- Dynamic List of Cards -->
+        <div id="storyboard-scenes-container" class="scenes-list">
+          <!-- Populated by drawStoryboard() in app.js -->
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-3 mt-2 pb-6 border-t border-white/5 pt-4">
+          <button class="flex-1 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-xs font-semibold text-white transition-all" onclick="saveStoryboardEdits(true)">
+            💾 Save Changes
+          </button>
+          <button class="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-xl text-xs font-bold transition-all" id="btn-approve-render" onclick="approveAndRender()">
+            ▶ Approve & Start Render
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT COLUMN: MEDIA PRODUCTION & STAGE -->
+    <div class="panel" style="background: linear-gradient(180deg, rgba(17,24,39,0.85) 0%, rgba(11,15,25,0.95) 100%)">
+      
+      <div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Preview Stage</div>
+
+      <!-- Viewport Stage -->
+      <div class="preview-stage preview-ratio-16-9" id="previewStage">
+        <div class="preview-inner">
+          <img id="video-preview-placeholder" class="w-full h-full object-cover opacity-60" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrOMxkkUr7gyAAaFpYdy_Qa-MWC0Cza7D8huCyKrvyNhLdWBsN43Tm3GqS3qH6EB0He3hW3lLpamh7ULKd-2T4dmyZwoE22OvWQYZYeNaR0lPBElUlvWFbB5X9fIbIYBvO5TPYM2fyBKbklwAG1Jis4VkSvSbgE5XhXqbM45OCQkrt5C4iXI9YBg9RKWK67tpg7aHBuSG5NBCgzHz1v5qZnBSp2OkVo6GGNBz_It042jlByTnn5_-kWA" alt="Video stage preview"/>
+          
+          <!-- Live Render Progress Overlay -->
+          <div id="section-progress" class="absolute inset-0 bg-[#0f131d]/95 backdrop-blur-md p-4 flex flex-col justify-between hidden z-10">
+            <div class="flex justify-between items-center border-b border-white/10 pb-1.5">
+              <span class="text-[10px] uppercase font-bold tracking-widest text-[#c0c1ff]">Rendering Progress</span>
+              <span class="text-[9px] font-mono text-[#4cd7f6]" id="segment-label">Segment -/-</span>
+            </div>
+            
+            <div class="flex-grow my-3 flex flex-col justify-center gap-1.5">
+              <div class="flex justify-between items-end text-[11px]">
+                <span id="stage-label" class="font-medium text-[#dfe2f1] truncate max-w-[170px]">Initializing render...</span>
+                <span class="text-[#c7c4d7]" id="progress-text">0%</span>
+              </div>
+              <div class="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div id="progress-fill" class="h-full bg-gradient-to-r from-indigo-500 to-cyan-500" style="width: 0%"></div>
+              </div>
+            </div>
+            
+            <div id="log-panel" class="h-16 bg-[#0a0e18] border border-white/10 rounded-lg p-2 font-mono text-[9px] overflow-y-auto text-[#c7c4d7] hide-scrollbar leading-normal"></div>
+          </div>
+        </div>
+        <span class="preview-timecode">00:00:00</span>
+        <div class="preview-caption-bar" style="display:none" id="captionBar"></div>
+      </div>
+
+      <!-- Horizontal Strip Navigator -->
+      <div id="sceneStrip" class="flex gap-1.5 overflow-x-auto py-1 hide-scrollbar">
+        <span style="font-size:10px;color:var(--text3);line-height:2.5;white-space:nowrap">Scenes load here ↗</span>
+      </div>
+
+      <!-- Waveform panel -->
+      <div class="waveform-wrap">
+        <div class="waveform-label">
+          <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-wave-sine" aria-hidden="true"></i>TTS Waveform</span>
+          <span id="ttsStatus" style="font-size:10px;color:var(--text3)">Idle</span>
+        </div>
+        <div class="waveform-bars" id="waveBars"></div>
+      </div>
+
+      <!-- Render Hub Controls -->
+      <div class="render-hub space-y-3">
+        <div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Render Production</div>
+
+        <div class="grid grid-cols-2 gap-2 text-[10px] text-gray-400">
+          <div class="bg-black/20 border border-white/5 rounded-lg p-2">
+            <div>Codec</div>
+            <div class="text-white font-medium mt-0.5">H.264 / AAC</div>
+          </div>
+          <div class="bg-black/20 border border-white/5 rounded-lg p-2">
+            <div>Quality</div>
+            <div class="text-white font-medium mt-0.5">1080p · 30fps</div>
+          </div>
+        </div>
+
+        <!-- Progress bar container -->
+        <div id="renderProgress" class="hidden">
+          <div class="flex justify-between text-[10px] mb-1">
+            <span class="text-gray-400">Encoding progress</span>
+            <span id="progressPct" class="text-indigo-400 font-semibold">0%</span>
+          </div>
+          <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+            <div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full w-0 transition-all"></div>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button class="render-btn flex-1" id="btn-render" onclick="startRender()" disabled>
+            <i class="ti ti-player-record" aria-hidden="true"></i> Render Video
+          </button>
+          <button id="btn-cancel" onclick="cancelRender()" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-xl font-bold text-xs active:scale-95 transition-all hidden">
+            ✕ Cancel
+          </button>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-clear-cache" onclick="clearCache()" class="py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-center text-xs font-semibold text-white active:scale-95 transition-all">
+            🗑 Clear Cache
+          </button>
+          <button onclick="openProjectFolder()" class="py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-center text-xs font-semibold text-white active:scale-95 transition-all">
+            📂 Open Project
+          </button>
+        </div>
+
+        <p class="text-[10px] text-[#c7c4d7] text-center" id="render-hint">Plan a script or load a JSON file to render.</p>
+
+        <!-- Logs Console Panel -->
+        <div class="log-drawer">
+          <div class="log-header" id="logHeader" onclick="toggleLog()">
+            <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-terminal-2" aria-hidden="true"></i>Console Log</span>
+            <i class="ti ti-chevron-down" id="logChevron" aria-hidden="true" style="transition:transform 0.2s"></i>
+          </div>
+          <div class="log-body" id="logBody">
+            <span class="log-line info">[S2V] Engine ready · supertonic-xtts-v2</span>
+            <span class="log-line ok">[TTS] Voice profiles cached</span>
+            <span class="log-line">[FFmpeg] Awaiting render job…</span>
+          </div>
+        </div>
+
+        <!-- Output Download Button -->
+        <button class="download-btn w-full" id="downloadBtn" style="display:none" onclick="openOutputFolder()">
+          <i class="ti ti-download" aria-hidden="true"></i> Download Output.mp4
+        </button>
+      </div>
+
+      <!-- Render Complete panel -->
+      <section class="card hidden mt-4" id="section-complete">
+        <div class="text-center space-y-3">
+          <div class="text-sm font-bold text-emerald-400 flex items-center justify-center gap-1">
+            <i class="ti ti-circle-check" aria-hidden="true"></i> Render Complete!
+          </div>
+          <p class="text-[10px] text-gray-400 break-all bg-black/35 border border-white/5 p-2 rounded-lg font-mono text-left select-all" id="complete-path"></p>
+          <div class="flex gap-2">
+            <button class="flex-1 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-xs font-bold transition-all" onclick="openOutputFolder()">Open Output Folder</button>
+            <button class="flex-1 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-[#dfe2f1] transition-all" onclick="renderAnother()">Create Another</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
   </div>
 
-  <script src="app.js?v=2.0.1"></script>
+  <!-- GLOBAL SETTINGS OVERLAY MODAL -->
+  <div class="modal-overlay" id="settings-modal" onclick="toggleSettingsModal()">
+    <div class="settings-modal" onclick="event.stopPropagation()">
+      <div class="modal-title">
+        <span style="display:flex;align-items:center;gap:8px">
+          <i class="ti ti-settings" aria-hidden="true" style="color:var(--ind2)"></i>
+          S2V Studio Settings
+        </span>
+        <button class="close-btn" onclick="closeSettings()" aria-label="Close settings">
+          <i class="ti ti-x" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="modal-section-label">API Credentials</div>
+      
+      <div class="form-group">
+        <label class="form-label">Google Gemini API Key</label>
+        <div class="api-input-wrap">
+          <input class="form-input" type="password" id="google-key-input" placeholder="AIza…" style="padding-right:70px" oninput="onGoogleKeyInput()">
+          <button class="api-toggle" onclick="toggleKey('google-key-input',this)">Show</button>
+        </div>
+        <span id="google-key-status" class="key-status"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">DeepSeek API Key</label>
+        <div class="api-input-wrap">
+          <input class="form-input" type="password" id="deepseek-key-input" placeholder="sk-…" style="padding-right:70px" oninput="onDeepseekKeyInput()">
+          <button class="api-toggle" onclick="toggleKey('deepseek-key-input',this)">Show</button>
+        </div>
+        <span id="deepseek-key-status" class="key-status"></span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Google Cloud TTS Key (Optional)</label>
+        <div class="api-input-wrap">
+          <input class="form-input" type="password" id="google-tts-key-input" placeholder="Paste Google Cloud TTS API key (optional)" style="padding-right:70px" oninput="onGoogleTtsKeyInput()">
+          <button class="api-toggle" onclick="toggleKey('google-tts-key-input',this)">Show</button>
+        </div>
+        <span id="google-tts-key-status" class="key-status"></span>
+      </div>
+
+      <div class="modal-section-label pt-2 border-t border-white/5">Studio Languages</div>
+      <p class="text-[10px] text-gray-400 mb-2">Enable or disable specific languages inside the dial select list:</p>
+      
+      <div id="language-selection-list" class="grid grid-cols-2 gap-2 text-xs mb-4">
+        <!-- Rendered by app.js -->
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:20px;padding-top:12px;border-t:1px solid rgba(255,255,255,0.05)">
+        <button onclick="closeSettings()" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all 0.2s;font-family:Inter,sans-serif" onmouseover="this.style.background='var(--glass2)'" onmouseout="this.style.background='transparent'">Cancel</button>
+        <button onclick="saveSettingsModal()" style="flex:1;padding:9px;border-radius:9px;border:1px solid rgba(99,102,241,0.4);background:rgba(99,102,241,0.15);color:var(--ind2);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:Inter,sans-serif">Save Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=2.4.0"></script>
 </body>
 </html>

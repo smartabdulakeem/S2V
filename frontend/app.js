@@ -301,28 +301,75 @@ async function previewVoice() {
 
 // ── Mode switching ────────────────────────────────────────────────────────────
 
-function switchMode(mode) {
-  // Stubbed out since tabs were removed
-}
+window.switchTab = function(tabIdx) {
+  const coreTab = document.getElementById("coreTab");
+  const aiTab = document.getElementById("aiTab");
+  const tab0 = document.getElementById("tab0");
+  const tab1 = document.getElementById("tab1");
+  const pill = document.getElementById("tabPill");
+  const tabBar = document.getElementById("tabBar");
 
-function switchPlannerTab(tabName) {
-  const tabCore = document.getElementById("tab-planner-core");
-  const tabGuidelines = document.getElementById("tab-planner-guidelines");
-  const panelCore = document.getElementById("planner-panel-core");
-  const panelGuidelines = document.getElementById("planner-panel-guidelines");
-  
-  if (tabName === "core") {
-    tabCore.classList.add("active");
-    tabGuidelines.classList.remove("active");
-    panelCore.classList.remove("hidden");
-    panelGuidelines.classList.add("hidden");
+  if (tabIdx === 0) {
+    if (coreTab) coreTab.style.display = "block";
+    if (aiTab) aiTab.style.display = "none";
+    if (tab0) tab0.classList.add("active");
+    if (tab1) tab1.classList.remove("active");
+    if (pill && tabBar && tab0) {
+      pill.style.left = (tab0.offsetLeft - tabBar.offsetLeft - 3) + "px";
+      pill.style.width = tab0.offsetWidth + "px";
+    }
   } else {
-    tabCore.classList.remove("active");
-    tabGuidelines.classList.add("active");
-    panelCore.classList.add("hidden");
-    panelGuidelines.classList.remove("hidden");
+    if (coreTab) coreTab.style.display = "none";
+    if (aiTab) aiTab.style.display = "block";
+    if (tab0) tab0.classList.remove("active");
+    if (tab1) tab1.classList.add("active");
+    if (pill && tabBar && tab1) {
+      pill.style.left = (tab1.offsetLeft - tabBar.offsetLeft - 3) + "px";
+      pill.style.width = tab1.offsetWidth + "px";
+    }
   }
-}
+};
+
+window.selectRatio = function(element) {
+  document.querySelectorAll(".ratio-grid .ratio-btn").forEach(btn => btn.classList.remove("active"));
+  element.classList.add("active");
+  const ratio = element.querySelector(".ratio-label").textContent.trim();
+  const ptAspectRatio = document.getElementById("pt-aspect-ratio");
+  if (ptAspectRatio) {
+    ptAspectRatio.value = ratio;
+    // Trigger aspect ratio text summary update if active
+    const sAspectRatio = document.getElementById("s-aspect-ratio");
+    if (sAspectRatio) sAspectRatio.textContent = ratio;
+    if (currentScriptData) {
+      currentScriptData.project.aspect_ratio = ratio;
+    }
+  }
+};
+
+window.toggleSettingsModal = function() {
+  const modal = document.getElementById("settings-modal");
+  if (modal) modal.classList.toggle("hidden");
+};
+
+window.closeSettings = function() {
+  const modal = document.getElementById("settings-modal");
+  if (modal) modal.classList.add("hidden");
+};
+
+window.saveSettingsModal = async function() {
+  if (googleKeyDirty) await window.saveGoogleKey();
+  if (deepseekKeyDirty) await window.saveDeepseekKey();
+  if (googleTtsKeyDirty) await window.saveGoogleTtsKey();
+  window.closeSettings();
+};
+
+window.toggleKey = function(id, btn) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  const show = inp.type === "password";
+  inp.type = show ? "text" : "password";
+  btn.textContent = show ? "Hide" : "Show";
+};
 
 function toggleCustomStyleInput() {
   const select = document.getElementById("pt-style-select");
@@ -495,9 +542,12 @@ function drawStoryboard(scriptData) {
   scriptData.segments.forEach((seg, idx) => {
     const card = document.createElement("div");
     card.className = "scene-card card-fade-in";
+    card.id = `scene${idx}`;
     card.style.animationDelay = `${idx * 0.05}s`;
 
-    const badgeClass = seg.type === "hook" ? "hook" : seg.type === "conclusion" ? "conclusion" : "body";
+    const badgeClass = seg.type === "hook" ? "tag-hook" : seg.type === "conclusion" ? "tag-conclusion" : seg.type === "cta" ? "tag-cta" : "tag-body";
+    const tagLabel = seg.type ? seg.type.toUpperCase() : "BODY";
+
     const kbOptions = ["zoom_in", "zoom_out", "pan_left", "pan_right", "none"]
       .map(opt => `<option value="${opt}" ${seg.ken_burns === opt ? 'selected' : ''}>${opt.replace('_', ' ')}</option>`)
       .join('');
@@ -506,39 +556,48 @@ function drawStoryboard(scriptData) {
     const voiceSteering = seg.voice_steering || "";
 
     card.innerHTML = `
-      <div class="scene-header">
-        <span class="scene-num">Scene ${seg.segment_id}</span>
-        <span class="scene-badge ${badgeClass}">${seg.type}</span>
-      </div>
-      <div class="scene-grid-cols">
-        <div class="scene-field">
-          <label>Scene Voice Narration (verbatim)</label>
-          <textarea class="scene-textarea scene-input-narration" data-index="${idx}" placeholder="Enter scene text...">${seg.narration}</textarea>
-          
-          <label style="margin-top: 8px;">Voice Steering & Tone (Optional)</label>
-          <input type="text" class="scene-input scene-input-steering" data-index="${idx}" value="${voiceSteering}" placeholder="e.g. Speak with a warm conversational Nigerian English cadence" style="width:100%; box-sizing:border-box; margin-top:4px;" />
+      <div class="scene-card-top">
+        <span class="scene-num">#${seg.segment_id}</span>
+        <span class="scene-tag ${badgeClass}">${tagLabel}</span>
+        <div class="scene-actions">
+          <button class="scene-action-btn" title="Preview speech" onclick="previewSceneSpeech(${idx})"><i class="ti ti-player-play" aria-hidden="true"></i></button>
+          <button class="scene-action-btn" title="Delete scene" onclick="deleteStoryboardScene(${idx})" style="color:var(--text3)"><i class="ti ti-trash" aria-hidden="true"></i></button>
         </div>
-        <div class="scene-field">
-          <label>AI Visual Generation Prompt</label>
-          <textarea class="scene-textarea scene-input-keyword" data-index="${idx}" placeholder="Describe the scene imagery...">${seg.b_roll_keyword}</textarea>
-          
-          <div class="scene-row-3" style="margin-top: 8px;">
-            <div class="scene-field">
-              <label>Ken Burns Motion</label>
-              <select class="scene-input scene-input-kb" data-index="${idx}">
-                ${kbOptions}
-              </select>
-            </div>
-            <div class="scene-field">
-              <label>Text Overlay</label>
-              <input type="text" class="scene-input scene-input-overlay" data-index="${idx}" value="${overlayText}" placeholder="Optional subtitle / keyword" />
-            </div>
+      </div>
+      <div class="scene-card-body space-y-2">
+        <div>
+          <div class="scene-field-label"><i class="ti ti-microphone" aria-hidden="true"></i>Voice Narration (verbatim)</div>
+          <textarea class="scene-narration scene-input-narration" data-index="${idx}" oninput="syncScene(${idx},'narration',this.value)">${seg.narration}</textarea>
+        </div>
+        
+        <div>
+          <div class="scene-field-label"><i class="ti ti-microphone-alt" aria-hidden="true"></i>Voice Steering & Tone (Optional)</div>
+          <input type="text" class="form-input scene-input-steering" data-index="${idx}" value="${voiceSteering}" oninput="syncScene(${idx},'voice_steering',this.value)" placeholder="e.g. Speak with a warm conversational cadence" />
+        </div>
+
+        <div>
+          <div class="scene-field-label"><i class="ti ti-photo" aria-hidden="true"></i>B-Roll Visual Prompt</div>
+          <textarea class="scene-broll scene-input-keyword" data-index="${idx}" oninput="syncScene(${idx},'b_roll_keyword',this.value)">${seg.b_roll_keyword}</textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <div class="scene-field-label"><i class="ti ti-arrows-maximize" aria-hidden="true"></i>Ken Burns Motion</div>
+            <select class="form-select scene-input-kb" data-index="${idx}" onchange="syncScene(${idx},'ken_burns',this.value)">
+              ${kbOptions}
+            </select>
+          </div>
+          <div>
+            <div class="scene-field-label"><i class="ti ti-typography" aria-hidden="true"></i>Text Overlay</div>
+            <input type="text" class="form-input scene-input-overlay" data-index="${idx}" value="${overlayText}" oninput="syncSceneOverlay(${idx},this.value)" placeholder="Optional subtitle text" />
           </div>
         </div>
       </div>
     `;
     container.appendChild(card);
   });
+
+  buildSceneStrip();
 }
 
 // ── Save Storyboard edits ─────────────────────────────────────────────────────
@@ -1041,3 +1100,170 @@ window.clearCache = async function() {
         if (hint) hint.textContent = "Error clearing cache: " + e;
     }
 };
+
+// ── Storyboard card sync and utility actions ─────────────────────────────────
+
+window.syncScene = function(idx, field, val) {
+  if (currentScriptData && currentScriptData.segments[idx]) {
+    currentScriptData.segments[idx][field] = val;
+  }
+};
+
+window.syncSceneOverlay = function(idx, val) {
+  if (currentScriptData && currentScriptData.segments[idx]) {
+    if (val.trim()) {
+      const segDuration = Math.max(3, Math.round(currentScriptData.segments[idx].narration.length / 15));
+      currentScriptData.segments[idx].text_overlay = {
+        "text": val.trim(),
+        "position": "bottom_center",
+        "duration_seconds": segDuration
+      };
+    } else {
+      currentScriptData.segments[idx].text_overlay = null;
+    }
+  }
+};
+
+window.deleteStoryboardScene = function(idx) {
+  if (!currentScriptData || currentScriptData.segments.length <= 1) return;
+  currentScriptData.segments.splice(idx, 1);
+  currentScriptData.segments.forEach((seg, i) => {
+    seg.segment_id = i + 1;
+  });
+  drawStoryboard(currentScriptData);
+  
+  // Update summaries
+  const sSegments = document.getElementById("s-segments");
+  if (sSegments) sSegments.textContent = currentScriptData.segments.length + " segments";
+  const sbEstDuration = document.getElementById("sb-est-duration");
+  if (sbEstDuration) sbEstDuration.textContent = `~${Math.round(currentScriptData.segments.length * 4)} seconds`;
+};
+
+// ── Horizontal timeline navigation strip ─────────────────────────────────────
+
+function buildSceneStrip() {
+  const strip = document.getElementById("sceneStrip");
+  if (!strip || !currentScriptData) return;
+  
+  const colors = {
+    hook: "rgba(6,182,212,0.25)",
+    body: "rgba(99,102,241,0.25)",
+    cta: "rgba(139,92,246,0.25)",
+    conclusion: "rgba(16,185,129,0.25)"
+  };
+  
+  strip.innerHTML = currentScriptData.segments.map((s, i) => `
+    <div onclick="previewScene(${i})" style="flex-shrink:0;width:32px;height:24px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:${colors[s.type] || "rgba(255,255,255,0.05)"};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#94a3b8;transition:all 0.15s" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Scene ${s.segment_id}: ${s.type || 'Body'}">${s.segment_id}</div>
+  `).join("");
+}
+
+window.previewScene = function(idx) {
+  if (!currentScriptData || !currentScriptData.segments[idx]) return;
+  
+  const seg = currentScriptData.segments[idx];
+  const preview = document.getElementById("previewStage");
+  const captionBar = document.getElementById("captionBar");
+  
+  const colors = {
+    hook: "rgba(6,182,212,0.1)",
+    body: "rgba(99,102,241,0.1)",
+    cta: "rgba(139,92,246,0.1)",
+    conclusion: "rgba(16,185,129,0.1)"
+  };
+  
+  if (preview) {
+    preview.style.backgroundColor = colors[seg.type] || "rgba(0,0,0,0.35)";
+    preview.querySelector(".preview-inner").innerHTML = `
+      <div style="font-size:11px;font-weight:600;color:#94a3b8;letter-spacing:0.5px;text-transform:uppercase">${seg.type || 'Body'} — Scene ${seg.segment_id}</div>
+      <div style="font-size:10px;color:#64748b;max-width:180px;text-align:center;line-height:1.5;margin-top:4px">${seg.b_roll_keyword.substring(0,80)}…</div>
+    `;
+  }
+  
+  if (captionBar) {
+    captionBar.style.display = "block";
+    captionBar.textContent = seg.narration;
+  }
+  
+  // Highlight active card border in middle panel
+  document.querySelectorAll(".scene-card").forEach(c => c.style.borderColor = "");
+  const activeCard = document.getElementById(`scene${idx}`);
+  if (activeCard) {
+    activeCard.style.borderColor = "rgba(99,102,241,0.6)";
+    activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+};
+
+// ── TTS waveform visualizer ───────────────────────────────────────────────
+
+function buildWave() {
+  const wrap = document.getElementById("waveBars");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  for (let i = 0; i < 35; i++) {
+    const b = document.createElement("div");
+    b.className = "wbar";
+    const h = 4 + Math.random() * 16;
+    b.style.height = h + "px";
+    wrap.appendChild(b);
+  }
+}
+
+let waveAnim = null;
+window.animateWave = function(on) {
+  const bars = document.querySelectorAll(".wbar");
+  if (on) {
+    if (waveAnim) clearInterval(waveAnim);
+    waveAnim = setInterval(() => {
+      bars.forEach((b, i) => {
+        const phase = Date.now() / 120 + i * 0.4;
+        const h = 4 + Math.abs(Math.sin(phase)) * 26;
+        b.style.height = h + "px";
+        b.classList.toggle("active", h > 16);
+      });
+    }, 60);
+  } else {
+    if (waveAnim) clearInterval(waveAnim);
+    bars.forEach(b => {
+      b.classList.remove("active");
+      b.style.height = (4 + Math.random() * 8) + "px";
+    });
+  }
+};
+
+window.previewSceneSpeech = function(idx) {
+  if (!currentScriptData || !currentScriptData.segments[idx]) return;
+  
+  window.animateWave(true);
+  const ttsStatus = document.getElementById("ttsStatus");
+  if (ttsStatus) ttsStatus.textContent = `Scene ${idx + 1} TTS synthesis…`;
+  
+  setTimeout(() => {
+    window.animateWave(false);
+    if (ttsStatus) ttsStatus.textContent = "Done · 1.8s";
+    window.previewScene(idx);
+  }, 1800);
+};
+
+// ── Log and Terminal controls ───────────────────────────────────────────────
+
+window.toggleLog = function() {
+  const body = document.getElementById("logBody");
+  const header = document.getElementById("logHeader");
+  const chev = document.getElementById("logChevron");
+  if (!body) return;
+  const open = body.classList.toggle("visible");
+  if (header) header.classList.toggle("open", open);
+  if (chev) chev.style.transform = open ? "rotate(180deg)" : "";
+};
+
+window.openLog = function() {
+  const body = document.getElementById("logBody");
+  const header = document.getElementById("logHeader");
+  const chev = document.getElementById("logChevron");
+  if (body) body.classList.add("visible");
+  if (header) header.classList.add("open");
+  if (chev) chev.style.transform = "rotate(180deg)";
+};
+
+// Init waveform on script boot
+buildWave();
