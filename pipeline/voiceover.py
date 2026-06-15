@@ -10,6 +10,8 @@ Engine routing (based on voice ID prefix):
 
 import asyncio
 import json
+import re
+import base64
 import os
 import shutil
 import subprocess
@@ -38,7 +40,7 @@ def _find_ffmpeg() -> str:
     raise RuntimeError("FFmpeg not found. Please run setup.bat first.")
 
 
-def _transcode_to_mp3(input_bytes: bytes, output_path: str):
+def _transcode_to_mp3(input_bytes: bytes, output_path: str, is_raw_pcm: bool = False, sample_rate: int = 24000):
     """Write bytes to a temp file and transcode to MP3 using FFmpeg."""
     ffmpeg = _find_ffmpeg()
     with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as tmp:
@@ -46,13 +48,26 @@ def _transcode_to_mp3(input_bytes: bytes, output_path: str):
         tmp.write(input_bytes)
 
     try:
-        cmd = [
-            ffmpeg, "-y",
-            "-i", tmp_path,
-            "-codec:a", "libmp3lame",
-            "-q:a", "2",
-            output_path
-        ]
+        if is_raw_pcm:
+            # Raw PCM data requires explicit format, sample rate and channel count inputs for FFmpeg to decode correctly
+            cmd = [
+                ffmpeg, "-y",
+                "-f", "s16le",
+                "-ar", str(sample_rate),
+                "-ac", "1",
+                "-i", tmp_path,
+                "-codec:a", "libmp3lame",
+                "-q:a", "2",
+                output_path
+            ]
+        else:
+            cmd = [
+                ffmpeg, "-y",
+                "-i", tmp_path,
+                "-codec:a", "libmp3lame",
+                "-q:a", "2",
+                output_path
+            ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"FFmpeg transcoding failed: {result.stderr}")
@@ -62,144 +77,207 @@ def _transcode_to_mp3(input_bytes: bytes, output_path: str):
         except OSError:
             pass
 
-# ── Local Piper TTS ───────────────────────────────────────────────────────────
+# ── Local Supertonic TTS ──────────────────────────────────────────────────────
 
-def _generate_with_local_piper(narration: str, output_path: str, on_progress=None, segment_id: int = 0):
-    """Generate audio offline using local Piper executable and model."""
-    piper_exe = r"C:\Users\HomePC\Downloads\piper_extracted\piper\piper.exe"
-    model_path = r"C:\Users\HomePC\Documents\GitHub\piper-desktop-skill\models\en_US-lessac-medium.onnx"
+_tts_instance = None
 
-    if not os.path.exists(piper_exe):
-        raise FileNotFoundError(f"Local Piper executable not found at: {piper_exe}")
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Local Piper model ONNX file not found at: {model_path}")
-
-    if on_progress:
-        on_progress(f"Segment {segment_id} — Generating offline voiceover via local Piper (lessac-medium)")
-
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        temp_wav = tmp.name
-
-    try:
-        cmd = [
-            piper_exe,
-            "--model", model_path,
-            "--output_file", temp_wav
-        ]
-        
-        # Run Piper process and pipe narration to stdin
-        result = subprocess.run(
-            cmd,
-            input=narration.encode("utf-8"),
-            capture_output=True,
-            check=False
-        )
-        
-        if result.returncode != 0:
-            err_details = result.stderr.decode("utf-8", errors="replace")
-            raise RuntimeError(f"Piper execution failed: {err_details}")
-
-        if not os.path.exists(temp_wav) or os.path.getsize(temp_wav) < 1000:
-            raise RuntimeError("Piper generated an empty or invalid WAV file.")
-
-        # Transcode WAV to MP3
-        with open(temp_wav, "rb") as f:
-            wav_bytes = f.read()
-        _transcode_to_mp3(wav_bytes, output_path)
-
-    finally:
-        try:
-            os.unlink(temp_wav)
-        except OSError:
-            pass
-
-# ── Hugging Face TTS API ──────────────────────────────────────────────────────
-
-def _generate_with_hf(
+def _generate_with_local_supertonic(
     narration: str,
-    model_id: str,
-    hf_token: str,
+    voice: str,
+    voice_rate: str,
     output_path: str,
     on_progress=None,
     segment_id: int = 0
 ):
-    """
-    Generate voiceover using Hugging Face serverless inference.
-    Automatically retries on rate limits (429) or model loading (503).
-    """
-    if not hf_token:
-        raise ValueError("Hugging Face API Token is required for premium cloud voices.")
+    """Generate audio offline using local Supertonic synthesis."""
+    global _tts_instance
+    if _tts_instance is None:
+        from supertonic import TTS
+        _tts_instance = TTS()
 
-    url = f"https://router.huggingface.co/hf-inference/models/{model_id}"
-    headers = {
-        "Authorization": f"Bearer {hf_token}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "inputs": narration,
-        "options": {"wait_for_model": True}
-    }
-    body = json.dumps(payload).encode("utf-8")
+    if on_progress:
+        on_progress(f"Segment {segment_id} — Generating offline voiceover via Supertonic")
 
-    max_attempts = 4
-    last_error = None
+    # 1. Map voice name to style. Default to "M1"
+    voice_name = "M1"
+    voice_lower = voice.lower()
+    for v_style in ["m1", "m2", "m3", "m4", "m5", "f1", "f2", "f3", "f4", "f5"]:
+        if v_style in voice_lower:
+            voice_name = v_style.upper()
+            break
 
-    for attempt in range(max_attempts):
-        try:
-            req = urllib.request.Request(
-                url, data=body, headers=headers, method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=90) as resp:
-                content_type = resp.headers.get("Content-Type", "")
-                data = resp.read()
+    style = _tts_instance.get_voice_style(voice_name=voice_name)
 
-                if "application/json" in content_type:
-                    try:
-                        err_json = json.loads(data.decode("utf-8"))
-                        if "error" in err_json:
-                            raise RuntimeError(err_json["error"])
-                    except json.JSONDecodeError:
-                        pass
-
-                if len(data) < 100:
-                    try:
-                        txt = data.decode("utf-8")
-                        raise RuntimeError(f"Unexpected response text: {txt}")
-                    except UnicodeDecodeError:
-                        pass
-
-                _transcode_to_mp3(data, output_path)
-                return
-
-        except urllib.error.HTTPError as e:
+    # 2. Map rate string to speed coefficient (0.7 - 2.0)
+    speed = 1.05
+    if voice_rate:
+        voice_rate = voice_rate.strip()
+        if voice_rate.endswith("%"):
             try:
-                err_text = e.read().decode("utf-8")
-                err_json = json.loads(err_text)
-                last_error = err_json.get("error", err_text)
-            except Exception:
-                last_error = str(e)
-            
-            if e.code in (503, 504, 429) and attempt < max_attempts - 1:
-                wait = 5 * (attempt + 1)
-                if on_progress:
-                    on_progress(
-                        f"Segment {segment_id} — Hugging Face API temporary error {e.code} ({last_error}). "
-                        f"Retrying in {wait}s..."
-                    )
-                time.sleep(wait)
-                continue
-            raise urllib.error.HTTPError(e.url, e.code, f"HF API Error: {last_error}", e.headers, None)
-        except Exception as e:
-            last_error = str(e)
-            if attempt < max_attempts - 1:
-                wait = 5 * (attempt + 1)
-                if on_progress:
-                    on_progress(f"Segment {segment_id} — Connection error ({e}). Retrying in {wait}s...")
-                time.sleep(wait)
-                continue
-            raise RuntimeError(f"Hugging Face TTS call failed: {last_error}")
+                val = float(voice_rate[:-1])
+                speed = round(1.05 + (val / 100.0), 2)
+                speed = max(0.7, min(2.0, speed))
+            except ValueError:
+                pass
 
-    raise RuntimeError(f"Hugging Face TTS API failed after {max_attempts} attempts: {last_error}")
+    # 3. Detect / extract language code
+    lang = None
+    parts = voice_lower.split("-")
+    if len(parts) >= 3:
+        potential_lang = parts[-1]
+        if potential_lang in ["en", "ko", "ja", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hi", "hr", "hu", "id", "it", "lt", "lv", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk", "vi"]:
+            lang = potential_lang
+
+    if not lang:
+        # Detect if narration is primarily Arabic (over 10% characters)
+        arabic_chars = len(re.findall(r'[\u0600-\u06FF]', narration))
+        if arabic_chars > len(narration) * 0.1:
+            lang = "ar"
+        else:
+            lang = "en"
+
+    # Check for speaker switching tags in the narration
+    has_speaker_switch = bool(re.search(r'\[(?:M|F)[1-5]\]', narration))
+
+    if has_speaker_switch:
+        if on_progress:
+            on_progress(f"Segment {segment_id} — Processing conversational speaker switches")
+        
+        # Split text by speaker tags
+        text_parts = re.split(r'(\[(?:M|F)[1-5]\])', narration)
+        
+        active_voice_name = voice_name
+        active_style = style
+        
+        temp_wav_files = []
+        
+        try:
+            part_idx = 0
+            for part in text_parts:
+                part = part.strip()
+                if not part:
+                    continue
+                
+                # Check if this part is a speaker tag
+                tag_match = re.match(r'^\[((?:M|F)[1-5])\]$', part, re.IGNORECASE)
+                if tag_match:
+                    active_voice_name = tag_match.group(1).upper()
+                    active_style = _tts_instance.get_voice_style(voice_name=active_voice_name)
+                    continue
+                
+                # This part is narration text. Clean other emotional tags inside it.
+                part_clean = part
+                part_clean = re.sub(r'\[(?:sigh|pause|gasp)\]', '... ', part_clean)
+                part_clean = re.sub(r'\[(?:laughter|laugh)\]', ', ', part_clean)
+                part_clean = re.sub(r'\[[^\]]+\]', '', part_clean)
+                part_clean = re.sub(r'\s+', ' ', part_clean)
+                part_clean = re.sub(r'\.{4,}', '...', part_clean)
+                part_clean = part_clean.strip()
+                
+                if not part_clean:
+                    continue
+                
+                # Synthesize part
+                part_wav, _ = _tts_instance.synthesize(
+                    text=part_clean,
+                    voice_style=active_style,
+                    speed=speed,
+                    lang=lang
+                )
+                
+                temp_part_wav = os.path.join(tempfile.gettempdir(), f"s2v_seg_{segment_id}_part_{part_idx}.wav")
+                _tts_instance.save_audio(part_wav, temp_part_wav)
+                temp_wav_files.append(temp_part_wav)
+                part_idx += 1
+                
+            if not temp_wav_files:
+                raise RuntimeError("No audio parts were generated for speaker-switching narration.")
+                
+            # Concatenate all parts using FFmpeg concat demuxer
+            ffmpeg = _find_ffmpeg()
+            
+            # Write list file
+            list_path = os.path.join(tempfile.gettempdir(), f"s2v_seg_{segment_id}_list.txt")
+            with open(list_path, "w", encoding="utf-8") as lf:
+                for tf in temp_wav_files:
+                    lf.write(f"file '{tf.replace('\\', '/')}'\n")
+                    
+            final_wav = os.path.join(tempfile.gettempdir(), f"s2v_seg_{segment_id}_final.wav")
+            
+            cmd = [
+                ffmpeg, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", list_path,
+                "-c", "copy",
+                final_wav
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            # Clean list file
+            try:
+                os.unlink(list_path)
+            except OSError:
+                pass
+                
+            if result.returncode != 0:
+                raise RuntimeError(f"FFmpeg audio parts concat failed: {result.stderr}")
+                
+            # Transcode final WAV to output MP3
+            with open(final_wav, "rb") as f:
+                wav_bytes = f.read()
+            _transcode_to_mp3(wav_bytes, output_path)
+            
+            # Clean final wav
+            try:
+                os.unlink(final_wav)
+            except OSError:
+                pass
+                
+        finally:
+            # Clean up all part files
+            for tf in temp_wav_files:
+                try:
+                    if os.path.exists(tf):
+                        os.unlink(tf)
+                except OSError:
+                    pass
+    else:
+        # Standard single speaker narration
+        clean_text = narration
+        clean_text = re.sub(r'\[(?:sigh|pause|gasp)\]', '... ', clean_text)
+        clean_text = re.sub(r'\[(?:laughter|laugh)\]', ', ', clean_text)
+        clean_text = re.sub(r'\[[^\]]+\]', '', clean_text)
+        clean_text = re.sub(r'\s+', ' ', clean_text)
+        clean_text = re.sub(r'\.{4,}', '...', clean_text)
+        clean_text = clean_text.strip()
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            temp_wav = tmp.name
+
+        try:
+            wav, _ = _tts_instance.synthesize(
+                text=clean_text,
+                voice_style=style,
+                speed=speed,
+                lang=lang
+            )
+            _tts_instance.save_audio(wav, temp_wav)
+
+            if not os.path.exists(temp_wav) or os.path.getsize(temp_wav) < 1000:
+                raise RuntimeError("Supertonic generated an empty or invalid WAV file.")
+
+            with open(temp_wav, "rb") as f:
+                wav_bytes = f.read()
+            _transcode_to_mp3(wav_bytes, output_path)
+
+        finally:
+            try:
+                os.unlink(temp_wav)
+            except OSError:
+                pass
+
+
 
 # ── Microsoft Edge TTS ────────────────────────────────────────────────────────
 
@@ -226,6 +304,199 @@ def _generate_with_edge_tts(narration: str, voice: str, voice_rate: str, voice_p
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+# ── Public API ────────────────────────────────────────────────────────────────
+
+
+
+# ── Google Cloud TTS ──────────────────────────────────────────────────────────
+
+def _generate_with_google_tts(
+    narration: str,
+    voice: str,
+    voice_rate: str,
+    voice_pitch: str,
+    google_api_key: str,
+    output_path: str,
+    on_progress=None,
+    segment_id: int = 0
+):
+    """Generate audio using Google Cloud Text-to-Speech REST API."""
+    if not google_api_key:
+        raise ValueError("Google API key is required for Google Premium Voices.")
+
+    url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={google_api_key}"
+
+    # Parse voice name and language code
+    voice_name = voice
+    if voice.startswith("google:"):
+        voice_name = voice.split(":", 1)[1]
+    
+    parts = voice_name.split("-")
+    language_code = "en-US"
+    if len(parts) >= 2:
+        language_code = f"{parts[0]}-{parts[1]}"
+
+    # Parse speaking rate
+    speaking_rate = 1.0
+    if voice_rate:
+        voice_rate = voice_rate.strip()
+        if voice_rate.endswith("%"):
+            try:
+                val = float(voice_rate[:-1])
+                speaking_rate = round(1.0 + (val / 100.0), 2)
+                speaking_rate = max(0.25, min(4.0, speaking_rate))
+            except ValueError:
+                pass
+
+    # Parse pitch config (convert pitch to semitones)
+    pitch_semitones = 0.0
+    if voice_pitch:
+        voice_pitch = voice_pitch.strip()
+        m = re.match(r"^([+-]?\d+)", voice_pitch)
+        if m:
+            try:
+                pitch_semitones = float(m.group(1))
+                pitch_semitones = max(-20.0, min(20.0, pitch_semitones))
+            except ValueError:
+                pass
+
+    input_type = "ssml" if narration.strip().startswith("<speak>") else "text"
+    payload = {
+        "input": {
+            input_type: narration
+        },
+        "voice": {
+            "languageCode": language_code,
+            "name": voice_name
+        },
+        "audioConfig": {
+            "audioEncoding": "MP3",
+            "speakingRate": speaking_rate,
+            "pitch": pitch_semitones
+        }
+    }
+    body = json.dumps(payload).encode("utf-8")
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                response_data = json.loads(resp.read().decode("utf-8"))
+            
+            if "audioContent" not in response_data:
+                raise RuntimeError(f"Google TTS API response missing 'audioContent': {response_data}")
+            
+            audio_bytes = base64.b64decode(response_data["audioContent"])
+            with open(output_path, "wb") as f:
+                f.write(audio_bytes)
+            return
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2)
+            else:
+                raise RuntimeError(f"Google TTS failed after 3 attempts: {e}")
+
+
+def _generate_with_gemini_tts(
+    narration: str,
+    voice: str,
+    google_api_key: str,
+    output_path: str,
+    voice_steering: str = "",
+    on_progress=None,
+    segment_id: int = 0
+):
+    """Generate audio using Google Gemini 3.1 Flash TTS Preview API."""
+    if not google_api_key:
+        raise ValueError("Google API key is required for Gemini TTS voices.")
+
+    # Determine voice name
+    voice_name = "Puck" # Default
+    if voice.startswith("google:gemini-3.1-flash-tts-preview:"):
+        voice_name = voice.split(":", 2)[2]
+    elif voice.startswith("google:"):
+        potential_name = voice.split(":", 1)[1]
+        # If it's not the model name, use it
+        if potential_name != "gemini-3.1-flash-tts-preview":
+            voice_name = potential_name
+    else:
+        try:
+            from app import _load_settings
+            settings = _load_settings()
+            voice_name = settings.get("tts_voice_name", "Puck")
+        except Exception:
+            pass
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key={google_api_key}"
+
+    # Formulate steering input
+    text_content = narration
+    if voice_steering:
+        # Prepend steering tag to text
+        text_content = f"{voice_steering}\n{narration}"
+
+    payload = {
+        "contents": [{
+            "parts": [{"text": text_content}]
+        }],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {
+                        "voiceName": voice_name
+                    }
+                }
+            }
+        }
+    }
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                response_data = json.loads(resp.read().decode("utf-8"))
+            
+            candidates = response_data.get("candidates", [])
+            if not candidates:
+                raise RuntimeError(f"No candidates returned: {response_data}")
+            
+            parts = candidates[0].get("content", {}).get("parts", [])
+            if not parts:
+                raise RuntimeError(f"No parts returned: {response_data}")
+            
+            inline_data = parts[0].get("inlineData", {})
+            if not inline_data:
+                raise RuntimeError(f"No inline audio data returned: {response_data}")
+            
+            b64_data = inline_data.get("data", "")
+            if not b64_data:
+                raise RuntimeError("Base64 audio data is empty.")
+            
+            mime_type = inline_data.get("mimeType", "audio/pcm")
+            audio_bytes = base64.b64decode(b64_data)
+            
+            is_raw_pcm = "audio/pcm" in mime_type or "audio/l16" in mime_type
+            sample_rate = 24000
+            rate_match = re.search(r"rate=(\d+)", mime_type)
+            if rate_match:
+                sample_rate = int(rate_match.group(1))
+                
+            _transcode_to_mp3(audio_bytes, output_path, is_raw_pcm=is_raw_pcm, sample_rate=sample_rate)
+            return
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2)
+            else:
+                raise RuntimeError(f"Gemini 3.1 Flash TTS failed after 3 attempts: {e}")
+
+
 def generate_voiceover(
     segment_id: int,
     narration: str,
@@ -233,18 +504,19 @@ def generate_voiceover(
     voice_rate: str,
     voice_pitch: str,
     cache_dir: str,
-    huggingface_api_key: str = "",
+    google_api_key: str = "",
     on_progress=None,
+    voice_steering: str = ""
 ) -> str:
     """
     Generate MP3 voiceover. Returns path to the MP3 file.
     Skips if already cached (resume support).
 
     Voice ID formats:
-      "edge:en-US-GuyNeural"  edge-tts (free)
-      "hf:suno/bark"          Suno Bark (Hugging Face)
-      "hf:coqui/XTTS-v2"      Coqui XTTS-v2 (Hugging Face)
-      "local:piper"           local Piper offline (Free)
+      "edge:<voice_name>"    edge-tts (free)
+      "google:<voice_name>"  Google Cloud Text-to-Speech (requires Google API Key)
+      "hf:<model_id>"        Hugging Face cloud model (requires HF API Key)
+      "local:piper"          local Piper offline
     """
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_audio.mp3")
 
@@ -256,39 +528,56 @@ def generate_voiceover(
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
     voice_lower = voice.lower()
-    
-    # Determine routing
-    is_hf = voice_lower.startswith("hf:") or "bark" in voice_lower or "xtts" in voice_lower
-    is_piper = voice_lower.startswith("local:piper") or voice_lower.startswith("piper:")
+    is_gemini_tts = "gemini-3.1-flash-tts" in voice_lower
+    is_google = voice_lower.startswith("google:")
+    is_google_tts = is_google and not is_gemini_tts
+    is_supertonic = (
+        voice_lower.startswith("local:supertonic")
+        or voice_lower.startswith("supertonic:")
+        or voice_lower.startswith("local:piper")
+        or voice_lower.startswith("piper:")
+    )
 
-    if is_piper:
-        # Run local offline Piper
-        _generate_with_local_piper(
-            narration=narration,
+    tts_text = narration
+    if is_gemini_tts or not is_google:
+        # Strip any SSML tags so non-SSML engines do not read them aloud
+        tts_text = re.sub(r'<[^>]+>', '', narration)
+
+    if is_supertonic:
+        # Run local offline Supertonic
+        _generate_with_local_supertonic(
+            narration=tts_text,
+            voice=voice,
+            voice_rate=voice_rate,
             output_path=output_path,
             on_progress=on_progress,
             segment_id=segment_id
         )
 
-    elif is_hf:
-        # Determine Hugging Face model repository path
-        model_id = voice
-        if voice_lower == "hf:suno/bark" or voice_lower == "suno/bark":
-            model_id = "suno/bark"
-        elif voice_lower == "hf:suno/bark-small" or voice_lower == "suno/bark-small":
-            model_id = "suno/bark-small"
-        elif voice_lower == "hf:coqui/xtts-v2" or voice_lower == "coqui/xtts-v2" or "xtts-v2" in voice_lower:
-            model_id = "coqui/XTTS-v2"
-        elif model_id.startswith("hf:"):
-            model_id = model_id.split(":", 1)[1]
-
+    elif is_gemini_tts:
+        # Run Gemini 3.1 Flash TTS Preview
         if on_progress:
-            on_progress(f"Segment {segment_id} — Generating cloud voiceover (HF: {model_id})")
+            on_progress(f"Segment {segment_id} — Generating Gemini 3.1 Flash TTS voiceover")
+        _generate_with_gemini_tts(
+            narration=tts_text,
+            voice=voice,
+            google_api_key=google_api_key,
+            output_path=output_path,
+            voice_steering=voice_steering,
+            on_progress=on_progress,
+            segment_id=segment_id
+        )
 
-        _generate_with_hf(
-            narration=narration,
-            model_id=model_id,
-            hf_token=huggingface_api_key,
+    elif is_google_tts:
+        # Run Google Premium Cloud TTS
+        if on_progress:
+            on_progress(f"Segment {segment_id} — Generating Google Premium voiceover ({voice})")
+        _generate_with_google_tts(
+            narration=tts_text,
+            voice=voice,
+            voice_rate=voice_rate,
+            voice_pitch=voice_pitch,
+            google_api_key=google_api_key,
             output_path=output_path,
             on_progress=on_progress,
             segment_id=segment_id
@@ -307,7 +596,7 @@ def generate_voiceover(
         if on_progress:
             on_progress(f"Segment {segment_id} — Generating Edge Neural voiceover ({clean_voice})")
             
-        _generate_with_edge_tts(narration, clean_voice, voice_rate, voice_pitch, output_path)
+        _generate_with_edge_tts(tts_text, clean_voice, voice_rate, voice_pitch, output_path)
 
     if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError(

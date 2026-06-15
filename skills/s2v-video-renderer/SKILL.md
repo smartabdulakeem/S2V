@@ -105,3 +105,32 @@ The JSON script passed to `cli.py` must match the following S2V schema:
   ]
 }
 ```
+
+---
+
+## 🔌 Sub-skills
+
+### Piper TTS Offline Synthesis
+When the voiceover option is set to `local:piper`, the S2V rendering engine (`cli.py`) internally invokes the Piper binary located at `C:\Users\HomePC\Documents\GitHub\S2V\vendor\piper\piper.exe`.
+If you need to test voiceover synthesis independently or debug voice assets, refer to the `piper-tts` skill and execute the wrapper script:
+```powershell
+C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe C:\Users\HomePC\Documents\GitHub\piper-desktop-skill\piper_skill.py "Text to render" -o "C:\Users\HomePC\Documents\GitHub\S2V\vendor\piper\voices\output.wav" -b "C:\Users\HomePC\Documents\GitHub\S2V\vendor\piper\piper.exe"
+```
+
+### AI Scenery Generation and Image Editing
+When you need to manually generate concept art, scenery, or edit visual frames for S2V segments:
+1. Refer to the `generate-image` skill.
+2. Ensure you have `OPENROUTER_API_KEY` set in your `.env` configuration.
+3. Run the generator script with the visual prompt (supports FLUX.2 and Gemini models):
+```powershell
+C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe scripts/generate_image.py "A beautiful cinematic landscape for scene" --model google/gemini-3-pro-image-preview
+```
+
+### Remotion Programmatic Video Rendering (Video Engine)
+S2V compiles visual frames, subtitles, and audio tracks using the Remotion framework. 
+Whenever you are making adjustments to the React compositions, styling sequences, handling canvas frame-rates, or interpolation curves for S2V rendering outputs:
+1. Refer to the `remotion` skill.
+2. Ensure you follow Remotion's frame-perfect rendering principles to avoid frame jitters and glitches in final video outputs.
+
+
+

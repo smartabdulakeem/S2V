@@ -11,6 +11,7 @@ rule-based `build_script()` if Gemini fails or no key is available.
 """
 
 import json
+import os
 import re
 import urllib.error
 import urllib.request
@@ -42,6 +43,17 @@ KEN_BURNS_CYCLE = ["zoom_in", "pan_right", "zoom_out", "pan_left", "zoom_in", "z
 
 # Transition cycle
 TRANSITION_CYCLE = ["fade", "crossfade", "fade", "crossfade"]
+
+
+def sanitize_output_filename(filename: str) -> str:
+    """Sanitize the output filename to be safe for filenames and end with .mp4."""
+    safe_name = re.sub(r'[^\w\-]', '_', filename.strip())
+    safe_name = re.sub(r'_+', '_', safe_name).strip('_')
+    if not safe_name:
+        safe_name = "my_video"
+    if not safe_name.lower().endswith('.mp4'):
+        safe_name += '.mp4'
+    return safe_name
 
 
 # ── Sentence / paragraph splitter ──────────────────────────────────────────────
@@ -216,13 +228,7 @@ def build_script(
     if not raw_segments:
         raise ValueError("No text found — please paste your script and try again.")
 
-    # Sanitise output filename
-    safe_name = re.sub(r'[^\w\-]', '_', output_filename.strip())
-    safe_name = re.sub(r'_+', '_', safe_name).strip('_')
-    if not safe_name:
-        safe_name = "my_video"
-    if not safe_name.lower().endswith('.mp4'):
-        safe_name += '.mp4'
+    safe_name = sanitize_output_filename(output_filename)
 
     total = len(raw_segments)
     segments = []
@@ -265,7 +271,7 @@ def build_script(
 
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:generateContent?key={key}"
+    "gemini-2.5-flash:generateContent?key={key}"
 )
 
 _SPLIT_PROMPT = """\
@@ -273,15 +279,19 @@ You are a video script editor. Your job is to split a narration script into \
 individual scenes for a documentary-style YouTube video.
 
 Rules:
-1. NEVER rewrite, paraphrase, summarise, or omit any of the narrator's words. \
-   Every word in the original script must appear in exactly one segment's \
-   "narration" field, verbatim. Do not add filler sentences.
+1. Narration Dialect & Verbatim: If the requested voice dialect is NOT "Standard English", you MUST adapt and rewrite the narration script text to match the sentence structure, rhythm, spellings, and vocabulary of "{voice_dialect}" (with custom guidelines: "{ai_guideline}"). Otherwise, keep the text verbatim. Do not omit any core information or add filler sentences.
 2. Split at natural narrative or topic breaks. Each segment should be \
    30-60 words (one clear idea or moment).
-3. For each segment write a "b_roll_keyword": a specific 2-4 word visual \
-   search term that describes what viewers should SEE on screen (not a quote \
-   from the narration -- a concrete visual noun phrase).
-4. If the user did not supply a visual_style, suggest one that fits the topic \
+3. For each segment, write a "b_roll_keyword": a highly-detailed, rich 15-25 word \
+   visual prompt describing concrete scene imagery, lighting, mood, atmosphere, and subjects in detail. \
+   Ensure the visual style and keywords match the requested tone "{narrative_tone}". Avoid generic keywords.
+4. Narration SSML Formatting: Wrap the narration segment text in `<speak>...</speak>`. You must inject subtle SSML markup tags to make the speech sound natural, dramatic, and expressive. Use single quotes for all SSML attributes (e.g. use `<break time='300ms'/>` or `<break time='500ms'/>` for dramatic pauses at punctuation, and `<emphasis level='moderate'>...</emphasis>` to emphasize important proper nouns, actions, or names). This is crucial to prevent JSON syntax errors from unescaped double quotes.
+5. Voice Steering: Write a "voice_steering" instruction prompt for each segment to steer the Gemini 3.1 Flash Text-to-Speech engine. This guides the speed, emotional tone, and pronunciation.
+   - User's Tone Guideline: {ai_guideline} (If empty, use a natural dramatic documentary tone)
+   - Ensure the voice_steering matches the user's guideline.
+6. Conversational Speaker Switching: The speaker mode is "{speaker_mode}". If it is "conversational", structure the narration to switch between different speakers/voices (using tags `[M1]` through `[M5]` for male speakers, and `[F1]` through `[F5]` for female speakers) mid-sentence or mid-segment to create a natural back-and-forth conversation or dynamic dual-narrative. Insert these tags inline in the narration text (e.g. `[M1] In the beginning, [F1] there was only light.`). If the mode is "single", do not insert any inline speaker tags.
+7. Arabic Storytelling: If the narration language is Arabic or the dialect is "Arabic Storytelling", you MUST fully add diacritical marks (Tashkeel) to all Arabic words in the narration text.
+8. If the user did not supply a visual_style, suggest one that fits the topic \
    (e.g. "Islamic golden age, warm cinematic tones, oil painting style").
 
 Return ONLY a valid JSON object -- no markdown fences, no commentary -- in this \
@@ -289,7 +299,7 @@ exact shape:
 {{
   "visual_style": "<suggested style or the user-supplied one unchanged>",
   "segments": [
-    {{"narration": "...", "b_roll_keyword": "..."}},
+    {{"narration": "...", "b_roll_keyword": "...", "voice_steering": "..."}},
     ...
   ]
 }}
@@ -300,6 +310,61 @@ User-supplied visual_style (empty = please suggest): {visual_style}
 Script to split:
 {script}"""
 
+_OVERSIGHT_PROMPT = """\
+You are a Quality Control and Voice Narration Editor. Your job is to verify and enrich a proposed storyboard.
+
+Original Script:
+{original_script}
+
+Proposed Storyboard (JSON):
+{storyboard_json}
+
+Your tasks:
+1. Dialect & Accuracy Verification: If a custom voice dialect "{voice_dialect}" is requested, verify that the narration matches the target dialect while retaining 100% of the meaning/flow of the original script. Otherwise, verify that the concatenated "narration" fields of all segments in the storyboard contain EXACTLY the original script verbatim. No words added, changed, or deleted. Correct the "narration" fields immediately if there is a mismatch.
+2. Tone Steering: Ensure that the visual descriptions (b_roll_keyword) and voice steering for all segments fit the narrative tone "{narrative_tone}" and user guidelines "{ai_guideline}".
+3. Conversational Speaker Switching: The speaker mode is "{speaker_mode}". If it is "conversational", verify that the narration segments contain inline speaker tags like `[M1]`, `[F1]`, etc. at appropriate mid-sentence or mid-segment switch points to create conversational dialogue. If the mode is "single", ensure there are no speaker tags in the narration.
+4. Arabic Storytelling: If the language is Arabic, ensure all narration text has full diacritical marks (Tashkeel) added.
+5. Wrap each segment's narration in `<speak>...</speak>` and add subtle SSML markup tags (like `<break time='300ms'/>` or `<emphasis level='moderate'>...</emphasis>`) to make it sound natural and dramatic. You must use single quotes for all SSML attributes to prevent JSON format errors.
+
+Return ONLY a valid JSON object in this exact shape:
+{{
+  "visual_style": "<visual style>",
+  "segments": [
+    {{
+      "narration": "<narration wrapped in speak tag with SSML>",
+      "b_roll_keyword": "<visual prompt from the storyboard>",
+      "voice_steering": "<voice steering guidance tailored to the segment and tone guideline>"
+    }},
+    ...
+  ]
+}}
+"""
+def split_script_into_chunks(text: str, max_chunk_words: int = 500) -> list[str]:
+    """Split a long script into chunks of ~max_chunk_words words at paragraph boundaries."""
+    paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
+    if not paragraphs:
+        # Fallback to lines if no blank lines
+        paragraphs = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        
+    chunks = []
+    current_chunk = []
+    current_words = 0
+    
+    for p in paragraphs:
+        p_words = len(p.split())
+        if current_words + p_words > max_chunk_words and current_chunk:
+            chunks.append("\n\n".join(current_chunk))
+            current_chunk = [p]
+            current_words = p_words
+        else:
+            current_chunk.append(p)
+            current_words += p_words
+            
+    if current_chunk:
+        chunks.append("\n\n".join(current_chunk))
+        
+    return chunks
+
 
 def build_script_with_ai(
     text: str,
@@ -308,6 +373,10 @@ def build_script_with_ai(
     output_filename: str,
     visual_style: str = "",
     google_api_key: str = "",
+    ai_guideline: str = "",
+    voice_dialect: str = "",
+    narrative_tone: str = "",
+    speaker_mode: str = "single",
 ) -> dict:
     """
     Use Gemini to intelligently split the script into scenes.
@@ -322,17 +391,79 @@ def build_script_with_ai(
     if not google_api_key:
         return build_script(text, title, voice, output_filename, visual_style)
 
+    # Automatically chunk long scripts to prevent token limit/JSON errors
+    word_count = len(text.split())
+    if word_count > 800:
+        print(f"Script is long ({word_count} words). Planning in chunks via Gemini to prevent token limits.")
+        chunks = split_script_into_chunks(text, max_chunk_words=500)
+        
+        all_segments = []
+        suggested_style = visual_style
+        
+        for idx, chunk in enumerate(chunks, 1):
+            print(f"Planning script chunk {idx}/{len(chunks)}...")
+            chunk_script = build_script_with_ai(
+                text=chunk,
+                title=title,
+                voice=voice,
+                output_filename=output_filename,
+                visual_style=suggested_style,
+                google_api_key=google_api_key,
+                ai_guideline=ai_guideline,
+                voice_dialect=voice_dialect,
+                narrative_tone=narrative_tone,
+                speaker_mode=speaker_mode
+            )
+            all_segments.extend(chunk_script["segments"])
+            if not suggested_style and chunk_script["project"].get("visual_style"):
+                suggested_style = chunk_script["project"]["visual_style"]
+                
+        # Re-index the segments sequentially
+        for i, seg in enumerate(all_segments):
+            seg["segment_id"] = i + 1
+            if i == 0:
+                seg["type"] = "hook"
+            elif i == len(all_segments) - 1:
+                seg["type"] = "conclusion"
+            else:
+                seg["type"] = "body"
+                
+        return {
+            "project": {
+                "title": title.strip() or "My Video",
+                "output_filename": sanitize_output_filename(output_filename),
+                "voice": voice,
+                "voice_rate": "+0%",
+                "voice_pitch": "+0Hz",
+                "background_music": None,
+                "visual_style": suggested_style or visual_style,
+                "voice_tone_guideline": ai_guideline,
+                "voice_dialect": voice_dialect,
+                "narrative_tone": narrative_tone,
+                "speaker_mode": speaker_mode
+            },
+            "segments": all_segments,
+        }
+
     prompt = _SPLIT_PROMPT.format(
         title=title.strip() or "My Video",
         visual_style=visual_style.strip(),
         script=text.strip(),
+        ai_guideline=ai_guideline or "None",
+        voice_dialect=voice_dialect or "Standard English",
+        narrative_tone=narrative_tone or "Dramatic Documentary",
+        speaker_mode=speaker_mode or "single"
     )
 
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.2,
+            "responseMimeType": "application/json",
             "maxOutputTokens": 8192,
+            "thinkingConfig": {
+                "thinkingBudget": 0
+            }
         },
     }).encode("utf-8")
 
@@ -353,67 +484,327 @@ def build_script_with_ai(
             raw_text = re.sub(r"^```[a-z]*\n?", "", raw_text)
             raw_text = re.sub(r"\n?```$", "", raw_text.strip())
 
-        parsed = json.loads(raw_text)
-        ai_segments = parsed.get("segments", [])
-        ai_style    = parsed.get("visual_style", visual_style).strip()
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as jde:
+            try:
+                os.makedirs("logs", exist_ok=True)
+                with open("logs/failed_gemini_resp.json", "w", encoding="utf-8") as lf:
+                    lf.write(raw_text)
+                with open("logs/failed_gemini_api_full.json", "w", encoding="utf-8") as af:
+                    json.dump(data, af, indent=2, ensure_ascii=False)
+                print("Saved failed Gemini response to logs/failed_gemini_resp.json and full API response to logs/failed_gemini_api_full.json")
+            except Exception:
+                pass
+            raise RuntimeError(f"JSONDecodeError: {jde}. Raw response saved to logs/failed_gemini_resp.json")
+        return _assemble_script_dict(parsed, title, voice, output_filename, visual_style, ai_guideline)
 
-        if not ai_segments:
-            raise ValueError("Gemini returned empty segments list")
+    except Exception as e:
+        # Raise detailed exception so the orchestrator/agent knows planning failed and reports it
+        raise RuntimeError(f"Gemini script planning failed: {type(e).__name__}: {e}")
 
-        # Validate every segment has narration
-        for s in ai_segments:
-            if not s.get("narration", "").strip():
-                raise ValueError("Gemini returned a segment with empty narration")
 
-        # ── Build the full script dict from Gemini's output ────────────────────
-        safe_name = re.sub(r'[^\w\-]', '_', output_filename.strip())
-        safe_name = re.sub(r'_+', '_', safe_name).strip('_')
-        if not safe_name:
-            safe_name = "my_video"
-        if not safe_name.lower().endswith('.mp4'):
-            safe_name += '.mp4'
+def build_script_with_deepseek_and_gemini(
+    text: str,
+    title: str,
+    voice: str,
+    output_filename: str,
+    visual_style: str = "",
+    google_api_key: str = "",
+    deepseek_api_key: str = "",
+    ai_guideline: str = "",
+    deepseek_model: str = "deepseek-chat",
+    voice_dialect: str = "",
+    narrative_tone: str = "",
+    speaker_mode: str = "single",
+) -> dict:
+    """
+    Use DeepSeek to split the script and generate rich B-roll prompts,
+    and Gemini as an Oversight Agent to verify text verbatim compliance
+    and write custom voice-steering prompts.
+    """
+    if not deepseek_api_key:
+        return build_script_with_ai(
+            text=text,
+            title=title,
+            voice=voice,
+            output_filename=output_filename,
+            visual_style=visual_style,
+            google_api_key=google_api_key,
+            ai_guideline=ai_guideline,
+            voice_dialect=voice_dialect,
+            narrative_tone=narrative_tone,
+            speaker_mode=speaker_mode
+        )
 
-        total = len(ai_segments)
-        segments = []
-
-        for i, seg in enumerate(ai_segments):
+    # Automatically chunk long scripts to prevent token limit/JSON errors
+    word_count = len(text.split())
+    if word_count > 800:
+        print(f"Script is long ({word_count} words). Planning in chunks via DeepSeek/Gemini to prevent token limits.")
+        chunks = split_script_into_chunks(text, max_chunk_words=500)
+        
+        all_segments = []
+        suggested_style = visual_style
+        
+        for idx, chunk in enumerate(chunks, 1):
+            print(f"Planning script chunk {idx}/{len(chunks)}...")
+            chunk_script = build_script_with_deepseek_and_gemini(
+                text=chunk,
+                title=title,
+                voice=voice,
+                output_filename=output_filename,
+                visual_style=suggested_style,
+                google_api_key=google_api_key,
+                deepseek_api_key=deepseek_api_key,
+                ai_guideline=ai_guideline,
+                deepseek_model=deepseek_model,
+                voice_dialect=voice_dialect,
+                narrative_tone=narrative_tone,
+                speaker_mode=speaker_mode
+            )
+            all_segments.extend(chunk_script["segments"])
+            if not suggested_style and chunk_script["project"].get("visual_style"):
+                suggested_style = chunk_script["project"]["visual_style"]
+                
+        # Re-index the segments sequentially
+        for i, seg in enumerate(all_segments):
+            seg["segment_id"] = i + 1
             if i == 0:
-                seg_type = "hook"
-            elif i == total - 1:
-                seg_type = "conclusion"
+                seg["type"] = "hook"
+            elif i == len(all_segments) - 1:
+                seg["type"] = "conclusion"
             else:
-                seg_type = "body"
-
-            narration = seg.get("narration", "").strip()
-            keyword = seg.get("b_roll_keyword", "").strip()
-            if not keyword:
-                keyword = extract_keyword(narration)
-
-            segments.append({
-                "segment_id": i + 1,
-                "type": seg_type,
-                "narration": narration,
-                "b_roll_keyword": keyword,
-                "visual_type": "ai_image",
-                "ken_burns": KEN_BURNS_CYCLE[i % len(KEN_BURNS_CYCLE)],
-                "text_overlay": None,
-                "transition_in": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
-                "transition_out": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
-            })
-
+                seg["type"] = "body"
+                
         return {
             "project": {
                 "title": title.strip() or "My Video",
-                "output_filename": safe_name,
+                "output_filename": sanitize_output_filename(output_filename),
                 "voice": voice,
                 "voice_rate": "+0%",
                 "voice_pitch": "+0Hz",
                 "background_music": None,
-                "visual_style": ai_style or visual_style.strip(),
+                "visual_style": suggested_style or visual_style,
+                "voice_tone_guideline": ai_guideline,
+                "voice_dialect": voice_dialect,
+                "narrative_tone": narrative_tone,
+                "speaker_mode": speaker_mode
             },
-            "segments": segments,
+            "segments": all_segments,
         }
 
-    except Exception:
-        # Any failure → fall back silently to rule-based splitter
-        return build_script(text, title, voice, output_filename, visual_style)
+    # 1. DeepSeek Storyboard Planning
+    prompt_ds = _SPLIT_PROMPT.format(
+        title=title.strip() or "My Video",
+        visual_style=visual_style.strip(),
+        script=text.strip(),
+        ai_guideline=ai_guideline or "None",
+        voice_dialect=voice_dialect or "Standard English",
+        narrative_tone=narrative_tone or "Dramatic Documentary",
+        speaker_mode=speaker_mode or "single"
+    )
+
+    body_ds = json.dumps({
+        "model": deepseek_model,
+        "messages": [
+            {"role": "system", "content": "You are a professional video storyboard planner. Splitting scripts verbatim is critical."},
+            {"role": "user", "content": prompt_ds}
+        ],
+        "temperature": 0.2,
+        "response_format": {"type": "json_object"}
+    }).encode("utf-8")
+
+    try:
+        req_ds = urllib.request.Request(
+            "https://api.deepseek.com/chat/completions",
+            data=body_ds,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {deepseek_api_key}"
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req_ds, timeout=90) as resp:
+            ds_data = json.loads(resp.read().decode("utf-8"))
+        
+        raw_text_ds = ds_data["choices"][0]["message"]["content"].strip()
+        if raw_text_ds.startswith("```"):
+            raw_text_ds = re.sub(r"^```[a-z]*\n?", "", raw_text_ds)
+            raw_text_ds = re.sub(r"\n?```$", "", raw_text_ds.strip())
+
+        parsed_ds = json.loads(raw_text_ds)
+    except Exception as e:
+        print(f"DeepSeek storyboard planning failed: {e}. Trying Gemini planning fallback.")
+        if google_api_key:
+            try:
+                return build_script_with_ai(
+                    text=text,
+                    title=title,
+                    voice=voice,
+                    output_filename=output_filename,
+                    visual_style=visual_style,
+                    google_api_key=google_api_key,
+                    ai_guideline=ai_guideline,
+                    voice_dialect=voice_dialect,
+                    narrative_tone=narrative_tone,
+                    speaker_mode=speaker_mode
+                )
+            except Exception as gem_err:
+                raise RuntimeError(f"DeepSeek failed ({e}) and Gemini planning fallback failed: {gem_err}")
+        else:
+            raise RuntimeError(f"DeepSeek storyboard planning failed: {type(e).__name__}: {e}")
+
+    # 2. Gemini Oversight Verification & Voice-steering
+    if not google_api_key:
+        # If Gemini is missing, just build the schema from DeepSeek results directly
+        return _assemble_script_dict(
+            parsed_ds, title, voice, output_filename, visual_style, ai_guideline,
+            voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
+        )
+
+    prompt_gemini = _OVERSIGHT_PROMPT.format(
+        original_script=text.strip(),
+        storyboard_json=json.dumps(parsed_ds, indent=2),
+        ai_guideline=ai_guideline or "None",
+        voice_dialect=voice_dialect or "Standard English",
+        narrative_tone=narrative_tone or "Dramatic Documentary",
+        speaker_mode=speaker_mode or "single"
+    )
+
+    body_gemini = json.dumps({
+        "contents": [{"parts": [{"text": prompt_gemini}]}],
+        "generationConfig": {
+            "temperature": 0.1,
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 8192,
+            "thinkingConfig": {
+                "thinkingBudget": 0
+            }
+        },
+    }).encode("utf-8")
+
+    try:
+        req_gemini = urllib.request.Request(
+            _GEMINI_URL.format(key=google_api_key),
+            data=body_gemini,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req_gemini, timeout=90) as resp:
+            gemini_data = json.loads(resp.read().decode("utf-8"))
+        
+        raw_text_gemini = gemini_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        if raw_text_gemini.startswith("```"):
+            raw_text_gemini = re.sub(r"^```[a-z]*\n?", "", raw_text_gemini)
+            raw_text_gemini = re.sub(r"\n?```$", "", raw_text_gemini.strip())
+
+        try:
+            parsed_gemini = json.loads(raw_text_gemini)
+        except json.JSONDecodeError as jde:
+            try:
+                os.makedirs("logs", exist_ok=True)
+                with open("logs/failed_gemini_oversight_resp.json", "w", encoding="utf-8") as lf:
+                    lf.write(raw_text_gemini)
+                print("Saved failed Gemini Oversight response to logs/failed_gemini_oversight_resp.json")
+            except Exception:
+                pass
+            raise RuntimeError(f"JSONDecodeError: {jde}. Raw response saved to logs/failed_gemini_oversight_resp.json")
+        return _assemble_script_dict(
+            parsed_gemini, title, voice, output_filename, visual_style, ai_guideline,
+            voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
+        )
+    except Exception as e:
+        print(f"Gemini Oversight QC failed ({e}). Returning DeepSeek storyboard directly.")
+        return _assemble_script_dict(
+            parsed_ds, title, voice, output_filename, visual_style, ai_guideline,
+            voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
+        )
+
+
+def _assemble_script_dict(
+    parsed_data: dict,
+    title: str,
+    voice: str,
+    output_filename: str,
+    visual_style: str,
+    ai_guideline: str,
+    voice_dialect: str = "",
+    narrative_tone: str = "",
+    speaker_mode: str = "single"
+) -> dict:
+    safe_name = sanitize_output_filename(output_filename)
+
+    ai_segments = parsed_data.get("segments", [])
+    ai_style = parsed_data.get("visual_style", visual_style).strip()
+
+    # Filter out empty or whitespace-only narration segments
+    valid_ai_segments = []
+    for seg in ai_segments:
+        narration = str(seg.get("narration", ""))
+        clean_narration = re.sub(r'<[^>]+>', '', narration).strip()
+        if clean_narration:
+            valid_ai_segments.append(seg)
+
+    total = len(valid_ai_segments)
+    segments = []
+
+    for i, seg in enumerate(valid_ai_segments):
+        if i == 0:
+            seg_type = "hook"
+        elif i == total - 1:
+            seg_type = "conclusion"
+        else:
+            seg_type = "body"
+
+        narration = seg.get("narration", "").strip()
+        
+        # Robust visual prompt extraction
+        keyword = ""
+        for key in ["b_roll_keyword", "b_roll_prompt", "visual_prompt", "image_prompt", "b_roll", "keyword", "prompt", "visual"]:
+            if key in seg and seg[key]:
+                keyword = str(seg[key]).strip()
+                break
+        if not keyword:
+            keyword = extract_keyword(narration)
+
+        # Robust voice steering extraction
+        voice_steering = ""
+        for key in ["voice_steering", "voice_tone", "tone_guideline", "steering", "tone", "voice_guidance"]:
+            if key in seg and seg[key]:
+                voice_steering = str(seg[key]).strip()
+                break
+        if not voice_steering:
+            if ai_guideline:
+                voice_steering = ai_guideline
+            else:
+                voice_steering = "Speak in a natural, dramatic documentary tone."
+
+        segments.append({
+            "segment_id": i + 1,
+            "type": seg_type,
+            "narration": narration,
+            "b_roll_keyword": keyword,
+            "voice_steering": voice_steering,
+            "visual_type": "ai_image",
+            "ken_burns": KEN_BURNS_CYCLE[i % len(KEN_BURNS_CYCLE)],
+            "text_overlay": None,
+            "transition_in": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
+            "transition_out": TRANSITION_CYCLE[i % len(TRANSITION_CYCLE)],
+        })
+
+    return {
+        "project": {
+            "title": title.strip() or "My Video",
+            "output_filename": safe_name,
+            "voice": voice,
+            "voice_rate": "+0%",
+            "voice_pitch": "+0Hz",
+            "background_music": None,
+            "visual_style": ai_style or visual_style.strip(),
+            "voice_tone_guideline": ai_guideline,
+            "voice_dialect": voice_dialect,
+            "narrative_tone": narrative_tone,
+            "speaker_mode": speaker_mode
+        },
+        "segments": segments,
+    }

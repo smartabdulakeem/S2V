@@ -7,6 +7,7 @@
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="style.css" rel="stylesheet"/>
   <style>
     :root {
       --obsidian-base: #0b0f19;
@@ -148,7 +149,7 @@
     }
   </script>
 </head>
-<body class="flex flex-col min-h-screen pb-32">
+<body class="flex flex-col min-h-screen pb-32 pt-16">
   <!-- Top AppBar -->
   <header class="fixed top-0 w-full z-50 bg-[#0f131d]/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-6 h-16 shadow-sm">
     <div class="flex items-center gap-3">
@@ -212,6 +213,16 @@
                       <option value="edge:en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
                       <option value="edge:en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
                       <option value="edge:en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
+                    </optgroup>
+                    <optgroup label="🇪🇸 Spanish Voices (Edge Neural)">
+                      <option value="edge:es-ES-AlvaroNeural">🇪🇸 Spanish Spain Male (Alvaro)</option>
+                      <option value="edge:es-ES-ElviraNeural">🇪🇸 Spanish Spain Female (Elvira)</option>
+                      <option value="edge:es-MX-JorgeNeural">🇲🇽 Spanish Mexico Male (Jorge)</option>
+                      <option value="edge:es-MX-DaliaNeural">🇲🇽 Spanish Mexico Female (Dalia)</option>
+                    </optgroup>
+                    <optgroup label="🇫🇷 French Voices (Edge Neural)">
+                      <option value="edge:fr-FR-HenriNeural">🇫🇷 French Male (Henri)</option>
+                      <option value="edge:fr-FR-DeniseNeural">🇫🇷 French Female (Denise)</option>
                     </optgroup>
                     <optgroup label="🌟 Gemini 3.1 Flash TTS (Steerable Voices, requires Google API key)">
                       <option value="google:gemini-3.1-flash-tts-preview:Puck" selected>🌟 Gemini Puck (Preview Voice - Recommended)</option>

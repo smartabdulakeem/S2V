@@ -111,7 +111,7 @@ def stitch_segments(
             os.remove(concat_file)
 
     if on_progress:
-        on_progress(f"✅ Final video saved: {output_path}")
+        on_progress(f"Success: Final video saved: {output_path}")
 
     return output_path
 

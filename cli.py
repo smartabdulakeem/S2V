@@ -25,13 +25,16 @@ def main():
         sys.exit(1)
         
     settings = _load_settings()
-    hf_key = settings.get("huggingface_api_key", "")
+    google_key = settings.get("google_api_key", "").strip()
+    google_tts_key = settings.get("google_tts_api_key", "").strip()
     
     print(f"Starting S2V CLI Render for: {script_path}")
-    if hf_key:
-        print("Hugging Face Access Token loaded.")
+    if google_key:
+        print(f"Google API Key loaded (ending in ...{google_key[-6:] if len(google_key) > 6 else google_key}).")
     else:
-        print("Warning: Hugging Face Token is missing. Visuals will fall back to Pollinations.")
+        print("Warning: Google API Key is missing.")
+    if google_tts_key:
+        print(f"Google Cloud TTS Key loaded (ending in ...{google_tts_key[-6:] if len(google_tts_key) > 6 else google_tts_key}).")
         
     def on_event(event):
         if event.get("type") == "log":
@@ -46,7 +49,7 @@ def main():
             print(f"\n[COMPLETE] Video rendered successfully at: {event.get('output_path')}")
             
     orchestrator = RenderOrchestrator(base_dir=BASE_DIR, on_event=on_event)
-    result = orchestrator.render(script_path, hf_key)
+    result = orchestrator.render(script_path, google_api_key=google_key, google_tts_api_key=google_tts_key)
     
     if result.get("success"):
         print("\nS2V Render finished successfully!")

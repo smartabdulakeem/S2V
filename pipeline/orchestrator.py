@@ -68,7 +68,7 @@ class RenderOrchestrator:
         if self.logger:
             self.logger.info(message)
 
-    def render(self, script_path: str, huggingface_api_key: str = "") -> dict:
+    def render(self, script_path: str, google_api_key: str = "", google_tts_api_key: str = "") -> dict:
         """
         Run the full render pipeline.
         Returns {"success": True, "output": path} or {"success": False, "error": message}
@@ -78,15 +78,6 @@ class RenderOrchestrator:
 
         # Unique ID for this render — ensures fresh AI images every run
         render_id = uuid.uuid4().hex
-
-        # Clear old visual cache so new renders get fresh AI images
-        if os.path.exists(self.cache_dir):
-            for f in os.listdir(self.cache_dir):
-                if f.endswith("_visual.jpg"):
-                    try:
-                        os.remove(os.path.join(self.cache_dir, f))
-                    except Exception:
-                        pass
 
         # ── Stage 1: Validate ──────────────────────────────────────────────────
         self._emit("stage", name="Validating script", stage_num=1, total_stages=7)
@@ -107,12 +98,29 @@ class RenderOrchestrator:
 
         width, height = _get_dimensions(aspect_ratio)
 
+        # Shift cache to a project-specific directory to prevent cache collisions
+        import hashlib
+        proj_hash = hashlib.md5(video_title.encode("utf-8")).hexdigest()[:8]
+        self.cache_dir = os.path.join(self.base_dir, "cache", proj_hash)
+
+        # Clear old visual cache and final segment videos for this project so new renders get fresh AI images
+        if os.path.exists(self.cache_dir):
+            for f in os.listdir(self.cache_dir):
+                if f.endswith("_visual.jpg") or f.endswith("_final.mp4"):
+                    try:
+                        os.remove(os.path.join(self.cache_dir, f))
+                    except Exception:
+                        pass
+
         self._log(f"Loaded script: {proj['title']} — {total} segments")
         self._log(f"Aspect Ratio: {aspect_ratio} ({width}x{height})")
         if visual_style:
             self._log(f"Visual style: {visual_style}")
-        if huggingface_api_key:
-            self._log("Hugging Face API integrations enabled for visuals and premium voiceovers")
+        google_tts_key = google_tts_api_key if google_tts_api_key else google_api_key
+        if google_api_key:
+            self._log("Google API integrations enabled for scripts and visuals (Google Imagen)")
+        if google_tts_key:
+            self._log("Google Cloud TTS integration enabled for voiceovers")
 
         Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
@@ -131,17 +139,32 @@ class RenderOrchestrator:
                 self._log(msg)
 
             try:
+                # Fast path: check if segment final video is already cached
+                seg_video = os.path.join(self.cache_dir, f"segment_{seg_id}_final.mp4")
+                if os.path.exists(seg_video) and os.path.getsize(seg_video) > 0:
+                    self._progress("processing", idx, total, f"Segment {seg_id} already cached, skipping all stages")
+                    self._log(f"Segment {seg_id} complete (loaded from cache): {seg_video}")
+                    segment_paths.append(seg_video)
+                    continue
+
                 # Stage 2 — Voiceover
                 self._emit("stage", name=f"Voiceover — segment {idx}/{total}", stage_num=2, total_stages=7)
+                seg_voice = seg.get("voice", proj["voice"])
+                if "gemini-3.1-flash-tts" in seg_voice.lower():
+                    voice_key = google_api_key
+                else:
+                    voice_key = google_tts_key
+
                 audio_path = generate_voiceover(
                     segment_id=seg_id,
                     narration=seg["narration"],
-                    voice=proj["voice"],
-                    voice_rate=proj.get("voice_rate", "+0%"),
-                    voice_pitch=proj.get("voice_pitch", "+0Hz"),
+                    voice=seg_voice,
+                    voice_rate=seg.get("voice_rate", proj.get("voice_rate", "+0%")),
+                    voice_pitch=seg.get("voice_pitch", proj.get("voice_pitch", "+0Hz")),
                     cache_dir=self.cache_dir,
-                    huggingface_api_key=huggingface_api_key,
+                    google_api_key=voice_key,
                     on_progress=progress,
+                    voice_steering=seg.get("voice_steering", "")
                 )
 
                 if self._cancelled:
@@ -166,7 +189,7 @@ class RenderOrchestrator:
                     keyword=seg["b_roll_keyword"],
                     narration=seg.get("narration", ""),
                     cache_dir=self.cache_dir,
-                    huggingface_api_key=huggingface_api_key,
+                    google_api_key=google_api_key,
                     aspect_ratio=aspect_ratio,
                     render_id=render_id,
                     video_title=video_title,

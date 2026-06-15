@@ -22,7 +22,9 @@ if os.path.exists(_vendor_ffmpeg):
 
 def _load_settings() -> dict:
     default = {
-        "huggingface_api_key": "",
+        "google_api_key": "",
+        "google_tts_api_key": "",
+        "deepseek_api_key": "",
         "output_dir": "output",
         "cache_dir": "cache",
         "whisper_model": "base",
@@ -31,12 +33,8 @@ def _load_settings() -> dict:
         try:
             with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
                 stored = json.load(f)
-            # Support migrating from old google_api_key settings if needed
-            if "google_api_key" in stored and "huggingface_api_key" not in stored:
-                stored["huggingface_api_key"] = ""
             # Clean up old/unused keys
             stored.pop("pixabay_api_key", None)
-            stored.pop("google_api_key", None)
             default.update(stored)
         except Exception:
             pass
@@ -66,8 +64,20 @@ class Api:
     def get_settings(self) -> dict:
         return dict(self._settings)
 
-    def save_huggingface_key(self, key: str) -> dict:
-        self._settings["huggingface_api_key"] = key.strip()
+
+
+    def save_google_key(self, key: str) -> dict:
+        self._settings["google_api_key"] = key.strip()
+        _save_settings(self._settings)
+        return {"success": True}
+
+    def save_google_tts_key(self, key: str) -> dict:
+        self._settings["google_tts_api_key"] = key.strip()
+        _save_settings(self._settings)
+        return {"success": True}
+
+    def save_deepseek_key(self, key: str) -> dict:
+        self._settings["deepseek_api_key"] = key.strip()
         _save_settings(self._settings)
         return {"success": True}
 
@@ -122,7 +132,16 @@ class Api:
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 tmp_path = f.name
 
-            hf_key = self._settings.get("huggingface_api_key", "")
+            google_key = self._settings.get("google_api_key", "")
+            google_tts_key = self._settings.get("google_tts_api_key", "").strip()
+            if not google_tts_key:
+                google_tts_key = google_key
+            
+            # Gemini TTS requires the main Google Gemini Key (not the restricted Cloud TTS key)
+            if "gemini-3.1-flash-tts" in voice_id.lower():
+                active_key = google_key
+            else:
+                active_key = google_tts_key
             
             # Generate voiceover using the unified cloud TTS module
             generate_voiceover(
@@ -132,7 +151,7 @@ class Api:
                 voice_rate="+0%",
                 voice_pitch="+0Hz",
                 cache_dir=os.path.dirname(tmp_path),
-                huggingface_api_key=hf_key,
+                google_api_key=active_key,
             )
 
             # Look for the generated output segment
@@ -152,7 +171,19 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def parse_plain_text(self, text: str, title: str, voice: str, output_filename: str, visual_style: str = "", aspect_ratio: str = "16:9") -> dict:
+    def parse_plain_text(
+        self,
+        text: str,
+        title: str,
+        voice: str,
+        output_filename: str,
+        visual_style: str = "",
+        aspect_ratio: str = "16:9",
+        ai_guideline: str = "",
+        voice_dialect: str = "",
+        narrative_tone: str = "",
+        speaker_mode: str = "single"
+    ) -> dict:
         """
         Start plain-text parsing using the AI storyboard planner in a background thread.
         Returns immediately with {"started": True}.
@@ -176,7 +207,7 @@ class Api:
                 import tempfile
                 from pipeline.ai_agent import generate_storyboard_plan
 
-                hf_token = self._settings.get("huggingface_api_key", "")
+                google_api_key = self._settings.get("google_api_key", "")
 
                 res = generate_storyboard_plan(
                     text=text,
@@ -184,7 +215,12 @@ class Api:
                     voice=voice,
                     output_filename=output_filename,
                     visual_style=visual_style,
-                    hf_token=hf_token
+                    google_api_key=google_api_key,
+                    ai_guideline=ai_guideline,
+                    aspect_ratio=aspect_ratio,
+                    voice_dialect=voice_dialect,
+                    narrative_tone=narrative_tone,
+                    speaker_mode=speaker_mode
                 )
 
                 if not res.get("success"):
@@ -192,7 +228,6 @@ class Api:
                     return
 
                 script_dict = res["script"]
-                script_dict["project"]["aspect_ratio"] = aspect_ratio
 
                 # Save the planned script to a temporary file
                 tmp = tempfile.NamedTemporaryFile(
@@ -227,6 +262,14 @@ class Api:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(script_data, f, ensure_ascii=False, indent=2)
+            
+            # Sync edited visual prompts/placeholders with project folder
+            try:
+                from pipeline.visuals import initialize_project_sourcing
+                initialize_project_sourcing(script_data)
+            except Exception as sourcing_err:
+                print(f"Failed to update project sourcing workspace on save: {sourcing_err}")
+                
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -238,7 +281,8 @@ class Api:
         if self._render_thread and self._render_thread.is_alive():
             return {"success": False, "error": "A render is already in progress."}
 
-        hf_key = self._settings.get("huggingface_api_key", "")
+        google_key = self._settings.get("google_api_key", "")
+        google_tts_key = self._settings.get("google_tts_api_key", "").strip()
 
         from pipeline.orchestrator import RenderOrchestrator
 
@@ -261,7 +305,11 @@ class Api:
         )
 
         def run():
-            self._orchestrator.render(script_path, hf_key)
+            self._orchestrator.render(
+                script_path,
+                google_api_key=google_key,
+                google_tts_api_key=google_tts_key
+            )
 
         self._render_thread = threading.Thread(target=run, daemon=True)
         self._render_thread.start()
@@ -283,8 +331,32 @@ class Api:
             subprocess.Popen(["explorer", os.path.normpath(folder)])
         return {"success": True}
 
+    def open_project_folder(self, title: str) -> dict:
+        """Open the Windows Explorer at the project folder path."""
+        import re
+        project_slug = re.sub(r'[^\w\-]', '_', title.strip()).strip('_')
+        if not project_slug:
+            project_slug = "my_project"
+        folder = os.path.join(BASE_DIR, "projects", project_slug)
+        if not os.path.exists(folder):
+            os.makedirs(folder, exist_ok=True)
+        subprocess.Popen(["explorer", os.path.normpath(folder)])
+        return {"success": True}
+
     def get_version(self) -> str:
         return "2.0.0"
+
+    def clear_cache(self) -> dict:
+        """Delete all files in the cache directory."""
+        import shutil
+        cache_dir = os.path.join(BASE_DIR, "cache")
+        try:
+            if os.path.exists(cache_dir):
+                shutil.rmtree(cache_dir)
+                os.makedirs(cache_dir, exist_ok=True)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 # ── Window bootstrap ───────────────────────────────────────────────────────────
