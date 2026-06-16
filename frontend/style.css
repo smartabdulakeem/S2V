@@ -117,9 +117,10 @@
 }
 .tab-pill {
   position: absolute;
-  background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(139,92,246,0.35));
-  border: 1px solid rgba(99,102,241,0.4);
+  background: linear-gradient(135deg, var(--ind) 0%, var(--vio) 100%);
+  border: 1px solid rgba(99,102,241,0.5);
   border-radius: 8px; height: 30px;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.25);
   transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
   z-index: 0;
 }
@@ -127,27 +128,30 @@
   flex: 1; padding: 5px 10px; border-radius: 8px; border: none;
   background: transparent; color: var(--text2);
   font-size: 12px; font-weight: 500; cursor: pointer;
-  position: relative; z-index: 1; transition: color 0.2s;
+  position: relative; z-index: 1; transition: all 0.2s;
   white-space: nowrap;
 }
-.tab-btn.active { color: var(--text1); }
+.tab-btn:hover { color: #dfe2f1; }
+.tab-btn.active { color: #ffffff !important; font-weight: 600; }
 
 /* FORM ELEMENTS */
 .form-group { margin-bottom: 10px; }
 .form-label { font-size: 11px; font-weight: 500; color: var(--text3); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 5px; display: block; }
-.form-input {
+
+#s2v-root .form-input {
   width: 100%; padding: 8px 11px; border-radius: 8px;
   border: 1px solid var(--border);
-  background: rgba(0,0,0,0.2);
-  color: var(--text1); font-size: 13px; font-family: 'Inter', sans-serif;
+  background: rgba(0,0,0,0.3) !important;
+  color: #ffffff !important; font-size: 13px; font-family: 'Inter', sans-serif;
   outline: none; transition: all 0.25s;
 }
-.form-input:focus { border-color: rgba(99,102,241,0.6); box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 0 14px rgba(99,102,241,0.08); }
-.form-select {
+#s2v-root .form-input:focus { border-color: rgba(99,102,241,0.6); box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 0 14px rgba(99,102,241,0.08); }
+
+#s2v-root .form-select {
   width: 100%; padding: 8px 11px; border-radius: 8px;
   border: 1px solid var(--border);
-  background: rgba(0,0,0,0.3);
-  color: var(--text1); font-size: 13px;
+  background: rgba(0,0,0,0.35) !important;
+  color: #ffffff !important; font-size: 13px;
   outline: none; cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
@@ -155,34 +159,47 @@
   padding-right: 30px;
   font-family: 'Inter', sans-serif;
 }
-.form-select:focus { border-color: rgba(99,102,241,0.6); outline: none; }
-.form-select option,
-.form-select optgroup {
+#s2v-root .form-select:focus { border-color: rgba(99,102,241,0.6); outline: none; }
+#s2v-root .form-select option,
+#s2v-root .form-select optgroup {
   background-color: #111827;
   color: #dfe2f1;
 }
-.form-textarea {
+
+#s2v-root .form-textarea {
   width: 100%; padding: 10px 12px; border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgba(0,0,0,0.2);
-  color: var(--text1); font-size: 13px; font-family: 'Inter', sans-serif;
+  background: rgba(0,0,0,0.25) !important;
+  color: #ffffff !important; font-size: 13px; font-family: 'Inter', sans-serif;
   outline: none; resize: vertical; min-height: 90px; line-height: 1.6;
   transition: all 0.25s;
 }
-.form-textarea:focus { border-color: rgba(99,102,241,0.6); box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 0 20px rgba(99,102,241,0.06); }
+#s2v-root .form-textarea:focus { border-color: rgba(99,102,241,0.6); box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 0 20px rgba(99,102,241,0.06); }
 
 /* SCRIPT TEXTAREA */
-.script-textarea {
+#s2v-root .script-textarea {
   width: 100%; padding: 12px; border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgba(0,0,0,0.25);
-  color: var(--text1); font-size: 13px; font-family: 'Inter', sans-serif;
+  background: rgba(0,0,0,0.3) !important;
+  color: #ffffff !important; font-size: 13px; font-family: 'Inter', sans-serif;
   outline: none; resize: vertical; min-height: 130px; line-height: 1.7;
   transition: all 0.3s;
 }
-.script-textarea:focus {
+#s2v-root .script-textarea:focus {
   border-color: rgba(99,102,241,0.5);
   box-shadow: 0 0 0 3px rgba(99,102,241,0.1), 0 0 30px rgba(99,102,241,0.07);
+}
+
+#btn-preview-voice {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  transition: all 0.2s ease;
+}
+#btn-preview-voice:hover {
+  background-color: rgba(99, 102, 241, 0.15) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  color: #818cf8 !important;
 }
 
 /* ASPECT RATIO SELECTORS */
