@@ -193,6 +193,22 @@ THEMES = [
 ]
 
 
+LIVING_SUBJECT_TERMS = {
+    "woman", "women", "man", "men", "boy", "girl", "child", "children", "people", "crowd", "crowds",
+    "figure", "figures", "rider", "riders", "horseman", "horsemen", "warrior", "warriors", "soldier",
+    "soldiers", "elder", "scribe", "merchant", "imam", "worshipper", "worshippers", "pilgrims",
+    "mourners", "townspeople", "scouts", "survivors", "messenger", "commander", "chieftain",
+    "family", "mother", "horse", "horses", "camel", "camels", "cavalry", "donkey", "goat", "herd",
+    "bird", "vultures", "livestock", "fallen",
+}
+
+
+def is_living_subject(subject_text: str) -> bool:
+    import re
+    words = set(re.findall(r'\b[a-zA-Z]+\b', subject_text.lower()))
+    return bool(words & LIVING_SUBJECT_TERMS)
+
+
 def pollinations_url(prompt_with_style, seed, width=1280, height=720):
     from urllib.parse import quote
     return (f"https://image.pollinations.ai/prompt/{quote(prompt_with_style)}"
@@ -207,7 +223,7 @@ def build_batches():
         combos = list(itertools.product(subjects, SHOT, LIGHT))
         rng.shuffle(combos)
         combos = combos[:50 if code in ("CW", "MO") else 75]
-        tier = "q" if code in QUALITY_THEMES else "b"
+        theme_tier = "q" if code in QUALITY_THEMES else "b"
         for i in range(0, len(combos), 25):
             chunk = combos[i:i + 25]
             if len(chunk) < 10:
@@ -219,15 +235,17 @@ def build_batches():
                 # World anchor goes early — diffusion models weight leading tokens heavily.
                 full = f"{text}, {world}, {STYLE}" if world else f"{text}, {STYLE}"
                 seed = SEEDS[(n + 1) % len(SEEDS)]
+                prompt_tier = "q" if (theme_tier == "q" or is_living_subject(subject)) else "b"
                 prompts.append({
                     "text": text,
                     "prompt": full,
                     "subject": subject, "shot": shot, "light": light,
                     "seed": seed,
                     "url": pollinations_url(full, seed),
+                    "tier": prompt_tier,
                 })
             batches.append({"id": f"{code}{i//25+1}", "code": code, "theme": title,
-                            "tier": tier, "prompts": prompts})
+                            "tier": theme_tier, "prompts": prompts})
     return batches
 
 

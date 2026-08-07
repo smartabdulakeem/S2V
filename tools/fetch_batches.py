@@ -316,14 +316,18 @@ def main():
     all_batches = build_batches()
 
     if args.list:
-        print(f"{len(all_batches)} batches, "
-              f"{sum(len(b['prompts']) for b in all_batches)} prompts\n")
+        all_jobs = [{"p": p, "bid": b["id"], "tier": p.get("tier", b["tier"])} for b in all_batches for p in b["prompts"]]
+        total_prompts = len(all_jobs)
+        total_q = sum(1 for j in all_jobs if j["tier"] == "q")
+        total_b = total_prompts - total_q
+        print(f"{len(all_batches)} batches, {total_prompts} prompts ({total_q} quality/Imagen, {total_b} bulk/Pollinations)\n")
         cur = None
         for b in all_batches:
             if b["code"] != cur:
                 cur = b["code"]
                 print(f"\n{b['theme']}  [{'IMAGEN' if b['tier']=='q' else 'bulk'}]")
-            print(f"   {b['id']:<5} {len(b['prompts'])} prompts")
+            b_q = sum(1 for p in b["prompts"] if p.get("tier", b["tier"]) == "q")
+            print(f"   {b['id']:<5} {len(b['prompts'])} prompts ({b_q} quality)")
         return
 
     chosen = []
@@ -332,7 +336,7 @@ def main():
     elif args.theme:
         chosen = [b for b in all_batches if b["code"].upper() == args.theme.upper()]
     elif args.tier:
-        chosen = [b for b in all_batches if b["tier"] == args.tier]
+        chosen = [b for b in all_batches if any(p.get("tier", b["tier"]) == args.tier for p in b["prompts"])]
     elif args.batches:
         bm = batch_map()
         for bid in args.batches:
@@ -355,7 +359,7 @@ def main():
     seen = load_seen()
     gkey = "" if args.no_imagen else google_key()
 
-    jobs = [{"p": p, "bid": b["id"], "tier": b["tier"]} for b in chosen for p in b["prompts"]]
+    jobs = [{"p": p, "bid": b["id"], "tier": p.get("tier", b["tier"])} for b in chosen for p in b["prompts"]]
     if args.limit:
         jobs = jobs[:args.limit]
     nq = sum(1 for j in jobs if j["tier"] == "q")
