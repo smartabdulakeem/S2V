@@ -59,6 +59,42 @@ def _get_dimensions(aspect_ratio: str) -> tuple[int, int]:
     return ASPECT_RATIOS.get(aspect_ratio, ASPECT_RATIOS["16:9"])
 
 
+# Typographic punctuation that NFKD does NOT decompose. An em-dash has no decomposition,
+# so normalising alone left it to become "_" — and when the same title was read as cp1252
+# instead of UTF-8 it arrived as "â€"" and became "___" instead. That mismatch is what
+# produced three separate folders for one episode.
+_PUNCT_MAP = str.maketrans({
+    "—": "-", "–": "-", "‒": "-", "‐": "-", "‑": "-",
+    "‘": "'", "’": "'", "‚": "'", "‛": "'",
+    "“": '"', "”": '"', "„": '"',
+    "…": "...", " ": " ",
+})
+
+
+def slugify_title(title: str) -> str:
+    """
+    Stable folder name for a project title.
+
+    Must produce the same slug whatever encoding the title arrived in, so a re-render
+    finds the folder it created last time.
+    """
+    t = (title or "").strip()
+    # Repair the classic UTF-8-read-as-cp1252 mojibake ("â€"" for an em-dash). Old titles
+    # carry it, and without this the same episode slugs three different ways.
+    if "â" in t or "Â" in t or "€" in t:
+        try:
+            t = t.encode("cp1252", "strict").decode("utf-8", "strict")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    t = unicodedata.normalize("NFKD", t)
+    t = t.translate(_PUNCT_MAP)
+    # Drop anything still non-ASCII (accents already split off by NFKD, mojibake bytes too)
+    t = t.encode("ascii", "ignore").decode("ascii")
+    t = re.sub(r"[^\w\-]+", "_", t)
+    t = re.sub(r"_+", "_", t).strip("_")
+    return t or "my_project"
+
+
 def _create_black_frame(output_path: str, width: int, height: int):
     from PIL import Image
     img = Image.new("RGB", (width, height), color=(0, 0, 0))
@@ -537,10 +573,7 @@ def fetch_visual(
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_visual.jpg")
     width, height = _get_dimensions(aspect_ratio)
 
-    normalized_title = unicodedata.normalize("NFKD", video_title.strip())
-    project_slug = re.sub(r'[^\w\-]', '_', normalized_title).strip('_')
-    if not project_slug:
-        project_slug = "my_project"
+    project_slug = slugify_title(video_title)
 
     project_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "projects", project_slug)
     os.makedirs(project_dir, exist_ok=True)
@@ -758,10 +791,7 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     visual_style = proj.get("visual_style", "")
     character_bible = proj.get("character_bible", {})
     
-    normalized_title = unicodedata.normalize("NFKD", title.strip())
-    project_slug = re.sub(r'[^\w\-]', '_', normalized_title).strip('_')
-    if not project_slug:
-        project_slug = "my_project"
+    project_slug = slugify_title(title)
         
     project_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "projects", project_slug)
     os.makedirs(project_dir, exist_ok=True)

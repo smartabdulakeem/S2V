@@ -37,3 +37,6 @@ library/_inbox/
 library/_sheets/
 library/_rejected/
 
+projects/
+temp_animated_drawings/
+test_cache/
