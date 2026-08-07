@@ -18,6 +18,12 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+
+from pipeline.net import install as _install_net_shim
+
+# Google's hosts fail a dual-stack lookup on machines with a broken IPv6 path, which
+# kills every TTS request before it is sent. Retry IPv4 when that happens.
+_install_net_shim()
 import urllib.error
 from pathlib import Path
 
@@ -542,7 +548,7 @@ def _generate_with_google_tts(
             if timepoints and cache_dir:
                 from pipeline.captions import create_srt_from_tts_timings
                 srt_path = os.path.join(cache_dir, f"segment_{segment_id}_captions.srt")
-                create_srt_from_tts_timings(words, timepoints, srt_path)
+                create_srt_from_tts_timings(words, timepoints, srt_path, audio_path=output_path)
                 if on_progress:
                     on_progress(f"Segment {segment_id} — Captions generated directly from Google TTS timepoints")
             return

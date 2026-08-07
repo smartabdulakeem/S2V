@@ -1,12 +1,12 @@
-"""Stage 3 — Caption generation using Google TTS timepoints, faster-whisper, or OpenAI Whisper."""
+"""Stage 3 — Caption generation using Google TTS timepoints or OpenAI Whisper."""
 
 import os
 import re
+import subprocess
 import threading
 from pathlib import Path
 
 _WHISPER_MODELS = {}
-_FASTER_WHISPER_MODELS = {}
 _WHISPER_LOCK = threading.Lock()
 _WHISPER_LOAD_COUNT = 0
 
@@ -78,14 +78,27 @@ def create_srt_from_tts_timings(
     timepoints: list[dict],
     srt_path: str,
     max_words_per_line: int = 7,
+    audio_path: str = None,
     audio_duration: float = None,
 ) -> str:
     """
     Generate an SRT caption file directly from TTS timepoint marks.
-    Requires ZERO Whisper calls!
+    Intermediate caption lines end at the next mark. The final caption line's
+    end time matches the exact audio duration probed via ffprobe.
     """
     if not timepoints or not words:
         return ""
+
+    if audio_duration is None and audio_path and os.path.exists(audio_path):
+        try:
+            from pipeline.composer import _find_ffprobe
+            ffprobe = _find_ffprobe()
+            cmd = [ffprobe, "-i", audio_path, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode == 0 and res.stdout.strip():
+                audio_duration = float(res.stdout.strip())
+        except Exception:
+            pass
 
     word_times = []
     for tp in timepoints:
@@ -121,9 +134,9 @@ def create_srt_from_tts_timings(
         if i + 1 < len(word_times):
             t_next = word_times[i + 1][1]
         elif audio_duration:
-            t_next = min(audio_duration, max(t_start + 1.2, audio_duration - 0.1))
+            t_next = audio_duration
         else:
-            t_next = t_start + 1.2
+            t_next = t_start + 1.5
 
         if len(curr_words) >= max_words_per_line or w_text.endswith((".", "?", "!", ";", ":")):
             lines.append((curr_start, t_next, " ".join(curr_words)))
@@ -131,7 +144,7 @@ def create_srt_from_tts_timings(
             curr_start = None
 
     if curr_words and curr_start is not None:
-        last_end = min(audio_duration, max(curr_start + 1.2, audio_duration - 0.1)) if audio_duration else curr_start + 1.2
+        last_end = audio_duration if audio_duration else curr_start + 1.5
         lines.append((curr_start, last_end, " ".join(curr_words)))
 
     Path(os.path.dirname(srt_path)).mkdir(parents=True, exist_ok=True)
@@ -150,7 +163,7 @@ def generate_captions(
     on_progress=None,
 ) -> str:
     """
-    Transcribe audio with faster-whisper or Whisper and write an SRT file.
+    Transcribe audio with OpenAI Whisper and write an SRT file.
     Returns path to the SRT file.
     Skips if already cached (e.g., generated directly from Google TTS timepoints).
     """
@@ -164,27 +177,11 @@ def generate_captions(
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
     _ensure_ffmpeg_on_path()
 
-    # Prefer faster-whisper (CTranslate2) if available
-    try:
-        from faster_whisper import WhisperModel
-        if on_progress:
-            on_progress(f"Segment {segment_id} — transcribing audio (faster-whisper {model_name})")
-        global _FASTER_WHISPER_MODELS, _WHISPER_LOAD_COUNT
-        with _WHISPER_LOCK:
-            if model_name not in _FASTER_WHISPER_MODELS:
-                _FASTER_WHISPER_MODELS[model_name] = WhisperModel(model_name, device="cpu", compute_type="int8")
-                _WHISPER_LOAD_COUNT += 1
-            fw_model = _FASTER_WHISPER_MODELS[model_name]
-
-        segments_iter, _ = fw_model.transcribe(audio_path, word_timestamps=False)
-        segments = [{"start": seg.start, "end": seg.end, "text": seg.text} for seg in segments_iter]
-    except Exception:
-        # Fall back to standard OpenAI Whisper
-        if on_progress:
-            on_progress(f"Segment {segment_id} — transcribing audio (Whisper {model_name})")
-        model = _get_whisper_model(model_name, on_progress)
-        result = model.transcribe(audio_path, word_timestamps=False)
-        segments = result.get("segments", [])
+    if on_progress:
+        on_progress(f"Segment {segment_id} — transcribing audio (Whisper {model_name})")
+    model = _get_whisper_model(model_name, on_progress)
+    result = model.transcribe(audio_path, word_timestamps=False)
+    segments = result.get("segments", [])
 
     if not segments:
         with open(srt_path, "w", encoding="utf-8") as f:

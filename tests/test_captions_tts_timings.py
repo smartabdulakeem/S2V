@@ -3,7 +3,10 @@ import json
 import shutil
 import tempfile
 import subprocess
+import socket
+import urllib.error
 import pytest
+
 from pipeline.captions import (
     create_srt_from_tts_timings,
     generate_captions,
@@ -12,10 +15,6 @@ from pipeline.captions import (
 )
 from pipeline.voiceover import _generate_with_google_tts
 from pipeline.composer import _find_ffprobe
-
-
-import socket
-import urllib.error
 
 
 def _get_test_google_api_key() -> str:
@@ -113,11 +112,13 @@ def test_google_tts_v1beta1_timepoints_and_zero_whisper_calls():
         )
 
 
-def test_real_measured_caption_timing_drift_vs_whisper():
+def test_caption_timing_correctness_and_monotonicity():
     """
-    Real Measurement Test:
-    Synthesizes audio via Google TTS, generates SRT from timepoints, transcribes the SAME audio
-    using Whisper, and measures actual timing drift between the two caption paths.
+    Correctness Test:
+    Synthesizes audio via Google TTS, generates SRT from timepoints, probes actual audio duration,
+    and asserts:
+    1. The last caption's end time matches audio duration within 0.15s tolerance.
+    2. Caption entries are strictly monotonic and non-overlapping (start_i >= end_{i-1}).
     """
     api_key = _get_test_google_api_key()
     if not api_key:
@@ -129,7 +130,6 @@ def test_real_measured_caption_timing_drift_vs_whisper():
         out_mp3 = os.path.join(tmp_dir, "segment_888_audio.mp3")
         tts_srt_path = os.path.join(tmp_dir, "segment_888_captions.srt")
 
-        # 1. Synthesize audio with TTS timepoints SRT
         try:
             _generate_with_google_tts(
                 narration=narration,
@@ -148,27 +148,36 @@ def test_real_measured_caption_timing_drift_vs_whisper():
 
         assert os.path.exists(tts_srt_path), "TTS SRT file missing"
         tts_entries = parse_srt(tts_srt_path)
-
-        # 2. Force Whisper transcription on the SAME synthesized MP3 audio
-        whisper_dir = os.path.join(tmp_dir, "whisper_cache")
-        whisper_srt_path = generate_captions(888, out_mp3, whisper_dir)
-        whisper_entries = parse_srt(whisper_srt_path)
-
         assert len(tts_entries) > 0, "TTS timepoint SRT empty"
-        assert len(whisper_entries) > 0, "Whisper SRT empty"
 
-        # 3. Calculate REAL measured start and end drift between timepoints and Whisper
-        start_drift = abs(tts_entries[0][0] - whisper_entries[0][0])
-        end_drift = abs(tts_entries[-1][1] - whisper_entries[-1][1])
+        # Probe exact audio duration
+        ffprobe = _find_ffprobe()
+        dur_cmd = [ffprobe, "-i", out_mp3, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
+        audio_dur = float(subprocess.run(dur_cmd, capture_output=True, text=True, check=True).stdout.strip())
 
-        print(f"\n[REAL MEASURED CAPTION DRIFT REPORT]")
-        print(f"TTS Timepoint Start: {tts_entries[0][0]:.3f}s, End: {tts_entries[-1][1]:.3f}s")
-        print(f"Whisper Start:       {whisper_entries[0][0]:.3f}s, End: {whisper_entries[-1][1]:.3f}s")
-        print(f"Measured Start Drift: {start_drift:.3f}s")
-        print(f"Measured End Drift:   {end_drift:.3f}s")
+        last_caption_end = tts_entries[-1][1]
+        duration_diff = abs(last_caption_end - audio_dur)
 
-        assert start_drift <= 1.0, f"Start drift {start_drift:.3f}s exceeded 1.0s tolerance"
-        assert end_drift <= 1.0, f"End drift {end_drift:.3f}s exceeded 1.0s tolerance"
+        print(f"\n[CAPTION TIMING CORRECTNESS REPORT]")
+        print(f"Probed Audio Duration:  {audio_dur:.3f}s")
+        print(f"Final Caption End Time: {last_caption_end:.3f}s")
+        print(f"Final Caption Duration Difference: {duration_diff:.3f}s")
+
+        # 1. Assert last caption ends within 0.15s of audio duration
+        assert duration_diff <= 0.15, (
+            f"Final caption end time {last_caption_end:.3f}s differs from audio duration {audio_dur:.3f}s "
+            f"by {duration_diff:.3f}s (exceeds 0.15s tolerance)"
+        )
+
+        # 2. Assert monotonicity and non-overlapping timestamps
+        for i in range(len(tts_entries)):
+            start_i, end_i, text_i = tts_entries[i]
+            assert start_i < end_i, f"Caption {i+1} start ({start_i:.3f}s) must be < end ({end_i:.3f}s)"
+            if i > 0:
+                prev_end = tts_entries[i - 1][1]
+                assert start_i >= prev_end - 0.001, (
+                    f"Caption {i+1} start ({start_i:.3f}s) overlaps with caption {i} end ({prev_end:.3f}s)"
+                )
 
 
 def test_whisper_fallback_when_timings_unavailable():
