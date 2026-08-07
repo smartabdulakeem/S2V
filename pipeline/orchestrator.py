@@ -104,14 +104,6 @@ class RenderOrchestrator:
         proj_hash = hashlib.md5(video_title.encode("utf-8")).hexdigest()[:8]
         self.cache_dir = os.path.join(self.base_dir, "cache", proj_hash)
 
-        # Clear old visual cache and final segment videos for this project so new renders get fresh AI images
-        if os.path.exists(self.cache_dir):
-            for f in os.listdir(self.cache_dir):
-                if f.endswith("_visual.jpg") or f.endswith("_final.mp4"):
-                    try:
-                        os.remove(os.path.join(self.cache_dir, f))
-                    except Exception:
-                        pass
 
         self._log(f"Loaded script: {proj['title']} — {total} segments")
         self._log(f"Aspect Ratio: {aspect_ratio} ({width}x{height})")
@@ -230,6 +222,7 @@ class RenderOrchestrator:
                     on_progress=progress,
                     sfx=seg.get("sfx"),
                     level1_overlay=seg.get("level1_overlay"),
+                    segment_dict=seg,
                 )
                 segment_paths.append(seg_video)
                 self._log(f"Segment {seg_id} complete: {seg_video}")

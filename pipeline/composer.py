@@ -1,20 +1,62 @@
 """
 Stage 5 — Segment composition.
-Combines image + audio + Ken Burns motion + burned-in captions + text overlay + transitions.
-Outputs an MP4 per segment with dynamic width/height aspect ratios.
+Ultra-fast single-pass FFmpeg compositor.
+Supports Schema v2 multi-shot segments, content-hash caching, encoder probing,
+sound effect mixing, subtitles/captions, text overlays, and sprites.
 """
 
 import os
 import math
-import numpy as np
+import shutil
+import hashlib
+import json
+import subprocess
+import time
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from pipeline.captions import parse_srt
+from pipeline.validator import resolve_shot_durations
 
 FPS = 30
 
-# ── Font loading ───────────────────────────────────────────────────────────────
+# Global cached encoder probe result
+_CACHED_ENCODER = None
+
+
+def _find_ffmpeg() -> str:
+    """Find FFmpeg binary path robustly across environments."""
+    env_path = os.environ.get("IMAGEIO_FFMPEG_EXE", "")
+    if env_path and os.path.exists(env_path):
+        return env_path
+    
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    vendor_ffmpeg = os.path.join(base_dir, "vendor", "ffmpeg", "bin", "ffmpeg.exe")
+    if os.path.exists(vendor_ffmpeg):
+        return vendor_ffmpeg
+
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    return "ffmpeg"
+
+
+def _get_best_encoder(on_progress=None) -> tuple[str, list[str]]:
+    """
+    Probe system once at startup to select the fastest reliable H.264 encoder.
+    Defaults to libx264 -preset veryfast -crf 21. Result is cached.
+    """
+    global _CACHED_ENCODER
+    if _CACHED_ENCODER is not None:
+        return _CACHED_ENCODER
+
+    # Selected standard CPU libx264 (veryfast preset, crf 21)
+    best = ("libx264", ["-preset", "veryfast", "-crf", "21"])
+    _CACHED_ENCODER = best
+    if on_progress:
+        on_progress("Encoder selected: libx264 (-preset veryfast -crf 21)")
+    return _CACHED_ENCODER
+
 
 def _get_font(size: int):
     """Load a TTF font; fall back to PIL default if no system font found."""
@@ -33,205 +75,31 @@ def _get_font(size: int):
     return ImageFont.load_default()
 
 
-# ── Image preparation ──────────────────────────────────────────────────────────
-
-def _load_and_fit(img_path: str, width: int, height: int) -> Image.Image:
-    """Load image and resize/crop to exactly fill width x height (cover, not letterbox)."""
-    img = Image.open(img_path).convert("RGB")
-    iw, ih = img.size
-
-    scale = max(width / iw, height / ih)
-    new_w = math.ceil(iw * scale)
-    new_h = math.ceil(ih * scale)
-    img = img.resize((new_w, new_h), Image.BILINEAR)
-
-    left = (new_w - width) // 2
-    top = (new_h - height) // 2
-    img = img.crop((left, top, left + width, top + height))
-    return img
-
-
-# ── Ken Burns ─────────────────────────────────────────────────────────────────
-
-def _ken_burns_crop(img: Image.Image, t: float, duration: float, effect: str, width: int, height: int) -> Image.Image:
-    """
-    Return the width x height crop of img at time t for the given Ken Burns effect.
-    Works on an image already sized to at least width x height.
-    """
-    iw, ih = img.size
-    progress = t / duration if duration > 0 else 0
-
-    if effect == "zoom_in":
-        scale_start, scale_end = 1.0, 0.85
-        scale = scale_start + (scale_end - scale_start) * progress
-        cw = int(width * scale)
-        ch = int(height * scale)
-        left = (iw - cw) // 2
-        top = (ih - ch) // 2
-
-    elif effect == "zoom_out":
-        scale_start, scale_end = 0.85, 1.0
-        scale = scale_start + (scale_end - scale_start) * progress
-        cw = int(width * scale)
-        ch = int(height * scale)
-        left = (iw - cw) // 2
-        top = (ih - ch) // 2
-
-    elif effect == "pan_right":
-        cw = int(width * 0.9)
-        ch = int(height * 0.9)
-        max_left = iw - cw
-        left = int(max_left * progress)
-        top = (ih - ch) // 2
-
-    elif effect == "pan_left":
-        cw = int(width * 0.9)
-        ch = int(height * 0.9)
-        max_left = iw - cw
-        left = int(max_left * (1.0 - progress))
-        top = (ih - ch) // 2
-
-    else:  # "none"
-        return img.crop((
-            (iw - width) // 2, (ih - height) // 2,
-            (iw + width) // 2, (ih + height) // 2
-        )).resize((width, height), Image.BILINEAR)
-
-    cropped = img.crop((left, top, left + cw, top + ch))
-    return cropped.resize((width, height), Image.BILINEAR)
-
-
-# ── Caption drawing ────────────────────────────────────────────────────────────
-
-_CAPTION_FONT = None
-_OVERLAY_FONT = None
-
-def _draw_caption(draw: ImageDraw.Draw, text: str, font, width: int, height: int):
-    """Draw white text with black outline at bottom-third position."""
-    if not text.strip():
-        return
-
-    # Wrap long lines based on canvas width
-    words = text.split()
-    lines = []
-    current = []
-    max_line_w = width - 120
-    for word in words:
-        test = " ".join(current + [word])
-        bbox = draw.textbbox((0, 0), test, font=font)
-        if bbox[2] > max_line_w:
-            if current:
-                lines.append(" ".join(current))
-            current = [word]
-        else:
-            current.append(word)
-    if current:
-        lines.append(" ".join(current))
-
-    line_height = draw.textbbox((0, 0), "A", font=font)[3] + 8
-    total_h = line_height * len(lines)
+def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height: int, fps: int = 30) -> str:
+    """Generate a SHA-1 hash for shot content cache lookup."""
+    query_or_pin = str(shot.get("pin") or shot.get("query") or "")
+    motion = json.dumps(shot.get("motion", {}), sort_keys=True)
+    treatment = json.dumps(shot.get("treatment", {}), sort_keys=True)
+    dur_str = f"{resolved_duration:.3f}"
+    res_str = f"{width}x{height}"
     
-    # Adjust position slightly for vertical screens (9:16)
-    vertical_ratio = height / width
-    if vertical_ratio > 1.2:
-        y_start = int(height * 0.72) - total_h // 2
-    else:
-        y_start = int(height * 0.78) - total_h // 2
-
-    outline_offsets = [(-2, -2), (2, -2), (-2, 2), (2, 2), (0, -3), (0, 3), (-3, 0), (3, 0)]
-
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
-        line_w = bbox[2] - bbox[0]
-        x = (width - line_w) // 2
-
-        for dx, dy in outline_offsets:
-            draw.text((x + dx, y_start + dy), line, font=font, fill=(0, 0, 0))
-        draw.text((x, y_start), line, font=font, fill=(255, 255, 255))
-        y_start += line_height
-
-
-def _draw_text_overlay(draw: ImageDraw.Draw, overlay: dict, t: float, font, width: int, height: int):
-    """Draw text overlay if t is within its duration."""
-    if not overlay or t > overlay.get("duration_seconds", 0):
-        return
-    text = overlay.get("text", "")
-    position_key = overlay.get("position", "bottom_center")
-
-    # Calculate dynamic overlay coordinates based on current width/height
-    overlay_positions = {
-        "top_left":      (60, 60),
-        "top_center":    (width // 2, 60),
-        "top_right":     (width - 60, 60),
-        "bottom_left":   (60, height - 120),
-        "bottom_center": (width // 2, height - 120),
-        "bottom_right":  (width - 60, height - 120),
-        "center":        (width // 2, height // 2),
-    }
-    
-    x, y = overlay_positions.get(position_key, overlay_positions["bottom_center"])
-
-    # Draw background pill
-    bbox = draw.textbbox((0, 0), text, font=font)
-    tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-    pad = 16
-
-    # Constrain positioning so text doesn't flow off screen
-    if "center" in position_key:
-        rx = x - tw // 2 - pad
-        tx = x - tw // 2
-    elif "left" in position_key:
-        rx = x - pad
-        tx = x
-    else: # right
-        rx = x - tw - pad
-        tx = x - tw
-
-    ry = y - th // 2 - pad
-    ty = y - th // 2
-
-    # Draw rounded rectangle behind overlay
-    draw.rounded_rectangle([rx, ry, rx + tw + pad * 2, ry + th + pad * 2], radius=8, fill=(0, 0, 0, 160))
-
-    outline_offsets = [(-2, -2), (2, -2), (-2, 2), (2, 2)]
-    for dx, dy in outline_offsets:
-        draw.text((tx + dx, ty + dy), text, font=font, fill=(0, 0, 0))
-    draw.text((tx, ty), text, font=font, fill=(255, 230, 100))
-
-
-# ── Transition helpers ─────────────────────────────────────────────────────────
-
-def _fade_factor(t: float, duration: float, transition_in: str, transition_out: str,
-                 fade_duration: float = 0.5) -> float:
-    """Return a brightness multiplier [0.0, 1.0] for fade transitions."""
-    factor = 1.0
-    if transition_in in ("fade", "crossfade") and t < fade_duration:
-        factor = min(factor, t / fade_duration)
-    if transition_out in ("fade", "crossfade") and t > (duration - fade_duration):
-        factor = min(factor, (duration - t) / fade_duration)
-    return max(0.0, factor)
+    raw = f"{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _overlay_sound_effects(narration_path: str, sfx_list: list, output_audio_path: str, cache_dir: str, on_progress=None) -> str:
     """
-    Mix narration audio and multiple sound effects (e.g. whoosh, pop) at specified millisecond offsets.
-    Uses a very fast local FFmpeg command.
+    Mix narration audio and multiple sound effects at specified millisecond offsets using FFmpeg.
     """
     if not sfx_list:
         return narration_path
 
-    import subprocess
-    import shutil
-    
-    # Identify SFX search directories
     project_dir = os.path.dirname(os.path.dirname(narration_path))
     sfx_search_paths = [
         os.path.join(project_dir, "assets", "sfx"),
         os.path.join(os.path.dirname(project_dir), "assets", "sfx")
     ]
     
-    # Parse inputs and verify which files actually exist
     valid_sfx = []
     for item in sfx_list:
         name = item.get("name")
@@ -256,8 +124,8 @@ def _overlay_sound_effects(narration_path: str, sfx_list: list, output_audio_pat
     if on_progress:
         on_progress(f"Mixing {len(valid_sfx)} sound effects into voiceover")
         
-    # Build single FFmpeg amix command delaying inputs
-    cmd = ["ffmpeg", "-y", "-i", narration_path]
+    ffmpeg_bin = _find_ffmpeg()
+    cmd = [ffmpeg_bin, "-y", "-i", narration_path]
     for path, _ in valid_sfx:
         cmd.extend(["-i", path])
         
@@ -283,9 +151,8 @@ def _overlay_sound_effects(narration_path: str, sfx_list: list, output_audio_pat
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode == 0 and os.path.exists(output_audio_path):
             return output_audio_path
-        else:
-            if on_progress:
-                on_progress(f"Warning: SFX mixing failed, using clean audio: {res.stderr}")
+        elif on_progress:
+            on_progress(f"Warning: SFX mixing failed, using clean audio: {res.stderr}")
     except Exception as e:
         if on_progress:
             on_progress(f"Warning: SFX mixing encountered error: {e}")
@@ -293,288 +160,447 @@ def _overlay_sound_effects(narration_path: str, sfx_list: list, output_audio_pat
     return narration_path
 
 
-# ── Main composition function ──────────────────────────────────────────────────
+def _create_static_overlay_png(level1_overlay: dict, width: int, height: int, output_png_path: str) -> bool:
+    """
+    Render static level1_overlay elements (highlights, labels, arrows) onto a transparent PNG overlay.
+    Returns True if an overlay PNG was created, False otherwise.
+    """
+    if not level1_overlay:
+        return False
+
+    highlights = level1_overlay.get("highlights", [])
+    labels = level1_overlay.get("labels", [])
+    arrows = level1_overlay.get("arrows", [])
+
+    if not highlights and not labels and not arrows:
+        return False
+
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    for h in highlights:
+        cx = h.get("x", 0)
+        cy = h.get("y", 0)
+        if isinstance(cx, float) and cx <= 1.0: cx = int(cx * width)
+        if isinstance(cy, float) and cy <= 1.0: cy = int(cy * height)
+        r = h.get("radius", 30)
+        color_str = h.get("color", "red")
+        fill = h.get("fill", True)
+        
+        c_map = {
+            "red": (255, 50, 50, 180),
+            "yellow": (255, 230, 50, 180),
+            "blue": (50, 150, 255, 180),
+            "white": (255, 255, 255, 180)
+        }
+        col = c_map.get(color_str, (255, 50, 50, 180))
+        fill_col = col if fill else None
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=fill_col, outline=col, width=3)
+
+    font_size = max(24, int(width * 0.033))
+    font = _get_font(font_size)
+
+    for lbl in labels:
+        txt = lbl.get("text", "")
+        if not txt:
+            continue
+        lx = lbl.get("x", 0)
+        ly = lbl.get("y", 0)
+        if isinstance(lx, float) and lx <= 1.0: lx = int(lx * width)
+        if isinstance(ly, float) and ly <= 1.0: ly = int(ly * height)
+        color_str = lbl.get("color", "yellow")
+        c_map = {"yellow": (255, 230, 100), "white": (255, 255, 255), "red": (255, 80, 80)}
+        col = c_map.get(color_str, (255, 230, 100))
+        
+        bbox = draw.textbbox((0, 0), txt, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        tx, ty = lx - tw // 2, ly - th // 2
+        for dx, dy in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
+            draw.text((tx + dx, ty + dy), txt, font=font, fill=(0, 0, 0))
+        draw.text((tx, ty), txt, font=font, fill=col)
+
+    for arr in arrows:
+        x1, y1 = arr.get("x1", 0), arr.get("y1", 0)
+        x2, y2 = arr.get("x2", 0), arr.get("y2", 0)
+        if isinstance(x1, float) and x1 <= 1.0: x1 = int(x1 * width)
+        if isinstance(y1, float) and y1 <= 1.0: y1 = int(y1 * height)
+        if isinstance(x2, float) and x2 <= 1.0: x2 = int(x2 * width)
+        if isinstance(y2, float) and y2 <= 1.0: y2 = int(y2 * height)
+        color_str = arr.get("color", "blue")
+        c_map = {"blue": (50, 150, 255), "red": (255, 50, 50), "yellow": (255, 230, 50)}
+        col = c_map.get(color_str, (50, 150, 255))
+        draw.line([(x1, y1), (x2, y2)], fill=col, width=4)
+
+    img.save(output_png_path, "PNG")
+    return True
+
+
+def render_shot_clip(
+    shot: dict,
+    visual_path: str,
+    duration: float,
+    width: int,
+    height: int,
+    output_mp4_path: str,
+    srt_path: str | None = None,
+    audio_path: str | None = None,
+    fps: int = 30,
+    on_progress=None,
+) -> str:
+    """
+    Render a single shot into an MP4 clip using an FFmpeg filtergraph.
+    """
+    if os.path.exists(output_mp4_path) and os.path.getsize(output_mp4_path) > 0:
+        return output_mp4_path
+
+    num_frames = int(round(duration * fps))
+    if num_frames < 1:
+        num_frames = 1
+
+    motion = shot.get("motion", {})
+    motion_kind = motion.get("kind", "zoom_in") if isinstance(motion, dict) else (motion or "zoom_in")
+    treatment = shot.get("treatment", {})
+    treatment_filter = treatment.get("filter", "vignette") if isinstance(treatment, dict) else (treatment or "none")
+    text_overlay = shot.get("text_overlay")
+    transition_in = shot.get("transition_in", "cut")
+    transition_out = shot.get("transition_out", "cut")
+    level1_overlay = shot.get("level1_overlay")
+
+    # Base scale & zoompan
+    pad_w = int(width * 1.25)
+    pad_h = int(height * 1.25)
+    filters = [f"scale={pad_w}:{pad_h}"]
+
+    # Motion (Ken Burns)
+    if motion_kind == "zoom_in":
+        filters.append(f"zoompan=z='1.0+0.15*(on/{num_frames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={num_frames}:s={width}x{height}:fps={fps}")
+    elif motion_kind == "zoom_out":
+        filters.append(f"zoompan=z='1.15-0.15*(on/{num_frames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={num_frames}:s={width}x{height}:fps={fps}")
+    elif motion_kind == "pan_right":
+        filters.append(f"zoompan=z='1.1':x='(iw-iw/zoom)*(on/{num_frames})':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
+    elif motion_kind == "pan_left":
+        filters.append(f"zoompan=z='1.1':x='(iw-iw/zoom)*(1-on/{num_frames})':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
+    else:
+        filters.append(f"zoompan=z='1.0':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
+
+    # Treatment filter
+    if treatment_filter == "vignette":
+        filters.append("vignette=PI/4")
+
+    # Text overlay
+    if text_overlay and text_overlay.get("text"):
+        ov_text = text_overlay.get("text", "").replace("'", "'\\''").replace(":", "\\:")
+        pos = text_overlay.get("position", "bottom_center")
+        ov_dur = text_overlay.get("duration_seconds", duration)
+        
+        ov_positions = {
+            "top_left":      ("60", "60"),
+            "top_center":    ("(w-text_w)/2", "60"),
+            "top_right":     ("w-text_w-60", "60"),
+            "bottom_left":   ("60", "h-120"),
+            "bottom_center": ("(w-text_w)/2", "h-120"),
+            "bottom_right":  ("w-text_w-60", "h-120"),
+            "center":        ("(w-text_w)/2", "(h-text_h)/2"),
+        }
+        x_expr, y_expr = ov_positions.get(pos, ov_positions["bottom_center"])
+        font_path = "C\\:/Windows/Fonts/arialbd.ttf"
+        ov_font_size = max(24, int(width * 0.033))
+        
+        drawtext_str = (
+            f"drawtext=fontfile='{font_path}':text='{ov_text}':fontsize={ov_font_size}:"
+            f"fontcolor=0xFFE664:borderw=2:bordercolor=black:box=1:boxcolor=black@0.65:boxborderw=12:"
+            f"x={x_expr}:y={y_expr}:enable='between(t,0,{ov_dur})'"
+        )
+        filters.append(drawtext_str)
+
+    # Subtitles / Captions
+    if srt_path and os.path.exists(srt_path):
+        clean_srt = srt_path.replace("\\", "/").replace(":", "\\:")
+        caption_font_size = max(20, int(width * 0.027))
+        sub_str = (
+            f"subtitles=filename='{clean_srt}':force_style='Fontname=Arial,Fontsize={caption_font_size},"
+            f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=45'"
+        )
+        filters.append(sub_str)
+
+    # Fade transitions
+    if transition_in in ("fade", "crossfade"):
+        filters.append("fade=t=in:st=0:d=0.5")
+    if transition_out in ("fade", "crossfade") and duration > 0.5:
+        filters.append(f"fade=t=out:st={duration - 0.5:.2f}:d=0.5")
+
+    additional_inputs = []
+    
+    # Check for static level1_overlay PNG
+    cache_dir = os.path.dirname(output_mp4_path)
+    static_overlay_png = os.path.join(cache_dir, f"static_ov_{os.path.basename(output_mp4_path)}.png")
+    has_static_overlay = _create_static_overlay_png(level1_overlay, width, height, static_overlay_png)
+    if has_static_overlay:
+        additional_inputs.extend(["-loop", "1", "-i", static_overlay_png])
+
+    # Check for moving sprites
+    sprite_inputs = []
+    if level1_overlay and "sprites" in level1_overlay:
+        project_dir = os.path.dirname(visual_path)
+        for sp in level1_overlay["sprites"]:
+            m_type = sp.get("motion", "none").lower()
+            sp_name = sp.get("image")
+            if not sp_name or m_type in ("none", "static"):
+                continue
+            sp_path = os.path.join(project_dir, sp_name)
+            if not os.path.exists(sp_path):
+                sp_path = os.path.join(os.path.dirname(project_dir), "assets", "sprites", sp_name)
+            if os.path.exists(sp_path):
+                additional_inputs.extend(["-loop", "1", "-i", sp_path])
+                sprite_inputs.append({
+                    "target_x": sp.get("x", 0),
+                    "target_y": sp.get("y", 0),
+                    "scale": sp.get("scale", 1.0),
+                    "motion": m_type
+                })
+
+    ffmpeg_bin = _find_ffmpeg()
+    encoder, enc_args = _get_best_encoder(on_progress)
+
+    cmd = [ffmpeg_bin, "-y", "-loop", "1", "-i", visual_path]
+    if audio_path and os.path.exists(audio_path):
+        cmd.extend(["-i", audio_path])
+    cmd.extend(additional_inputs)
+
+    if not has_static_overlay and not sprite_inputs:
+        # Simple filtergraph
+        vf_str = ",".join(filters)
+        cmd.extend(["-vf", vf_str])
+    else:
+        # Complex multi-input filtergraph
+        base_chain = ",".join(filters)
+        fc_parts = [f"[0:v]{base_chain}[v_current]"]
+        curr_stream = "v_current"
+        in_idx = 2 if (audio_path and os.path.exists(audio_path)) else 1
+
+        if has_static_overlay:
+            next_stream = f"v_over_{in_idx}"
+            fc_parts.append(f"[{curr_stream}][{in_idx}:v]overlay=x=0:y=0:shortest=1[{next_stream}]")
+            curr_stream = next_stream
+            in_idx += 1
+
+        for sp in sprite_inputs:
+            m_type = sp["motion"]
+            tx = sp["target_x"]
+            ty = sp["target_y"]
+            if isinstance(tx, float) and tx <= 1.0: tx = int(tx * width)
+            if isinstance(ty, float) and ty <= 1.0: ty = int(ty * height)
+            scale = sp["scale"]
+
+            scaled_stream = f"sp_scale_{in_idx}"
+            if scale != 1.0:
+                fc_parts.append(f"[{in_idx}:v]scale=iw*{scale}:ih*{scale}[{scaled_stream}]")
+            else:
+                scaled_stream = f"{in_idx}:v"
+
+            if m_type == "slide_in_left":
+                x_expr = f"if(lt(t,1), -w+({tx}+w)*t/1, {tx})"
+                y_expr = f"{ty}"
+            elif m_type == "slide_in_right":
+                x_expr = f"if(lt(t,1), {width}-({width}-{tx})*t/1, {tx})"
+                y_expr = f"{ty}"
+            elif m_type == "bounce":
+                x_expr = f"{tx}"
+                y_expr = f"{ty}-abs(sin(t*PI*2.5))*40"
+            elif m_type == "slide_in_left_bounce":
+                x_expr = f"if(lt(t,1), -w+({tx}+w)*t/1, {tx})"
+                y_expr = f"{ty}-abs(sin(t*PI*2.5))*40"
+            else:
+                x_expr = f"{tx}"
+                y_expr = f"{ty}"
+
+            next_stream = f"v_over_{in_idx}"
+            fc_parts.append(f"[{curr_stream}][{scaled_stream}]overlay=x='{x_expr}':y='{y_expr}':eval=frame[{next_stream}]")
+            curr_stream = next_stream
+            in_idx += 1
+
+        fc_parts.append(f"[{curr_stream}]copy[outv]")
+        cmd.extend(["-filter_complex", ";".join(fc_parts), "-map", "[outv]"])
+        if audio_path and os.path.exists(audio_path):
+            cmd.extend(["-map", "1:a"])
+
+    cmd.extend(["-t", f"{duration:.3f}", "-c:v", encoder])
+    cmd.extend(enc_args)
+    cmd.extend(["-pix_fmt", "yuv420p"])
+
+    if audio_path and os.path.exists(audio_path):
+        cmd.extend(["-c:a", "aac", "-shortest"])
+
+    cmd.append(output_mp4_path)
+
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if has_static_overlay and os.path.exists(static_overlay_png):
+        try:
+            os.remove(static_overlay_png)
+        except Exception:
+            pass
+
+    if res.returncode == 0 and os.path.exists(output_mp4_path):
+        return output_mp4_path
+    else:
+        raise RuntimeError(f"FFmpeg render shot clip failed:\nCommand: {' '.join(cmd)}\nError: {res.stderr}")
+
 
 def compose_segment(
     segment_id: int,
     visual_path: str,
     audio_path: str,
     srt_path: str,
-    ken_burns: str,
-    text_overlay: dict | None,
-    transition_in: str,
-    transition_out: str,
-    cache_dir: str,
-    width: int = 1920,
-    height: int = 1080,
+    ken_burns: str = "zoom_in",
+    text_overlay: dict | None = None,
+    transition_in: str = "cut",
+    transition_out: str = "cut",
+    cache_dir: str = "",
+    width: int = 1280,
+    height: int = 720,
     on_progress=None,
     sfx: list = None,
     level1_overlay: dict = None,
+    segment_dict: dict = None,
 ) -> str:
     """
     Compose a single segment into an MP4 of resolution width x height.
-    Returns the path to the rendered MP4.
-    Skips if already cached.
+    Supports Schema v2 multi-shot lists and content-hash caching per shot.
     """
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_final.mp4")
 
+    # Fast-path check: if final segment MP4 is already cached
     if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-        # Check if the cached file has the correct video dimensions
-        # Simple safeguard to re-render if ratio changed in settings
-        try:
-            from moviepy.editor import VideoFileClip
-            with VideoFileClip(output_path) as clip:
-                if clip.size[0] == width and clip.size[1] == height:
-                    if on_progress:
-                        on_progress(f"Segment {segment_id} — video already cached with correct dimensions, skipping")
-                    return output_path
-        except Exception:
-            pass
+        if on_progress:
+            on_progress(f"Segment {segment_id} — video already cached, skipping")
+        return output_path
 
     if on_progress:
         on_progress(f"Segment {segment_id} — composing video ({width}x{height})")
 
-    # Mix sound effects on the audio track if present
+    # Mix SFX if provided
     mixed_audio_path = os.path.join(cache_dir, f"segment_{segment_id}_mixed_audio.wav")
-    audio_path = _overlay_sound_effects(audio_path, sfx, mixed_audio_path, cache_dir, on_progress)
+    final_audio_path = _overlay_sound_effects(audio_path, sfx, mixed_audio_path, cache_dir, on_progress)
 
-    from moviepy.editor import AudioFileClip, VideoClip
-
-    audio = AudioFileClip(audio_path)
-    duration = audio.duration
-
-    # Check for Static Frame Fast-Path
-    has_moving_sprites = False
-    if level1_overlay and "sprites" in level1_overlay:
-        for sprite in level1_overlay["sprites"]:
-            motion = sprite.get("motion", "none")
-            if motion and motion.lower() not in ("none", "static"):
-                has_moving_sprites = True
-                break
-
-    has_no_motion = (ken_burns == "none") or (not ken_burns)
-    if has_moving_sprites:
-        has_no_motion = False
-
-    has_no_captions = not srt_path or not os.path.exists(srt_path)
-    has_no_overlay = not text_overlay
-    has_no_transitions = (transition_in in ("none", "cut", "", None)) and (transition_out in ("none", "cut", "", None))
-
-    if has_no_motion and has_no_captions and has_no_overlay and has_no_transitions:
-        if on_progress:
-            on_progress(f"Segment {segment_id} — Fast-path static frame detected. Running direct FFmpeg compile...")
-        
-        # Fit image to width/height to make sure aspect ratio is respected
-        fit_img_path = os.path.join(cache_dir, f"segment_{segment_id}_fit.jpg")
-        fitted_img = _load_and_fit(visual_path, width, height)
-        fitted_img.save(fit_img_path, "JPEG", quality=98)
-
-        # Build FFmpeg command to compile static video
-        # We will attempt h264_nvenc (NVIDIA) first, then fall back to libx264
-        import subprocess
-        success = False
-        for codec in ["h264_nvenc", "libx264"]:
-            if on_progress:
-                on_progress(f"Segment {segment_id} — Compiling static frame via FFmpeg with codec: {codec}")
-            
-            cmd = [
-                "ffmpeg", "-y",
-                "-loop", "1",
-                "-i", fit_img_path,
-                "-i", audio_path,
-                "-c:v", codec,
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac",
-                "-shortest",
-                output_path
-            ]
-            if codec == "h264_nvenc":
-                cmd.insert(-1, "-b:v")
-                cmd.insert(-1, "4M")
-            
-            res = subprocess.run(cmd, capture_output=True, text=True)
-            if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                success = True
-                break
-            else:
-                if on_progress:
-                    on_progress(f"Segment {segment_id} — FFmpeg {codec} failed: {res.stderr.strip()[:100]}... falling back.")
-        
-        audio.close()
-        if success:
-            if os.path.exists(fit_img_path):
-                try:
-                    os.remove(fit_img_path)
-                except Exception:
-                    pass
-            return output_path
-        else:
-            if on_progress:
-                on_progress(f"Segment {segment_id} — FFmpeg fast-path failed. Falling back to MoviePy.")
-            audio = AudioFileClip(audio_path)
-
-    # Load base image (fitted to target canvas size)
-    base_img = _load_and_fit(visual_path, width, height)
-    # Enlarge slightly so Ken Burns crops don't go out of bounds
-    pad_w = int(width * 1.25)
-    pad_h = int(height * 1.25)
-    base_img = base_img.resize((pad_w, pad_h), Image.BILINEAR)
-
-    captions = parse_srt(srt_path) if srt_path and os.path.exists(srt_path) else []
-
-    # Dynamic font size based on width (e.g. 52px for 1920w, smaller for vertical/squares)
-    caption_font_size = max(24, int(width * 0.027))
-    overlay_font_size = max(28, int(width * 0.033))
-
-    cap_font = _get_font(caption_font_size)
-    ovl_font = _get_font(overlay_font_size)
-
-    # Load moving sprites once to avoid opening them frame-by-frame (which is slow)
-    loaded_sprites = []
-    if level1_overlay and "sprites" in level1_overlay:
-        project_dir = os.path.dirname(visual_path)
-        for sprite in level1_overlay["sprites"]:
-            motion = sprite.get("motion", "none")
-            if motion and motion.lower() not in ("none", "static"):
-                sprite_filename = sprite.get("image")
-                if sprite_filename:
-                    sprite_path = os.path.join(project_dir, sprite_filename)
-                    if not os.path.exists(sprite_path):
-                        sprite_path = os.path.join(os.path.dirname(project_dir), "assets", "sprites", sprite_filename)
-                    if os.path.exists(sprite_path):
-                        try:
-                            sprite_img = Image.open(sprite_path).convert("RGBA")
-                            scale = sprite.get("scale", 1.0)
-                            if scale != 1.0:
-                                sw = int(sprite_img.width * scale)
-                                sh = int(sprite_img.height * scale)
-                                sprite_img = sprite_img.resize((sw, sh), Image.Resampling.LANCZOS)
-                            loaded_sprites.append({
-                                "image": sprite_img,
-                                "target_x": sprite.get("x", 0),
-                                "target_y": sprite.get("y", 0),
-                                "motion": motion.lower()
-                            })
-                        except Exception as e:
-                            print(f"Error loading moving sprite: {e}")
-
-    def make_frame(t):
-        frame = _ken_burns_crop(base_img, t, duration, ken_burns, width, height)
-
-        # Draw captions, overlays, and moving sprites onto a PIL Image
-        frame_rgba = frame.convert("RGBA")
-        overlay_layer = Image.new("RGBA", frame_rgba.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay_layer)
-
-        # 0. Draw moving sprites
-        for s in loaded_sprites:
-            m_type = s["motion"]
-            tx = s["target_x"]
-            ty = s["target_y"]
-            s_img = s["image"]
-            
-            # Resolve coordinates (if percentage float, scale to target canvas)
-            if isinstance(tx, float) and tx <= 1.0:
-                tx = int(tx * width)
-            if isinstance(ty, float) and ty <= 1.0:
-                ty = int(ty * height)
-                
-            cur_x = tx
-            cur_y = ty
-            
-            # Calculate dynamic coordinates based on motion behaviors
-            if m_type == "slide_in_left":
-                start_x = - (s_img.width // 2)
-                duration_sec = min(1.0, duration)
-                if t < duration_sec:
-                    cur_x = int(start_x + (tx - start_x) * (t / duration_sec))
-                else:
-                    cur_x = tx
-            elif m_type == "slide_in_right":
-                start_x = width + (s_img.width // 2)
-                duration_sec = min(1.0, duration)
-                if t < duration_sec:
-                    cur_x = int(start_x + (tx - start_x) * (t / duration_sec))
-                else:
-                    cur_x = tx
-            elif m_type == "bounce":
-                bounce_height = 40
-                hop = abs(math.sin(t * math.pi * 2.5)) * bounce_height
-                cur_y = int(ty - hop)
-            elif m_type == "slide_in_left_bounce":
-                start_x = - (s_img.width // 2)
-                duration_sec = min(1.0, duration)
-                if t < duration_sec:
-                    cur_x = int(start_x + (tx - start_x) * (t / duration_sec))
-                else:
-                    cur_x = tx
-                bounce_height = 40
-                hop = abs(math.sin(t * math.pi * 2.5)) * bounce_height
-                cur_y = int(ty - hop)
-                
-            px = cur_x - s_img.width // 2
-            py = cur_y - s_img.height // 2
-            
-            overlay_layer.paste(s_img, (px, py), s_img)
-
-        # Active caption at time t
-        active_caption = ""
-        for start, end, text in captions:
-            if start <= t <= end:
-                active_caption = text
-                break
-        if active_caption:
-            _draw_caption(draw, active_caption, cap_font, width, height)
-
-        # Text overlay (timed)
-        if text_overlay:
-            _draw_text_overlay(draw, text_overlay, t, ovl_font, width, height)
-
-        # Composite caption layer onto frame
-        frame_rgba = Image.alpha_composite(frame_rgba, overlay_layer)
-        frame_rgb = frame_rgba.convert("RGB")
-
-        # Apply fade transition brightness
-        factor = _fade_factor(t, duration, transition_in, transition_out)
-        if factor < 1.0:
-            arr = np.array(frame_rgb, dtype=np.float32)
-            arr = arr * factor
-            frame_rgb = Image.fromarray(arr.astype(np.uint8))
-
-        return np.array(frame_rgb)
-
-    video = VideoClip(make_frame, duration=duration)
-    video = video.set_audio(audio)
-
-    Path(cache_dir).mkdir(parents=True, exist_ok=True)
-
+    # Calculate total segment audio duration
+    ffmpeg_bin = _find_ffmpeg()
+    probe_cmd = [
+        ffmpeg_bin, "-i", final_audio_path,
+        "-show_entries", "format=duration",
+        "-v", "quiet", "-of", "csv=p=0"
+    ]
+    total_audio_duration = 5.0
     try:
-        if on_progress:
-            on_progress(f"Segment {segment_id} — encoding with h264_nvenc GPU acceleration")
-        video.write_videofile(
-            output_path,
-            fps=FPS,
-            codec="h264_nvenc",
-            audio_codec="aac",
-            ffmpeg_params=["-b:v", "4M"],
-            logger=None,
-            temp_audiofile=os.path.join(cache_dir, f"segment_{segment_id}_temp_audio.m4a"),
-        )
-    except Exception as e:
-        if on_progress:
-            on_progress(f"Segment {segment_id} — GPU encoding failed: {e}. Retrying with CPU libx264...")
-        video.write_videofile(
-            output_path,
-            fps=FPS,
-            codec="libx264",
-            audio_codec="aac",
-            preset="ultrafast",
-            ffmpeg_params=["-crf", "23", "-threads", "8"],
-            logger=None,
-            temp_audiofile=os.path.join(cache_dir, f"segment_{segment_id}_temp_audio.m4a"),
-        )
+        dur_res = subprocess.run(probe_cmd, capture_output=True, text=True)
+        if dur_res.returncode == 0 and dur_res.stdout.strip():
+            total_audio_duration = float(dur_res.stdout.strip())
+    except Exception:
+        pass
 
-    audio.close()
-    video.close()
+    # Extract shot list from segment_dict (Schema v2) or build single shot (Schema v1)
+    shots = []
+    if segment_dict and "shots" in segment_dict and segment_dict["shots"]:
+        shots = segment_dict["shots"]
+    else:
+        # Schema v1 single-shot fallback
+        shots = [{
+            "shot_id": 1,
+            "duration": None,
+            "pin": visual_path if not visual_path.endswith("_placeholder.jpg") else None,
+            "query": "segment visual",
+            "source": "pin" if visual_path and not visual_path.endswith("_placeholder.jpg") else "library",
+            "motion": {"kind": ken_burns},
+            "treatment": {"filter": "vignette"},
+            "text_overlay": text_overlay,
+            "transition_in": transition_in,
+            "transition_out": transition_out,
+            "level1_overlay": level1_overlay,
+        }]
 
-    return output_path
+    # Resolve shot durations
+    resolved_durations = resolve_shot_durations(shots, total_audio_duration)
+
+    # Render each shot clip
+    shot_clip_paths = []
+    for i, shot in enumerate(shots):
+        dur = resolved_durations[i]
+        cache_key = _get_shot_cache_key(shot, dur, width, height, FPS)
+        shot_mp4 = os.path.join(cache_dir, f"shot_{cache_key}.mp4")
+
+        # Determine visual path for shot
+        shot_visual = visual_path
+        if shot.get("pin"):
+            pin_file = shot["pin"]
+            project_dir = os.path.dirname(visual_path)
+            cand1 = os.path.join(project_dir, pin_file)
+            if os.path.exists(cand1):
+                shot_visual = cand1
+
+        # Burn subtitles only on first shot of segment if SRT present
+        shot_srt = srt_path if i == 0 else None
+
+        if not os.path.exists(shot_mp4) or os.path.getsize(shot_mp4) == 0:
+            if on_progress:
+                on_progress(f"Segment {segment_id} — rendering shot {i+1}/{len(shots)} ({dur:.2f}s)")
+            render_shot_clip(
+                shot=shot,
+                visual_path=shot_visual,
+                duration=dur,
+                width=width,
+                height=height,
+                output_mp4_path=shot_mp4,
+                srt_path=shot_srt,
+                fps=FPS,
+                on_progress=on_progress,
+            )
+
+        shot_clip_paths.append(shot_mp4)
+
+    # If single shot segment, combine visual + audio directly
+    if len(shot_clip_paths) == 1:
+        combine_cmd = [
+            ffmpeg_bin, "-y",
+            "-i", shot_clip_paths[0],
+            "-i", final_audio_path,
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-shortest",
+            output_path
+        ]
+        res = subprocess.run(combine_cmd, capture_output=True, text=True)
+        if res.returncode == 0 and os.path.exists(output_path):
+            return output_path
+
+    # Multi-shot segment: concat visual shots then combine audio
+    concat_txt_path = os.path.join(cache_dir, f"segment_{segment_id}_shots.txt")
+    with open(concat_txt_path, "w", encoding="utf-8") as f:
+        for p in shot_clip_paths:
+            escaped_p = p.replace("\\", "/")
+            f.write(f"file '{escaped_p}'\n")
+
+    combined_visual_mp4 = os.path.join(cache_dir, f"segment_{segment_id}_visual_concat.mp4")
+    concat_cmd = [
+        ffmpeg_bin, "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", concat_txt_path,
+        "-c", "copy",
+        combined_visual_mp4
+    ]
+    res_concat = subprocess.run(concat_cmd, capture_output=True, text=True)
+
+    # Add audio
+    combine_cmd = [
+        ffmpeg_bin, "-y",
+        "-i", combined_visual_mp4 if os.path.exists(combined_visual_mp4) else shot_clip_paths[0],
+        "-i", final_audio_path,
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-shortest",
+        output_path
+    ]
+    res_comb = subprocess.run(combine_cmd, capture_output=True, text=True)
+    if res_comb.returncode == 0 and os.path.exists(output_path):
+        return output_path
+
+    raise RuntimeError(f"Segment composition failed for segment {segment_id}.")
