@@ -57,3 +57,57 @@ def test_compose_segment_duration_match():
 
     finally:
         shutil.rmtree(temp_cache, ignore_errors=True)
+
+
+def test_composer_corner_brightness_vignette_check():
+    """
+    Regression Test: Ensure corners are not crushed by double vignette application.
+    Samples corner pixel brightness from rendered video frame and fails if corners
+    are more than 40% darker than frame mean brightness.
+    """
+    import numpy as np
+    from PIL import Image
+
+    audio_path = os.path.abspath("cache/2c39a59e/segment_1_audio.mp3")
+    visual_path = os.path.abspath("cache/2c39a59e/segment_1_visual.jpg")
+    srt_path = os.path.abspath("cache/2c39a59e/segment_1_captions.srt")
+
+    ffmpeg = _find_ffmpeg()
+    temp_cache = tempfile.mkdtemp()
+    try:
+        output_mp4 = compose_segment(
+            segment_id=1,
+            visual_path=visual_path,
+            audio_path=audio_path,
+            srt_path=srt_path,
+            ken_burns="zoom_in",
+            text_overlay=None,
+            transition_in="cut",
+            transition_out="cut",
+            cache_dir=temp_cache,
+            width=1280,
+            height=720,
+        )
+
+        # Extract frame at t=7.0s
+        frame_png = os.path.join(temp_cache, "frame_7s.png")
+        cmd = [ffmpeg, "-ss", "7.0", "-i", output_mp4, "-vframes", "1", "-y", frame_png]
+        subprocess.run(cmd, capture_output=True, check=True)
+
+        img = Image.open(frame_png).convert("L")
+        arr = np.array(img, dtype=np.float32)
+        h, w = arr.shape
+        frame_mean = float(np.mean(arr))
+
+        cx, cy = int(w * 0.05), int(h * 0.05)
+        tl = np.mean(arr[0:cy, 0:cx])
+        tr = np.mean(arr[0:cy, w-cx:w])
+        bl = np.mean(arr[h-cy:h, 0:cx])
+        br = np.mean(arr[h-cy:h, w-cx:w])
+        mean_corners = float((tl + tr + bl + br) / 4.0)
+
+        darkening_ratio = (frame_mean - mean_corners) / frame_mean if frame_mean > 0 else 0
+        assert darkening_ratio <= 0.40, f"Runaway vignette detected: corners are {darkening_ratio*100:.1f}% darker than frame mean (limit 40%)"
+
+    finally:
+        shutil.rmtree(temp_cache, ignore_errors=True)

@@ -252,6 +252,53 @@ def _create_static_overlay_png(level1_overlay: dict, width: int, height: int, ou
     return True
 
 
+def _convert_srt_to_ass(srt_path: str, width: int, height: int) -> str:
+    """
+    Convert SRT file to an ASS subtitle file with exact PlayResX/Y header, font size,
+    and baseline position matching the original renderer.
+    """
+    captions = parse_srt(srt_path)
+    font_size = max(24, int(width * 0.027))
+    is_vertical = (height / width) > 1.2
+    margin_v = int(height * 0.28) if is_vertical else int(height * 0.22)
+    
+    ass_path = os.path.splitext(srt_path)[0] + ".ass"
+    
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        f"PlayResX: {width}",
+        f"PlayResY: {height}",
+        "WrapStyle: 0",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        f"Style: Default,Arial,{font_size},&H00FFFFFF,&H00000000,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2,0,2,60,60,{margin_v},1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    
+    def fmt_time(seconds: float) -> str:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        s = int(seconds % 60)
+        cs = int(round((seconds - int(seconds)) * 100))
+        return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+    for start_s, end_s, text in captions:
+        t_start = fmt_time(start_s)
+        t_end = fmt_time(end_s)
+        clean_text = text.replace("\n", "\\N")
+        lines.append(f"Dialogue: 0,{t_start},{t_end},Default,,0,0,0,,{clean_text}")
+
+    with open(ass_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    return ass_path
+
+
 def render_shot_clip(
     shot: dict,
     visual_path: str,
@@ -276,8 +323,6 @@ def render_shot_clip(
 
     motion = shot.get("motion", {})
     motion_kind = motion.get("kind", "zoom_in") if isinstance(motion, dict) else (motion or "zoom_in")
-    treatment = shot.get("treatment", {})
-    treatment_filter = treatment.get("filter", "vignette") if isinstance(treatment, dict) else (treatment or "none")
     text_overlay = shot.get("text_overlay")
     transition_in = shot.get("transition_in", "cut")
     transition_out = shot.get("transition_out", "cut")
@@ -299,10 +344,6 @@ def render_shot_clip(
         filters.append(f"zoompan=z='1.1':x='(iw-iw/zoom)*(1-on/{num_frames})':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
     else:
         filters.append(f"zoompan=z='1.0':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
-
-    # Treatment filter
-    if treatment_filter == "vignette":
-        filters.append("vignette=PI/4")
 
     # Text overlay
     if text_overlay and text_overlay.get("text"):
@@ -330,15 +371,11 @@ def render_shot_clip(
         )
         filters.append(drawtext_str)
 
-    # Subtitles / Captions
+    # Subtitles / Captions via ASS file
     if srt_path and os.path.exists(srt_path):
-        clean_srt = srt_path.replace("\\", "/").replace(":", "\\:")
-        caption_font_size = max(20, int(width * 0.027))
-        sub_str = (
-            f"subtitles=filename='{clean_srt}':force_style='Fontname=Arial,Fontsize={caption_font_size},"
-            f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=45'"
-        )
-        filters.append(sub_str)
+        ass_path = _convert_srt_to_ass(srt_path, width, height)
+        clean_ass = ass_path.replace("\\", "/").replace(":", "\\:")
+        filters.append(f"subtitles=filename='{clean_ass}'")
 
     # Fade transitions
     if transition_in in ("fade", "crossfade"):
