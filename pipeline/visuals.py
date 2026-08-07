@@ -20,7 +20,10 @@ import shutil
 import unicodedata
 from pathlib import Path
 
-from pipeline.magick_processor import process_vignette, process_diptych, process_collage, process_vox_collage
+from pipeline.magick_processor import (
+    process_vignette, process_diptych, process_collage, process_vox_collage,
+    process_documentary, process_illustration, process_silhouette
+)
 
 PIXABAY_SEARCH_URL = "https://pixabay.com/api/"
 POLLINATIONS_URL   = "https://image.pollinations.ai/prompt/{prompt}?width={width}&height={height}&nologo=true&seed={seed}&model=flux"
@@ -726,20 +729,32 @@ def fetch_visual(
                 _apply_level1_overlay(manual_path, output_path, level1_overlay or {}, width, height, crop)
             elif magick_filter in ["none", None, "null"]:
                 if on_progress:
-                    on_progress(f"Segment {segment_id} — Skipping ImageMagick filter, copying file")
+                    on_progress(f"Segment {segment_id} — Skipping filter, copying file")
                 shutil.copy(manual_path, output_path)
             elif magick_filter in ["vox_collage", "vox_paper_collage", "vox"] or (visual_style and "vox" in visual_style.lower()):
                 if on_progress:
-                    on_progress(f"Segment {segment_id} — Applying ImageMagick Vox Paper-Collage filter")
+                    on_progress(f"Segment {segment_id} — Applying Vox Paper-Collage filter")
                 try:
                     process_vox_collage(manual_path, output_path, width, height)
                 except Exception as e:
                     if on_progress:
                         on_progress(f"Segment {segment_id} — Vox filter failed ({e}), falling back to copy")
                     shutil.copy(manual_path, output_path)
+            elif magick_filter == "documentary":
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying Documentary filter")
+                process_documentary(manual_path, output_path, width, height)
+            elif magick_filter == "illustration":
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying Illustration filter")
+                process_illustration(manual_path, output_path, width, height)
+            elif magick_filter == "silhouette":
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying Silhouette filter")
+                process_silhouette(manual_path, output_path, width, height)
             else:
                 if on_progress:
-                    on_progress(f"Segment {segment_id} — Applying ImageMagick filter: {magick_filter}")
+                    on_progress(f"Segment {segment_id} — Applying filter: {magick_filter}")
                 try:
                     process_vignette(manual_path, output_path, width, height)
                 except Exception:

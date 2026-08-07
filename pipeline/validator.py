@@ -25,7 +25,7 @@ ALLOWED_TEXT_POSITIONS = {
 ALLOWED_SHOT_SOURCES = {"library", "generate", "pin"}
 ALLOWED_MOTION_KINDS = {"ken_burns", "static", "generative"}
 ALLOWED_MOTION_EFFECTS = {"zoom_in", "zoom_out", "pan_left", "pan_right"}
-ALLOWED_TREATMENT_FILTERS = {"none", "vignette", "vox_collage", "diptych", "collage"}
+ALLOWED_TREATMENT_FILTERS = {"none", "vignette", "vox_collage", "diptych", "collage", "documentary", "illustration", "silhouette"}
 ALLOWED_VISUAL_TYPES = {"stock_photo", "stock_video", "map", "text_card", "ai_image"}
 
 
