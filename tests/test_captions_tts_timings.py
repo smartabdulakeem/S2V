@@ -14,6 +14,10 @@ from pipeline.voiceover import _generate_with_google_tts
 from pipeline.composer import _find_ffprobe
 
 
+import socket
+import urllib.error
+
+
 def _get_test_google_api_key() -> str:
     """Load Google TTS API key from config/settings.json if available."""
     settings_path = os.path.abspath("config/settings.json")
@@ -27,12 +31,30 @@ def _get_test_google_api_key() -> str:
     return ""
 
 
+def _is_network_error(exc: Exception) -> bool:
+    """Return True if exception is caused by network/DNS/connectivity failure."""
+    if isinstance(exc, (urllib.error.URLError, socket.gaierror, TimeoutError, ConnectionError)):
+        return True
+    err_str = str(exc).lower()
+    network_keywords = [
+        "getaddrinfo failed",
+        "name or service not known",
+        "connection refused",
+        "timed out",
+        "network is unreachable",
+        "socket.gaierror",
+        "errno 11002"
+    ]
+    return any(kw in err_str for kw in network_keywords)
+
+
 def test_google_tts_v1beta1_timepoints_and_zero_whisper_calls():
     """
     Live API Integration Test:
     Synthesizes a real segment using Google TTS v1beta1 (voice: google:en-US-Neural2-F),
     verifies non-empty timepoints are returned, prints them, and asserts that generating captions
     requires ZERO Whisper model loads.
+    Skips cleanly if network/DNS is unreachable.
     """
     api_key = _get_test_google_api_key()
     if not api_key:
@@ -46,16 +68,21 @@ def test_google_tts_v1beta1_timepoints_and_zero_whisper_calls():
         srt_path = os.path.join(tmp_dir, "segment_777_captions.srt")
 
         # 1. Synthesize audio + generate SRT directly from Google TTS timepoints via v1beta1
-        _generate_with_google_tts(
-            narration=narration,
-            voice="google:en-US-Neural2-F",
-            voice_rate="+0%",
-            voice_pitch="+0Hz",
-            google_api_key=api_key,
-            output_path=out_mp3,
-            segment_id=777,
-            cache_dir=tmp_dir,
-        )
+        try:
+            _generate_with_google_tts(
+                narration=narration,
+                voice="google:en-US-Neural2-F",
+                voice_rate="+0%",
+                voice_pitch="+0Hz",
+                google_api_key=api_key,
+                output_path=out_mp3,
+                segment_id=777,
+                cache_dir=tmp_dir,
+            )
+        except Exception as e:
+            if _is_network_error(e):
+                pytest.skip(f"Google TTS API unreachable (network/DNS failure): {e}")
+            raise
 
         # 2. Verify Audio Output is sane
         assert os.path.exists(out_mp3) and os.path.getsize(out_mp3) > 1000, "Generated MP3 audio is invalid"
@@ -103,16 +130,21 @@ def test_real_measured_caption_timing_drift_vs_whisper():
         tts_srt_path = os.path.join(tmp_dir, "segment_888_captions.srt")
 
         # 1. Synthesize audio with TTS timepoints SRT
-        _generate_with_google_tts(
-            narration=narration,
-            voice="google:en-US-Neural2-F",
-            voice_rate="+0%",
-            voice_pitch="+0Hz",
-            google_api_key=api_key,
-            output_path=out_mp3,
-            segment_id=888,
-            cache_dir=tmp_dir,
-        )
+        try:
+            _generate_with_google_tts(
+                narration=narration,
+                voice="google:en-US-Neural2-F",
+                voice_rate="+0%",
+                voice_pitch="+0Hz",
+                google_api_key=api_key,
+                output_path=out_mp3,
+                segment_id=888,
+                cache_dir=tmp_dir,
+            )
+        except Exception as e:
+            if _is_network_error(e):
+                pytest.skip(f"Google TTS API unreachable (network/DNS failure): {e}")
+            raise
 
         assert os.path.exists(tts_srt_path), "TTS SRT file missing"
         tts_entries = parse_srt(tts_srt_path)

@@ -403,7 +403,13 @@ def _generate_with_edge_tts(narration: str, voice: str, voice_rate: str, voice_p
 
 
 
-# ── Google Cloud TTS ──────────────────────────────────────────────────────────
+TIMEPOINT_CAPABLE_VOICE_TYPES = ("neural2", "wavenet", "standard", "news", "polyglot")
+
+def is_timepoint_capable_voice(voice_name: str) -> bool:
+    """Return True if Google TTS voice supports SSML mark timepoints (Neural2/Wavenet/Standard)."""
+    v_lower = voice_name.lower()
+    return any(v_type in v_lower for v_type in TIMEPOINT_CAPABLE_VOICE_TYPES) and not ("studio" in v_lower or "journey" in v_lower)
+
 
 def _generate_with_google_tts(
     narration: str,
@@ -456,10 +462,38 @@ def _generate_with_google_tts(
             except ValueError:
                 pass
 
-    # Clean narration and build SSML with word mark tags for timepoint generation
     clean_text = re.sub(r'<[^>]+>', '', narration).strip()
     words = clean_text.split()
 
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    # Check if voice supports SSML mark timepoints
+    supports_timepoints = is_timepoint_capable_voice(voice_name)
+    if not supports_timepoints:
+        if on_progress:
+            on_progress(f"Segment {segment_id} — Google voice '{voice_name}' does not support SSML mark timepoints. Synthesizing plain audio; captions will fall back to Whisper.")
+
+        payload_fallback = {
+            "input": {"text": clean_text},
+            "voice": {"languageCode": language_code, "name": voice_name},
+            "audioConfig": {
+                "audioEncoding": "MP3",
+                "speakingRate": speaking_rate,
+                "pitch": pitch_semitones,
+            },
+        }
+        body_fb = json.dumps(payload_fallback).encode("utf-8")
+        req_fb = urllib.request.Request(url, data=body_fb, headers=headers, method="POST")
+        with urllib.request.urlopen(req_fb, timeout=60) as resp_fb:
+            response_data_fb = json.loads(resp_fb.read().decode("utf-8"))
+        audio_bytes = base64.b64decode(response_data_fb["audioContent"])
+        with open(output_path, "wb") as f:
+            f.write(audio_bytes)
+        return
+
+    # Voice supports SSML mark timepoints — build SSML payload
     if not narration.strip().startswith("<speak>"):
         ssml_parts = ["<speak>"]
         for idx, w in enumerate(words):
