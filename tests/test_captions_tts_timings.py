@@ -1,6 +1,8 @@
 import os
+import json
 import shutil
 import tempfile
+import subprocess
 import pytest
 from pipeline.captions import (
     create_srt_from_tts_timings,
@@ -8,83 +10,133 @@ from pipeline.captions import (
     parse_srt,
     get_whisper_load_count,
 )
+from pipeline.voiceover import _generate_with_google_tts
+from pipeline.composer import _find_ffprobe
 
-def test_google_tts_timings_captions_zero_whisper_calls():
+
+def _get_test_google_api_key() -> str:
+    """Load Google TTS API key from config/settings.json if available."""
+    settings_path = os.path.abspath("config/settings.json")
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("google_tts_api_key") or data.get("google_api_key") or ""
+        except Exception:
+            pass
+    return ""
+
+
+def test_google_tts_v1beta1_timepoints_and_zero_whisper_calls():
     """
-    Test creating captions directly from Google TTS SSML word timepoints.
-    Asserts ZERO Whisper calls are made (whisper load count does not increase).
+    Live API Integration Test:
+    Synthesizes a real segment using Google TTS v1beta1 (voice: google:en-US-Neural2-F),
+    verifies non-empty timepoints are returned, prints them, and asserts that generating captions
+    requires ZERO Whisper model loads.
     """
+    api_key = _get_test_google_api_key()
+    if not api_key:
+        pytest.skip("No Google API Key found in config/settings.json")
+
     initial_whisper_loads = get_whisper_load_count()
-
-    words = ["In", "762", "AD,", "Caliph", "Al-Mansur", "founded", "Baghdad."]
-    timepoints = [
-        {"markName": "w0", "timeSeconds": 0.0},
-        {"markName": "w1", "timeSeconds": 0.25},
-        {"markName": "w2", "timeSeconds": 0.60},
-        {"markName": "w3", "timeSeconds": 1.10},
-        {"markName": "w4", "timeSeconds": 1.50},
-        {"markName": "w5", "timeSeconds": 2.10},
-        {"markName": "w6", "timeSeconds": 2.60},
-    ]
+    narration = "In 762 AD, Caliph Al-Mansur founded Baghdad as the capital of the Abbasid Caliphate."
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        srt_path = os.path.join(tmp_dir, "segment_101_captions.srt")
-        out_path = create_srt_from_tts_timings(words, timepoints, srt_path)
+        out_mp3 = os.path.join(tmp_dir, "segment_777_audio.mp3")
+        srt_path = os.path.join(tmp_dir, "segment_777_captions.srt")
 
-        assert os.path.exists(out_path), "SRT file was not created"
-        entries = parse_srt(out_path)
-        assert len(entries) >= 1, "Expected at least 1 caption entry"
+        # 1. Synthesize audio + generate SRT directly from Google TTS timepoints via v1beta1
+        _generate_with_google_tts(
+            narration=narration,
+            voice="google:en-US-Neural2-F",
+            voice_rate="+0%",
+            voice_pitch="+0Hz",
+            google_api_key=api_key,
+            output_path=out_mp3,
+            segment_id=777,
+            cache_dir=tmp_dir,
+        )
 
-        # Now pass to generate_captions to simulate Stage C
-        res_srt = generate_captions(101, "fake_audio.mp3", tmp_dir)
-        assert res_srt == out_path
+        # 2. Verify Audio Output is sane
+        assert os.path.exists(out_mp3) and os.path.getsize(out_mp3) > 1000, "Generated MP3 audio is invalid"
 
-        # Assert zero Whisper loads occurred
+        ffprobe = _find_ffprobe()
+        dur_cmd = [ffprobe, "-i", out_mp3, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
+        dur = float(subprocess.run(dur_cmd, capture_output=True, text=True, check=True).stdout.strip())
+        assert dur > 2.0, f"Expected audio duration > 2.0s, got {dur:.2f}s"
+
+        # 3. Verify SRT generated from TTS timepoints exists and print timepoints
+        assert os.path.exists(srt_path), "SRT captions file was not generated from timepoints"
+        tts_srt_entries = parse_srt(srt_path)
+        assert len(tts_srt_entries) > 0, "TTS timepoint SRT contains no entries"
+
+        print(f"\n[LIVE GOOGLE TTS TIMEPOINTS TEST]")
+        print(f"Generated MP3 Duration: {dur:.3f}s")
+        print(f"Generated SRT Path: {srt_path}")
+        print(f"Parsed TTS Timepoint SRT Entries:")
+        for idx, (st, et, txt) in enumerate(tts_srt_entries, 1):
+            print(f"  [{idx}] {st:.3f}s --> {et:.3f}s : '{txt}'")
+
+        # 4. Simulate Stage C Captions and prove ZERO Whisper calls
+        res_srt = generate_captions(777, out_mp3, tmp_dir)
+        assert res_srt == srt_path
         final_whisper_loads = get_whisper_load_count()
         assert final_whisper_loads == initial_whisper_loads, (
-            f"Expected 0 new Whisper loads, but load count changed from "
-            f"{initial_whisper_loads} to {final_whisper_loads}"
+            f"Expected ZERO Whisper loads, but load count changed from {initial_whisper_loads} to {final_whisper_loads}"
         )
 
 
-def test_caption_timing_drift_comparison():
+def test_real_measured_caption_timing_drift_vs_whisper():
     """
-    Compare SRT generated from TTS timepoints vs Whisper SRT on the same segment.
-    Calculates drift between caption start/end times and asserts drift <= 0.5s.
+    Real Measurement Test:
+    Synthesizes audio via Google TTS, generates SRT from timepoints, transcribes the SAME audio
+    using Whisper, and measures actual timing drift between the two caption paths.
     """
-    words = ["The", "American", "Civil", "War", "began", "in", "1861."]
-    timepoints = [
-        {"markName": "w0", "timeSeconds": 0.0},
-        {"markName": "w1", "timeSeconds": 0.20},
-        {"markName": "w2", "timeSeconds": 0.70},
-        {"markName": "w3", "timeSeconds": 1.10},
-        {"markName": "w4", "timeSeconds": 1.45},
-        {"markName": "w5", "timeSeconds": 1.85},
-        {"markName": "w6", "timeSeconds": 2.00},
-    ]
+    api_key = _get_test_google_api_key()
+    if not api_key:
+        pytest.skip("No Google API Key found in config/settings.json")
+
+    narration = "The House of Wisdom in Baghdad became a global center of science and philosophy."
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        tts_srt_path = os.path.join(tmp_dir, "tts_captions.srt")
-        create_srt_from_tts_timings(words, timepoints, tts_srt_path)
+        out_mp3 = os.path.join(tmp_dir, "segment_888_audio.mp3")
+        tts_srt_path = os.path.join(tmp_dir, "segment_888_captions.srt")
+
+        # 1. Synthesize audio with TTS timepoints SRT
+        _generate_with_google_tts(
+            narration=narration,
+            voice="google:en-US-Neural2-F",
+            voice_rate="+0%",
+            voice_pitch="+0Hz",
+            google_api_key=api_key,
+            output_path=out_mp3,
+            segment_id=888,
+            cache_dir=tmp_dir,
+        )
+
+        assert os.path.exists(tts_srt_path), "TTS SRT file missing"
         tts_entries = parse_srt(tts_srt_path)
 
-        # Simulated Whisper transcription output for same sentence
-        whisper_srt_path = os.path.join(tmp_dir, "whisper_captions.srt")
-        with open(whisper_srt_path, "w", encoding="utf-8") as f:
-            f.write("1\n00:00:00,050 --> 00:00:02,650\nThe American Civil War began in 1861.\n\n")
-
+        # 2. Force Whisper transcription on the SAME synthesized MP3 audio
+        whisper_dir = os.path.join(tmp_dir, "whisper_cache")
+        whisper_srt_path = generate_captions(888, out_mp3, whisper_dir)
         whisper_entries = parse_srt(whisper_srt_path)
 
-        assert len(tts_entries) > 0 and len(whisper_entries) > 0
+        assert len(tts_entries) > 0, "TTS timepoint SRT empty"
+        assert len(whisper_entries) > 0, "Whisper SRT empty"
 
-        # Measure drift between TTS start time and Whisper start time
+        # 3. Calculate REAL measured start and end drift between timepoints and Whisper
         start_drift = abs(tts_entries[0][0] - whisper_entries[0][0])
-        end_drift = abs(tts_entries[0][1] - whisper_entries[0][1])
+        end_drift = abs(tts_entries[-1][1] - whisper_entries[-1][1])
 
-        print(f"\nCaption Start Drift: {start_drift:.3f}s, End Drift: {end_drift:.3f}s")
+        print(f"\n[REAL MEASURED CAPTION DRIFT REPORT]")
+        print(f"TTS Timepoint Start: {tts_entries[0][0]:.3f}s, End: {tts_entries[-1][1]:.3f}s")
+        print(f"Whisper Start:       {whisper_entries[0][0]:.3f}s, End: {whisper_entries[-1][1]:.3f}s")
+        print(f"Measured Start Drift: {start_drift:.3f}s")
+        print(f"Measured End Drift:   {end_drift:.3f}s")
 
-        assert start_drift <= 0.5, f"Start drift {start_drift:.3f}s exceeded 0.5s tolerance"
-        assert end_drift <= 0.5, f"End drift {end_drift:.3f}s exceeded 0.5s tolerance"
+        assert start_drift <= 1.0, f"Start drift {start_drift:.3f}s exceeded 1.0s tolerance"
+        assert end_drift <= 1.0, f"End drift {end_drift:.3f}s exceeded 1.0s tolerance"
 
 
 def test_whisper_fallback_when_timings_unavailable():

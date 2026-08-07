@@ -77,7 +77,8 @@ def create_srt_from_tts_timings(
     words: list[str],
     timepoints: list[dict],
     srt_path: str,
-    max_words_per_line: int = 7
+    max_words_per_line: int = 7,
+    audio_duration: float = None,
 ) -> str:
     """
     Generate an SRT caption file directly from TTS timepoint marks.
@@ -119,8 +120,10 @@ def create_srt_from_tts_timings(
 
         if i + 1 < len(word_times):
             t_next = word_times[i + 1][1]
+        elif audio_duration:
+            t_next = min(audio_duration, max(t_start + 1.2, audio_duration - 0.1))
         else:
-            t_next = t_start + 0.6
+            t_next = t_start + 1.2
 
         if len(curr_words) >= max_words_per_line or w_text.endswith((".", "?", "!", ";", ":")):
             lines.append((curr_start, t_next, " ".join(curr_words)))
@@ -128,7 +131,8 @@ def create_srt_from_tts_timings(
             curr_start = None
 
     if curr_words and curr_start is not None:
-        lines.append((curr_start, curr_start + 0.6, " ".join(curr_words)))
+        last_end = min(audio_duration, max(curr_start + 1.2, audio_duration - 0.1)) if audio_duration else curr_start + 1.2
+        lines.append((curr_start, last_end, " ".join(curr_words)))
 
     Path(os.path.dirname(srt_path)).mkdir(parents=True, exist_ok=True)
     with open(srt_path, "w", encoding="utf-8") as f:

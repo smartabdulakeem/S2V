@@ -420,7 +420,7 @@ def _generate_with_google_tts(
     if not google_api_key:
         raise ValueError("Google API key is required for Google Premium Voices.")
 
-    url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={google_api_key}"
+    url = f"https://texttospeech.googleapis.com/v1beta1/text:synthesize?key={google_api_key}"
 
     # Parse voice name and language code
     voice_name = voice
@@ -483,7 +483,7 @@ def _generate_with_google_tts(
             "speakingRate": speaking_rate,
             "pitch": pitch_semitones
         },
-        "enableTimepointing": ["SSML_MARK"]
+        "enableTimePointing": ["SSML_MARK"]
     }
     body = json.dumps(payload).encode("utf-8")
 
@@ -512,6 +512,33 @@ def _generate_with_google_tts(
                 if on_progress:
                     on_progress(f"Segment {segment_id} — Captions generated directly from Google TTS timepoints")
             return
+        except urllib.error.HTTPError as e:
+            if e.code == 400:
+                # Voice does not support SSML mark timepoints (e.g. Studio/Journey voices) — fallback to plain text synthesis
+                payload_fallback = {
+                    "input": {"text": clean_text},
+                    "voice": {"languageCode": language_code, "name": voice_name},
+                    "audioConfig": {
+                        "audioEncoding": "MP3",
+                        "speakingRate": speaking_rate,
+                        "pitch": pitch_semitones,
+                    },
+                }
+                body_fb = json.dumps(payload_fallback).encode("utf-8")
+                try:
+                    req_fb = urllib.request.Request(url, data=body_fb, headers=headers, method="POST")
+                    with urllib.request.urlopen(req_fb, timeout=60) as resp_fb:
+                        response_data_fb = json.loads(resp_fb.read().decode("utf-8"))
+                    audio_bytes = base64.b64decode(response_data_fb["audioContent"])
+                    with open(output_path, "wb") as f:
+                        f.write(audio_bytes)
+                    return
+                except Exception as fb_err:
+                    raise RuntimeError(f"Google TTS fallback failed: {fb_err}")
+            if attempt < 2:
+                time.sleep(2)
+            else:
+                raise RuntimeError(f"Google TTS failed after 3 attempts: {e}")
         except Exception as e:
             if attempt < 2:
                 time.sleep(2)
