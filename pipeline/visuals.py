@@ -19,6 +19,8 @@ import re
 import shutil
 from pathlib import Path
 
+from pipeline.magick_processor import process_vignette, process_diptych, process_collage, process_vox_collage
+
 PIXABAY_SEARCH_URL = "https://pixabay.com/api/"
 POLLINATIONS_URL   = "https://image.pollinations.ai/prompt/{prompt}?width={width}&height={height}&nologo=true&seed={seed}&model=flux"
 
@@ -27,6 +29,27 @@ ASPECT_RATIOS = {
     "9:16": (720, 1280),
     "1:1": (1080, 1080),
     "4:3": (1440, 1080)
+}
+
+STYLE_PRESETS = {
+    "vox_paper_collage": (
+        "modern editorial paper collage style, torn paper cut-outs, ripped magazine edges, "
+        "halftone dot texture, bold flat color blocking, newsprint background overlay, high contrast graphic poster illustration"
+    ),
+    "vox_collage": (
+        "modern editorial paper collage style, torn paper cut-outs, ripped magazine edges, "
+        "halftone dot texture, bold flat color blocking, newsprint background overlay, high contrast graphic poster illustration"
+    ),
+    "vox": (
+        "modern editorial paper collage style, torn paper cut-outs, ripped magazine edges, "
+        "halftone dot texture, bold flat color blocking, newsprint background overlay, high contrast graphic poster illustration"
+    ),
+    "vintage_documentary": (
+        "cinematic documentary photography, dramatic natural lighting, highly detailed, sharp focus, historical realism"
+    ),
+    "vector_editorial": (
+        "clean flat vector illustration, corporate editorial graphic style, vibrant colors, sharp geometric shapes"
+    )
 }
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -41,21 +64,46 @@ def _create_black_frame(output_path: str, width: int, height: int):
     img.save(output_path, "JPEG", quality=95)
 
 
-def _build_final_prompt(keyword: str, narration: str, video_title: str, visual_style: str, aspect_ratio: str) -> str:
-    """Builds a rich prompt string by combining keyword, narration context, style, and ratio details."""
+def _build_final_prompt(
+    keyword: str, 
+    narration: str, 
+    video_title: str, 
+    visual_style: str, 
+    aspect_ratio: str,
+    character_bible: dict = None
+) -> str:
+    """Builds a rich prompt string by combining keyword, character details from bible, narration context, style, and ratio."""
     context = narration.strip()
     if len(context) > 120:
         context = context[:120].rsplit(" ", 1)[0]
 
-    style = visual_style.strip() if visual_style.strip() else (
-        "cinematic documentary photography, dramatic natural lighting, "
-        "highly detailed, sharp focus, photorealistic, historical realism"
-    )
+    raw_style = visual_style.strip().lower() if visual_style else ""
+    if raw_style in STYLE_PRESETS:
+        style = STYLE_PRESETS[raw_style]
+    elif raw_style:
+        style = visual_style.strip()
+    else:
+        style = STYLE_PRESETS["vintage_documentary"]
 
     parts = []
     if video_title:
         parts.append(f"Scene for '{video_title}'")
+    
+    # Check for character bible matches in keyword and narration
+    character_matches = []
+    if character_bible:
+        for char_name, char_desc in character_bible.items():
+            pattern = r'\b' + re.escape(char_name) + r'\b'
+            if re.search(pattern, keyword, re.IGNORECASE) or re.search(pattern, narration, re.IGNORECASE):
+                if char_desc not in character_matches:
+                    character_matches.append(char_desc)
+
     parts.append(keyword)
+    
+    # Inject character descriptions if found
+    for match in character_matches:
+        parts.append(f"featuring: {match}")
+
     if context:
         parts.append(f"depicting: {context}")
     parts.append(style)
@@ -245,6 +293,219 @@ def _generate_placeholder_image(output_path: str, segment_id: int, keyword: str,
     img.save(output_path, "JPEG", quality=95)
 
 
+def _apply_level1_overlay(input_path: str, output_path: str, overlay: dict, width: int, height: int, crop: dict = None):
+    """
+    Apply Pillow drawing overlays (labels, highlights, arrows) and crops/sprites on top of the input image.
+    This enables reusing base assets (like maps or character portraits) and manipulating them programmatically.
+    """
+    import os
+    import math
+    from PIL import Image, ImageDraw
+    from pipeline.composer import _get_font
+    
+    # 0. Load raw source image
+    raw_img = Image.open(input_path)
+    img_w, img_h = raw_img.size
+    
+    # 0.1 Apply Crop if specified
+    if crop:
+        # Resolve coordinates (support both fractions 0.0-1.0 and absolute pixels)
+        cx = crop.get("x", 0)
+        cy = crop.get("y", 0)
+        cw = crop.get("w", img_w)
+        ch = crop.get("h", img_h)
+        
+        # If fraction/percentage is used, scale to actual pixel dimensions
+        if isinstance(cx, float) and cx <= 1.0:
+            cx = int(cx * img_w)
+        if isinstance(cy, float) and cy <= 1.0:
+            cy = int(cy * img_h)
+        if isinstance(cw, float) and cw <= 1.0:
+            cw = int(cw * img_w)
+        if isinstance(ch, float) and ch <= 1.0:
+            ch = int(ch * img_h)
+            
+        # Ensure values don't exceed boundaries
+        cx = max(0, min(cx, img_w - 1))
+        cy = max(0, min(cy, img_h - 1))
+        cw = max(1, min(cw, img_w - cx))
+        ch = max(1, min(ch, img_h - cy))
+        
+        raw_img = raw_img.crop((cx, cy, cx + cw, cy + ch))
+    
+    # 0.2 Fit cropped/raw image to target canvas size using "cover" cropping
+    img = raw_img.copy()
+    target_ratio = width / height
+    current_w, current_h = img.size
+    current_ratio = current_w / current_h
+    
+    if current_ratio > target_ratio:
+        # Image is too wide
+        new_w = int(target_ratio * current_h)
+        left = (current_w - new_w) // 2
+        img = img.crop((left, 0, left + new_w, current_h))
+    elif current_ratio < target_ratio:
+        # Image is too tall
+        new_h = int(current_w / target_ratio)
+        top = (current_h - new_h) // 2
+        img = img.crop((0, top, current_w, top + new_h))
+        
+    img = img.resize((width, height), Image.Resampling.LANCZOS)
+    draw = ImageDraw.Draw(img)
+    
+    # Helper for drawing text outlines for high readability
+    def draw_text_with_outline(text, x, y, font, fill_color, outline_color="black"):
+        outline_offsets = [(-1, -1), (1, -1), (-1, 1), (1, 1)]
+        for dx, dy in outline_offsets:
+            draw.text((x + dx, y + dy), text, font=font, fill=outline_color)
+        draw.text((x, y), text, font=font, fill=fill_color)
+
+    # 1. Draw Highlights (Circles)
+    for hl in overlay.get("highlights", []):
+        x = hl.get("x", 0)
+        y = hl.get("y", 0)
+        r = hl.get("radius", 15)
+        color = hl.get("color", "red")
+        fill_opt = hl.get("fill", False)
+        
+        color_map = {
+            "red": (255, 0, 0, 180),
+            "blue": (0, 0, 255, 180),
+            "green": (0, 255, 0, 180),
+            "yellow": (255, 255, 0, 180),
+            "white": (255, 255, 255, 180),
+            "black": (0, 0, 0, 180)
+        }
+        c = color_map.get(color.lower(), color)
+        
+        if fill_opt:
+            overlay_img = Image.new("RGBA", img.size, (0, 0, 0, 0))
+            overlay_draw = ImageDraw.Draw(overlay_img)
+            overlay_draw.ellipse([x - r, y - r, x + r, y + r], fill=c)
+            img = Image.alpha_composite(img.convert("RGBA"), overlay_img).convert("RGB")
+            draw = ImageDraw.Draw(img)
+        else:
+            draw.ellipse([x - r, y - r, x + r, y + r], outline=c, width=4)
+
+    # 2. Draw Arrows / Lines (Troop movements or focus paths)
+    for line in overlay.get("arrows", []):
+        x1 = line.get("x1", 0)
+        y1 = line.get("y1", 0)
+        x2 = line.get("x2", 0)
+        y2 = line.get("y2", 0)
+        color = line.get("color", "blue")
+        
+        color_map = {"red": (255, 0, 0), "blue": (0, 0, 255), "green": (0, 255, 0), "yellow": (255, 255, 0)}
+        c = color_map.get(color.lower(), color)
+        
+        draw.line([x1, y1, x2, y2], fill=c, width=5)
+        
+        # Draw arrow head
+        angle = math.atan2(y2 - y1, x2 - x1)
+        arrow_len = 15
+        arrow_angle = math.pi / 6
+        ax1 = x2 - arrow_len * math.cos(angle - arrow_angle)
+        ay1 = y2 - arrow_len * math.sin(angle - arrow_angle)
+        ax2 = x2 - arrow_len * math.cos(angle + arrow_angle)
+        ay2 = y2 - arrow_len * math.sin(angle + arrow_angle)
+        draw.polygon([x2, y2, ax1, ay1, ax2, ay2], fill=c)
+
+    # 3. Draw Sprites (Transparent character images pasted on base)
+    for sprite in overlay.get("sprites", []):
+        sprite_filename = sprite.get("image")
+        if not sprite_filename:
+            continue
+            
+        motion = sprite.get("motion", "none")
+        if motion and motion.lower() not in ("none", "static"):
+            continue
+            
+        # Sprites can be in project_dir or assets/sprites/ or cache/
+        project_dir = os.path.dirname(input_path)
+        sprite_path = os.path.join(project_dir, sprite_filename)
+        
+        if not os.path.exists(sprite_path):
+            sprite_path = os.path.join(os.path.dirname(project_dir), "assets", "sprites", sprite_filename)
+            
+        if os.path.exists(sprite_path):
+            try:
+                sprite_img = Image.open(sprite_path).convert("RGBA")
+                
+                # Dynamic scaling
+                scale = sprite.get("scale", 1.0)
+                if scale != 1.0:
+                    sw = int(sprite_img.width * scale)
+                    sh = int(sprite_img.height * scale)
+                    sprite_img = sprite_img.resize((sw, sh), Image.Resampling.LANCZOS)
+                    
+                # Calculate coordinates (placed relative to center of the sprite)
+                sx = sprite.get("x", 0)
+                sy = sprite.get("y", 0)
+                
+                # If percentages (floats between 0.0 and 1.0) are used, scale to target canvas
+                if isinstance(sx, float) and sx <= 1.0:
+                    sx = int(sx * width)
+                if isinstance(sy, float) and sy <= 1.0:
+                    sy = int(sy * height)
+                    
+                # Align sprite center to sx, sy
+                px = sx - sprite_img.width // 2
+                py = sy - sprite_img.height // 2
+                
+                # Paste with transparency alpha channel
+                img_rgba = img.convert("RGBA")
+                img_rgba.paste(sprite_img, (px, py), sprite_img)
+                img = img_rgba.convert("RGB")
+                draw = ImageDraw.Draw(img) # Reinitialize draw for subsequent overlays
+            except Exception as e:
+                print(f"Error drawing sprite {sprite_filename}: {e}")
+
+    # 4. Draw Labels (Character names, locations)
+    for lbl in overlay.get("labels", []):
+        text = lbl.get("text", "")
+        x = lbl.get("x", 0)
+        y = lbl.get("y", 0)
+        color = lbl.get("color", "white")
+        size = lbl.get("size", 24)
+        font = _get_font(size)
+        
+        color_map = {"white": (255, 255, 255), "yellow": (255, 230, 100), "red": (255, 100, 100), "blue": (100, 100, 255)}
+        c = color_map.get(color.lower(), color)
+        
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        tx = x - tw // 2
+        ty = y - (bbox[3] - bbox[1]) // 2
+        draw_text_with_outline(text, tx, ty, font, c)
+
+    img.convert("RGB").save(output_path, "JPEG", quality=95)
+
+
+def _convert_white_to_transparent(input_path: str, output_path: str):
+    """
+    Convert an image with a solid white background into a transparent PNG.
+    """
+    from PIL import Image
+    try:
+        img = Image.open(input_path).convert("RGBA")
+        datas = img.getdata()
+        
+        new_data = []
+        for item in datas:
+            # If color is close to pure white, convert alpha to 0
+            if item[0] > 230 and item[1] > 230 and item[2] > 230:
+                new_data.append((255, 255, 255, 0))
+            else:
+                new_data.append(item)
+                
+        img.putdata(new_data)
+        img.save(output_path, "PNG")
+        return True
+    except Exception as e:
+        print(f"Error keying background for {input_path}: {e}")
+        return False
+
+
 # ── Public Entry Point ─────────────────────────────────────────────────────────
 
 def fetch_visual(
@@ -259,6 +520,13 @@ def fetch_visual(
     visual_style: str = "",
     on_progress=None,
     visual_type: str = "ai_image",
+    magick_filter: str = "vignette",
+    use_base_image: str = None,
+    use_base_image_a: str = None,
+    use_base_image_b: str = None,
+    character_bible: dict = None,
+    level1_overlay: dict = None,
+    crop: dict = None,
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
@@ -275,28 +543,172 @@ def fetch_visual(
     project_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "projects", project_slug)
     os.makedirs(project_dir, exist_ok=True)
 
+    # Check and generate any missing sprites in the level1_overlay
+    if level1_overlay and "sprites" in level1_overlay:
+        for sprite in level1_overlay["sprites"]:
+            sprite_filename = sprite.get("image")
+            if not sprite_filename:
+                continue
+            
+            sprite_path = os.path.join(project_dir, sprite_filename)
+            if not os.path.exists(sprite_path):
+                # Search for it in character bible
+                desc = sprite_filename.rsplit(".", 1)[0]
+                bible_match = None
+                if character_bible:
+                    for k, v in character_bible.items():
+                        if k.lower() in desc.lower() or desc.lower() in k.lower():
+                            bible_match = v
+                            break
+                
+                char_prompt = f"flat vector stickman cartoon icon of {bible_match if bible_match else desc.replace('_', ' ')}, isolated on a pure white background"
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Auto-generating missing sprite asset: {sprite_filename}")
+                
+                # Fetch temporary JPG from Pollinations or Google Imagen
+                temp_jpg = os.path.join(cache_dir, f"temp_{sprite_filename.replace('.png', '.jpg')}")
+                
+                success = False
+                if google_api_key:
+                    success = _fetch_google_imagen_image(segment_id + 900, char_prompt, 512, 512, google_api_key, temp_jpg, on_progress)
+                if not success:
+                    success = _fetch_pollinations_image(segment_id + 900, char_prompt, 512, 512, temp_jpg, seed=segment_id*45, on_progress=on_progress)
+                
+                if success and os.path.exists(temp_jpg):
+                    # Convert to transparent PNG
+                    key_success = _convert_white_to_transparent(temp_jpg, sprite_path)
+                    try:
+                        os.remove(temp_jpg)
+                    except:
+                        pass
+                    if key_success and on_progress:
+                        on_progress(f"Segment {segment_id} — Successfully converted {sprite_filename} to transparent PNG")
+                else:
+                    # Fallback: create a small transparent placeholder
+                    if on_progress:
+                        on_progress(f"Segment {segment_id} — Warning: failed to generate sprite, creating dummy shape")
+                    try:
+                        from PIL import ImageDraw
+                        dummy = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+                        d_draw = ImageDraw.Draw(dummy)
+                        d_draw.rectangle([10, 10, 90, 90], fill=(255, 0, 0, 180), outline="white", width=2)
+                        dummy.save(sprite_path)
+                    except Exception as e:
+                        print(f"Error creating dummy sprite: {e}")
+
     # Check if a manual image has been placed by the user
-    jpg_path = os.path.join(project_dir, f"{segment_id}.jpg")
-    png_path = os.path.join(project_dir, f"{segment_id}.png")
+    if magick_filter in ["diptych", "collage"]:
+        base_a = use_base_image_a if use_base_image_a else f"{segment_id}a.jpg"
+        base_b = use_base_image_b if use_base_image_b else f"{segment_id}b.jpg"
+        path_a = os.path.join(project_dir, base_a)
+        path_b = os.path.join(project_dir, base_b)
+        
+        if not os.path.exists(path_a) and not os.path.exists(path_a.replace(".jpg", ".png")):
+            if visual_type == "ai_image":
+                prompt_a = _build_final_prompt(f"{keyword} (Left part)", narration, video_title, visual_style, aspect_ratio, character_bible)
+                success = False
+                if google_api_key:
+                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image A via Google Imagen")
+                    success = _fetch_google_imagen_image(segment_id, prompt_a, width, height, google_api_key, path_a, on_progress)
+                if not success:
+                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image A via Pollinations")
+                    success = _fetch_pollinations_image(segment_id, prompt_a, width, height, path_a, seed=segment_id*10, on_progress=on_progress)
+                if not success:
+                    if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder A")
+                    _generate_placeholder_image(path_a, f"{segment_id}a", keyword, narration, width, height)
+            else:
+                if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder A")
+                _generate_placeholder_image(path_a, f"{segment_id}a", keyword, narration, width, height)
+        if not os.path.exists(path_b) and not os.path.exists(path_b.replace(".jpg", ".png")):
+            if visual_type == "ai_image":
+                prompt_b = _build_final_prompt(f"{keyword} (Right part)", narration, video_title, visual_style, aspect_ratio, character_bible)
+                success = False
+                if google_api_key:
+                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image B via Google Imagen")
+                    success = _fetch_google_imagen_image(segment_id, prompt_b, width, height, google_api_key, path_b, on_progress)
+                if not success:
+                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image B via Pollinations")
+                    success = _fetch_pollinations_image(segment_id, prompt_b, width, height, path_b, seed=segment_id*11, on_progress=on_progress)
+                if not success:
+                    if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder B")
+                    _generate_placeholder_image(path_b, f"{segment_id}b", keyword, narration, width, height)
+            else:
+                if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder B")
+                _generate_placeholder_image(path_b, f"{segment_id}b", keyword, narration, width, height)
+            
+        actual_a = path_a.replace(".jpg", ".png") if os.path.exists(path_a.replace(".jpg", ".png")) else path_a
+        actual_b = path_b.replace(".jpg", ".png") if os.path.exists(path_b.replace(".jpg", ".png")) else path_b
 
-    manual_path = None
-    if os.path.exists(jpg_path):
-        manual_path = jpg_path
-    elif os.path.exists(png_path):
-        manual_path = png_path
+        needs_update = True
+        if os.path.exists(output_path):
+            if os.path.getmtime(output_path) > max(os.path.getmtime(actual_a), os.path.getmtime(actual_b)):
+                needs_update = False
 
-    # If no manual visual exists yet, generate the placeholder at jpg_path
-    if not manual_path:
-        if on_progress:
-            on_progress(f"Segment {segment_id} — Generating placeholder at projects/{project_slug}/{segment_id}.jpg")
-        _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
-        manual_path = jpg_path
+        if needs_update:
+            if on_progress:
+                on_progress(f"Segment {segment_id} — Applying ImageMagick filter: {magick_filter}")
+            if magick_filter == "diptych":
+                process_diptych(actual_a, actual_b, output_path, width, height)
+            else:
+                process_collage(actual_a, actual_b, output_path, width, height)
+    else:
+        base_img = use_base_image if use_base_image else f"{segment_id}.jpg"
+        if not base_img.endswith(".jpg") and not base_img.endswith(".png"):
+            base_img += ".jpg"
+            
+        jpg_path = os.path.join(project_dir, base_img)
+        base_img_png = base_img.rsplit(".", 1)[0] + ".png" if "." in base_img else base_img + ".png"
+        png_path = os.path.join(project_dir, base_img_png)
+        manual_path = png_path if os.path.exists(png_path) else jpg_path
 
-    # Copy to cache directory if cached file size is different (i.e. user replaced placeholder or it's new)
-    if not os.path.exists(output_path) or os.path.getsize(manual_path) != os.path.getsize(output_path):
-        if on_progress:
-            on_progress(f"Segment {segment_id} — Syncing image to cache")
-        shutil.copy2(manual_path, output_path)
+        if not os.path.exists(manual_path):
+            if visual_type == "ai_image":
+                prompt = _build_final_prompt(keyword, narration, video_title, visual_style, aspect_ratio, character_bible)
+                success = False
+                if google_api_key:
+                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image via Google Imagen")
+                    success = _fetch_google_imagen_image(segment_id, prompt, width, height, google_api_key, jpg_path, on_progress)
+                if not success:
+                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image via Pollinations")
+                    success = _fetch_pollinations_image(segment_id, prompt, width, height, jpg_path, seed=segment_id*100, on_progress=on_progress)
+                if not success:
+                    if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder")
+                    _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
+            else:
+                if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder")
+                _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
+            manual_path = jpg_path
+            
+        needs_update = True
+        if os.path.exists(output_path):
+            if os.path.getmtime(output_path) > os.path.getmtime(manual_path):
+                needs_update = False
+
+        if needs_update:
+            if level1_overlay or crop:
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying Level 1 overlays & crops on base image")
+                _apply_level1_overlay(manual_path, output_path, level1_overlay or {}, width, height, crop)
+            elif magick_filter in ["none", None, "null"]:
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Skipping ImageMagick filter, copying file")
+                shutil.copy(manual_path, output_path)
+            elif magick_filter in ["vox_collage", "vox_paper_collage", "vox"] or (visual_style and "vox" in visual_style.lower()):
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying ImageMagick Vox Paper-Collage filter")
+                try:
+                    process_vox_collage(manual_path, output_path, width, height)
+                except Exception as e:
+                    if on_progress:
+                        on_progress(f"Segment {segment_id} — Vox filter failed ({e}), falling back to copy")
+                    shutil.copy(manual_path, output_path)
+            else:
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying ImageMagick filter: {magick_filter}")
+                try:
+                    process_vignette(manual_path, output_path, width, height)
+                except Exception:
+                    shutil.copy(manual_path, output_path)
 
     # Create/update the project-specific visual prompts text file
     prompts_file = os.path.join(project_dir, "image_prompts.txt")
@@ -305,7 +717,8 @@ def fetch_visual(
         narration=narration,
         video_title=video_title,
         visual_style=visual_style,
-        aspect_ratio=aspect_ratio
+        aspect_ratio=aspect_ratio,
+        character_bible=character_bible
     )
     
     existing_lines = {}
@@ -341,6 +754,7 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     title = proj.get("title", "My Video")
     aspect_ratio = proj.get("aspect_ratio", "16:9")
     visual_style = proj.get("visual_style", "")
+    character_bible = proj.get("character_bible", {})
     
     project_slug = re.sub(r'[^\w\-]', '_', title.strip()).strip('_')
     if not project_slug:
@@ -358,12 +772,36 @@ def initialize_project_sourcing(script_dict: dict) -> str:
         segment_id = seg["segment_id"]
         keyword = seg.get("b_roll_keyword", "")
         narration = seg.get("narration", "")
+        magick_filter = seg.get("magick_filter", "vignette")
         
         # 1. Generate placeholder if neither jpg nor png exists
-        jpg_path = os.path.join(project_dir, f"{segment_id}.jpg")
-        png_path = os.path.join(project_dir, f"{segment_id}.png")
-        if not os.path.exists(jpg_path) and not os.path.exists(png_path):
-            _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
+        if magick_filter in ["diptych", "collage"]:
+            base_a = seg.get("use_base_image_a", f"{segment_id}a.jpg")
+            if not base_a.endswith(".jpg") and not base_a.endswith(".png"):
+                base_a += ".jpg"
+            path_a_jpg = os.path.join(project_dir, base_a)
+            base_a_png = base_a.rsplit(".", 1)[0] + ".png"
+            path_a_png = os.path.join(project_dir, base_a_png)
+            if not os.path.exists(path_a_jpg) and not os.path.exists(path_a_png):
+                _generate_placeholder_image(path_a_jpg, f"Base A ({base_a})", keyword, narration, width, height)
+                
+            base_b = seg.get("use_base_image_b", f"{segment_id}b.jpg")
+            if not base_b.endswith(".jpg") and not base_b.endswith(".png"):
+                base_b += ".jpg"
+            path_b_jpg = os.path.join(project_dir, base_b)
+            base_b_png = base_b.rsplit(".", 1)[0] + ".png"
+            path_b_png = os.path.join(project_dir, base_b_png)
+            if not os.path.exists(path_b_jpg) and not os.path.exists(path_b_png):
+                _generate_placeholder_image(path_b_jpg, f"Base B ({base_b})", keyword, narration, width, height)
+        else:
+            base_img = seg.get("use_base_image", f"{segment_id}.jpg")
+            if not base_img.endswith(".jpg") and not base_img.endswith(".png"):
+                base_img += ".jpg"
+            jpg_path = os.path.join(project_dir, base_img)
+            base_img_png = base_img.rsplit(".", 1)[0] + ".png"
+            png_path = os.path.join(project_dir, base_img_png)
+            if not os.path.exists(jpg_path) and not os.path.exists(png_path):
+                _generate_placeholder_image(jpg_path, f"Base ({base_img})", keyword, narration, width, height)
             
         # 2. Build rich prompt for image_prompts.txt
         prompt_desc = _build_final_prompt(
@@ -371,7 +809,8 @@ def initialize_project_sourcing(script_dict: dict) -> str:
             narration=narration,
             video_title=title,
             visual_style=visual_style,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            character_bible=character_bible
         )
         lines.append(f"Segment {segment_id}: {prompt_desc}")
         

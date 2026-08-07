@@ -30,3 +30,10 @@ desktop.ini
 .idea/
 
 .vercel
+
+# ── Image Library dynamic directories ───────────────────────────────────────
+library/images/
+library/_inbox/
+library/_sheets/
+library/_rejected/
+

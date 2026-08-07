@@ -1,0 +1,8 @@
+controller:
+  MODE: video_render
+  OUTPUT_VIDEO_PATH: C:\Users\HomePC\Documents\GitHub\S2V\temp_animated_drawings\examples\characters\char1\video.gif
+scene:
+  ANIMATED_CHARACTERS:
+  - character_cfg: C:\Users\HomePC\Documents\GitHub\S2V\temp_animated_drawings\examples\characters\char1\char_cfg.yaml
+    motion_cfg: C:\Users\HomePC\Documents\GitHub\S2V\temp_animated_drawings\examples\config\motion\dab.yaml
+    retarget_cfg: C:\Users\HomePC\Documents\GitHub\S2V\temp_animated_drawings\examples\config\retarget\fair1_ppf.yaml

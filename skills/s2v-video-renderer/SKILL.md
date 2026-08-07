@@ -132,5 +132,30 @@ Whenever you are making adjustments to the React compositions, styling sequences
 1. Refer to the `remotion` skill.
 2. Ensure you follow Remotion's frame-perfect rendering principles to avoid frame jitters and glitches in final video outputs.
 
+### 🎭 Animated Drawings Integration (Meta FAIR)
+This integration enables rendering animated sketch characters and overlaying them dynamically on top of video backgrounds.
+* **Local Source Directory:** `C:\Users\HomePC\Documents\GitHub\S2V\temp_animated_drawings`
+* **Python Environment (3.12 compatible):** Requires `glfw`, `PyOpenGL`, `opencv-python`, `scikit-learn`, `shapely`, and `setuptools<70` (to maintain `pkg_resources` API compatibility).
+* **Usage:** 
+  Animate pre-annotated characters using a custom motion BVH and retarget config:
+  ```powershell
+  python temp_animated_drawings/examples/annotations_to_animation.py temp_animated_drawings/examples/characters/char1 temp_animated_drawings/examples/config/motion/dab.yaml temp_animated_drawings/examples/config/retarget/fair1_ppf.yaml
+  ```
+  This creates `video.gif` inside the character directory which can be referenced in storyboard segments under `level1_overlay` configuration:
+  ```json
+  "level1_overlay": {
+    "sprites": [
+      {
+        "image": "char1_dab.gif",
+        "x": 0.5,
+        "y": 0.7,
+        "scale": 1.0,
+        "motion": "bounce"
+      }
+    ]
+  }
+  ```
+
+
 
 

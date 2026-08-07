@@ -14,6 +14,15 @@ let lastOutputPath = null;
 const MAX_LOG_LINES = 100;
 let logLines = [];
 
+window.decodeBase64UTF8 = function(payload) {
+    const binary = atob(payload);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder("utf-8").decode(bytes);
+};
+
 const ALL_DIALECTS = [
     { code: 'Standard English', label: 'Standard English', flag: '🇺🇸' },
     { code: 'Nigerian English', label: 'Nigerian English', flag: '🇳🇬' },

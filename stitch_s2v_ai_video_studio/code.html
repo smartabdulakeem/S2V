@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>S2V Mobile Workspace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Outfit:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        :root {
+            --obsidian-base: #0b0f19;
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+        }
+        body {
+            background-color: var(--obsidian-base);
+            color: #dfe2f1;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .cosmic-gradient {
+            background: linear-gradient(135deg, #c0c1ff 0%, #4cd7f6 50%, #571bc1 100%);
+        }
+        .cosmic-glow:hover {
+            box-shadow: 0 0 20px rgba(192, 193, 255, 0.4);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .active-pill {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .audio-wave {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            height: 24px;
+        }
+        .wave-bar {
+            width: 3px;
+            background: #4cd7f6;
+            border-radius: 1px;
+            animation: wave-anim 1.2s ease-in-out infinite;
+        }
+        @keyframes wave-anim {
+            0%, 100% { height: 4px; }
+            50% { height: 18px; }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary": "#003640",
+                      "primary-container": "#8083ff",
+                      "on-primary": "#1000a9",
+                      "background": "#0f131d",
+                      "inverse-surface": "#dfe2f1",
+                      "surface-container-highest": "#313540",
+                      "surface-container-lowest": "#0a0e18",
+                      "on-error": "#690005",
+                      "on-error-container": "#ffdad6",
+                      "primary-fixed": "#e1e0ff",
+                      "on-surface-variant": "#c7c4d7",
+                      "on-surface": "#dfe2f1",
+                      "on-tertiary-fixed-variant": "#004e5c",
+                      "surface-container-low": "#171b26",
+                      "on-background": "#dfe2f1",
+                      "on-secondary": "#3c0091",
+                      "on-secondary-fixed": "#23005c",
+                      "secondary-fixed-dim": "#d0bcff",
+                      "surface-dim": "#0f131d",
+                      "surface-tint": "#c0c1ff",
+                      "surface-container-high": "#262a35",
+                      "surface-container": "#1c1f2a",
+                      "tertiary-fixed-dim": "#4cd7f6",
+                      "inverse-primary": "#494bd6",
+                      "error": "#ffb4ab",
+                      "on-primary-container": "#0d0096",
+                      "primary": "#c0c1ff",
+                      "tertiary-container": "#009eb9",
+                      "surface-variant": "#313540",
+                      "outline-variant": "#464554",
+                      "secondary-fixed": "#e9ddff",
+                      "on-secondary-fixed-variant": "#5516be",
+                      "inverse-on-surface": "#2c303b",
+                      "secondary": "#d0bcff",
+                      "surface": "#0f131d",
+                      "on-secondary-container": "#c4abff",
+                      "error-container": "#93000a",
+                      "on-tertiary-fixed": "#001f26",
+                      "outline": "#908fa0",
+                      "surface-bright": "#353944",
+                      "secondary-container": "#571bc1",
+                      "tertiary": "#4cd7f6",
+                      "tertiary-fixed": "#acedff",
+                      "on-primary-fixed-variant": "#2f2ebe",
+                      "on-tertiary-container": "#002f38",
+                      "primary-fixed-dim": "#c0c1ff",
+                      "on-primary-fixed": "#07006c"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "md": "16px",
+                      "lg": "24px",
+                      "xl": "40px",
+                      "container-margin": "32px",
+                      "sm": "8px",
+                      "xs": "4px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": ["Outfit"],
+                      "label-sm": ["Inter"],
+                      "display-lg": ["Outfit"],
+                      "body-lg": ["Inter"],
+                      "caption-caps": ["Inter"],
+                      "title-md": ["Outfit"],
+                      "body-sm": ["Inter"],
+                      "headline-lg": ["Outfit"]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "400"}],
+                      "caption-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "600"}],
+                      "title-md": ["20px", {"lineHeight": "28px", "letterSpacing": "0", "fontWeight": "500"}],
+                      "body-sm": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen pb-32">
+<!-- Top AppBar (from JSON context) -->
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-gutter h-16 shadow-sm">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="movie_edit">movie_edit</span>
+<span class="text-headline-lg-mobile font-headline-lg-mobile font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-tertiary">S2V</span>
+<span class="bg-surface-container-highest text-on-surface-variant text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">v2.4</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden xs:flex flex-col items-end">
+<span class="text-[9px] text-primary/60 uppercase font-bold tracking-tighter leading-none">TTS Engine</span>
+<span class="text-[11px] text-on-surface font-medium">Local Supertonic</span>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant active:scale-95 transition-transform hover:opacity-80" data-icon="settings">settings</button>
+</div>
+</header>
+<main class="mt-20 px-4 space-y-8">
+<!-- Media Stage / Preview -->
+<section class="relative">
+<div class="glass-card rounded-2xl overflow-hidden aspect-[16/9] relative group">
+<img class="w-full h-full object-cover opacity-60" data-alt="A cinematic 3D abstract render featuring flowing obsidian ribbons and glowing cyan plasma energy trails in a deep dark space. The lighting is high-fidelity and dramatic, highlighting sharp edges and glossy textures in an ultra-modern futuristic aesthetic. Reflections of indigo and violet light bounce off the dark surfaces, creating a sense of premium technological craftsmanship." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrOMxkkUr7gyAAaFpYdy_Qa-MWC0Cza7D8huCyKrvyNhLdWBsN43Tm3GqS3qH6EB0He3hW3lLpamh7ULKd-2T4dmyZwoE22OvWQYZYeNaR0lPBElUlvWFbB5X9fIbIYBvO5TPYM2fyBKbklwAG1Jis4VkSvSbgE5XhXqbM45OCQkrt5C4iXI9YBg9RKWK67tpg7aHBuSG5NBCgzHz1v5qZnBSp2OkVo6GGNBz_It042jlByTnn5_-kWA"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background to-transparent"></div>
+<!-- Overlay UI -->
+<div class="absolute inset-0 flex flex-col justify-between p-4">
+<div class="flex justify-between items-start">
+<span class="bg-primary/20 text-primary text-[10px] px-2 py-1 rounded-md backdrop-blur-md border border-primary/30 uppercase font-bold">Preview Mode</span>
+<div class="flex gap-2">
+<button class="w-8 h-8 rounded-full glass-card flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-sm" data-icon="fullscreen">fullscreen</span>
+</button>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-end justify-between">
+<div class="audio-wave">
+<div class="wave-bar" style="animation-delay: 0.1s"></div>
+<div class="wave-bar" style="animation-delay: 0.4s"></div>
+<div class="wave-bar" style="animation-delay: 0.2s"></div>
+<div class="wave-bar" style="animation-delay: 0.5s"></div>
+<div class="wave-bar" style="animation-delay: 0.3s"></div>
+<div class="wave-bar" style="animation-delay: 0.6s"></div>
+<div class="wave-bar" style="animation-delay: 0.2s"></div>
+<div class="wave-bar" style="animation-delay: 0.1s"></div>
+</div>
+<span class="text-[11px] font-mono text-tertiary">00:14 / 01:22</span>
+</div>
+<div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+<div class="w-1/4 h-full cosmic-gradient"></div>
+</div>
+</div>
+</div>
+</div>
+<button class="mt-4 w-full h-12 rounded-xl cosmic-gradient cosmic-glow flex items-center justify-center gap-2 text-on-primary font-bold active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="memory">memory</span>
+                Render Final Video
+            </button>
+</section>
+<!-- Script Hub -->
+<section class="space-y-4">
+<div class="flex items-center justify-between">
+<h2 class="font-title-md text-title-md text-on-surface">Script Hub</h2>
+<div class="glass-card p-1 rounded-lg flex gap-1">
+<button class="px-3 py-1 text-[11px] font-bold rounded-md bg-primary text-on-primary transition-all" id="tab-core">Core Settings</button>
+<button class="px-3 py-1 text-[11px] font-bold rounded-md text-on-surface-variant hover:bg-white/5 transition-all" id="tab-guide">AI Guidelines</button>
+</div>
+</div>
+<div class="glass-card rounded-2xl p-4 space-y-4">
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-2">
+<label class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Narrator Voice</label>
+<div class="relative">
+<select class="w-full bg-surface-container border-none rounded-xl text-sm py-2 px-3 appearance-none focus:ring-1 focus:ring-tertiary">
+<option>Aura (Smooth AI)</option>
+<option>Echo (Cinematic)</option>
+<option>Nova (Energetic)</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-2 text-sm pointer-events-none text-on-surface-variant" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Aspect Ratio</label>
+<div class="flex gap-2">
+<button class="flex-1 h-9 glass-card border-tertiary/50 bg-tertiary/10 rounded-lg flex items-center justify-center active:scale-95">
+<span class="material-symbols-outlined text-tertiary text-sm" data-icon="crop_16_9">crop_16_9</span>
+</button>
+<button class="flex-1 h-9 glass-card rounded-lg flex items-center justify-center opacity-40 active:scale-95">
+<span class="material-symbols-outlined text-sm" data-icon="crop_portrait">crop_portrait</span>
+</button>
+<button class="flex-1 h-9 glass-card rounded-lg flex items-center justify-center opacity-40 active:scale-95">
+<span class="material-symbols-outlined text-sm" data-icon="crop_square">crop_square</span>
+</button>
+</div>
+</div>
+</div>
+<div class="relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-tertiary/20 rounded-xl blur opacity-30 group-focus-within:opacity-100 transition-opacity"></div>
+<textarea class="relative w-full h-40 bg-surface-container border border-white/5 rounded-xl p-4 text-body-sm text-on-surface focus:ring-1 focus:ring-primary/50 focus:outline-none resize-none" placeholder="Paste your vision here. S2V will segment the scenes automatically..."></textarea>
+</div>
+</div>
+</section>
+<!-- Storyboard Grid -->
+<section class="space-y-4">
+<div class="flex items-center justify-between">
+<h2 class="font-title-md text-title-md text-on-surface">Storyboard</h2>
+<button class="flex items-center gap-1 text-primary text-xs font-bold active:scale-95">
+<span class="material-symbols-outlined text-xs" data-icon="add_circle">add_circle</span>
+                    New Scene
+                </button>
+</div>
+<div class="flex flex-col gap-4">
+<!-- Scene Card 1 -->
+<div class="glass-card rounded-2xl p-4 flex gap-4 group transition-all hover:bg-white/10 active:scale-[0.98]">
+<div class="w-20 h-24 rounded-lg bg-surface-container-highest overflow-hidden relative flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A high-tech digital device display showing complex code and floating data streams. The environment is dark and moody, typical of a professional creator's workspace. Bright neon cyan and electric violet lights reflect off the screen, creating a visionary and cinematic atmosphere that emphasizes AI-driven technology." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAij9PXGy28SBilabnr-NLHH3ZXM8k8iVwiRiE6HrrjzL5lKVbmJ7ewH2NRQsPRAYEXCOBG_IvH9G53DDCFj3Xlg8bSb1qhAXOtIkpBAvTIaaLOWgw4Aj0Lxgla3OsKRypnnZeFzPsXkURQzDcQ2rfWjo4wH4NKWzCrZU3hlVhb4nXfURjlIAO4QAEadAssXcZsIYejVQNgMYqd2hGN-4TKoJsSUqC6UFJo5jzDr3dYTAZQazs2G1zMAQ"/>
+<div class="absolute top-1 left-1 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[9px] font-bold">SC 01</div>
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="bg-tertiary/10 text-tertiary text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">Hook</span>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-sm cursor-pointer hover:text-primary" data-icon="edit">edit</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm cursor-pointer hover:text-error" data-icon="delete">delete</span>
+</div>
+</div>
+<p class="text-[13px] leading-snug text-on-surface line-clamp-2">In a world where intelligence flows like liquid light, the boundary between human and machine dissolves...</p>
+</div>
+<div class="flex items-center gap-2 mt-2">
+<div class="flex -space-x-2">
+<div class="w-5 h-5 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center">
+<span class="material-symbols-outlined text-[10px]" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<div class="w-5 h-5 rounded-full bg-tertiary/20 border border-tertiary/40 flex items-center justify-center">
+<span class="material-symbols-outlined text-[10px]" data-icon="mic">mic</span>
+</div>
+</div>
+<span class="text-[10px] text-on-surface-variant">2 Assets Ready</span>
+</div>
+</div>
+</div>
+<!-- Scene Card 2 -->
+<div class="glass-card rounded-2xl p-4 flex gap-4 group transition-all hover:bg-white/10 active:scale-[0.98]">
+<div class="w-20 h-24 rounded-lg bg-surface-container-highest overflow-hidden relative flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A futuristic city landscape at night with glowing architectural structures and neon-lit streets. The atmosphere is dense with a misty, cinematic haze. The color palette consists of deep obsidian shades, vibrant purples, and sharp cyan highlights, evoking a high-fidelity digital craftsmanship look." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRmIuUYRABc_F0HWUOSo08NMsHURoURrSuIy9WwVbOuF89FfXafJ7DrjBwNovwYhYYpYxOa2HgVVseZx8LlB_udsNti9sYBHYl6Ar6TZ0nXgs7luwGw_wnThabJC_1i-UOsc4vsbd6X504rKWSUidEFEh8_YULeOSeOLXycPIj9Adev-74uJ8G_a1I-6P4C8qB_k-7AoCLTZG6AFOaQdIJcJ6DJzFnKCZVsBsITZ_0l9-mzT9OYUYDoQ"/>
+<div class="absolute top-1 left-1 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[9px] font-bold">SC 02</div>
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="bg-primary/10 text-primary text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">Body</span>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="edit">edit</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="delete">delete</span>
+</div>
+</div>
+<p class="text-[13px] leading-snug text-on-surface line-clamp-2">Witness the birth of a new era of digital creativity, where your script becomes the director.</p>
+</div>
+<div class="flex items-center gap-2 mt-2">
+<span class="material-symbols-outlined text-on-surface-variant text-sm animate-pulse" data-icon="sync">sync</span>
+<span class="text-[10px] text-on-surface-variant italic">Generating visuals...</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-surface-container-lowest/80 backdrop-blur-lg border-t border-white/10 flex justify-around items-center px-4 pb-6 pt-2 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] rounded-t-xl">
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors active:scale-90">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span class="font-label-sm text-label-sm mt-1">Script</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary bg-primary/10 rounded-xl px-4 py-1 active:scale-90">
+<span class="material-symbols-outlined" data-icon="movie_filter">movie_filter</span>
+<span class="font-label-sm text-label-sm mt-1">Scenes</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors active:scale-90">
+<span class="material-symbols-outlined" data-icon="memory">memory</span>
+<span class="font-label-sm text-label-sm mt-1">Render</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors active:scale-90">
+<span class="material-symbols-outlined" data-icon="video_library">video_library</span>
+<span class="font-label-sm text-label-sm mt-1">Library</span>
+</button>
+</nav>
+<script>
+        // Tab switching logic
+        const tabCore = document.getElementById('tab-core');
+        const tabGuide = document.getElementById('tab-guide');
+
+        tabCore.addEventListener('click', () => {
+            tabCore.className = 'px-3 py-1 text-[11px] font-bold rounded-md bg-primary text-on-primary transition-all';
+            tabGuide.className = 'px-3 py-1 text-[11px] font-bold rounded-md text-on-surface-variant hover:bg-white/5 transition-all';
+        });
+
+        tabGuide.addEventListener('click', () => {
+            tabGuide.className = 'px-3 py-1 text-[11px] font-bold rounded-md bg-primary text-on-primary transition-all';
+            tabCore.className = 'px-3 py-1 text-[11px] font-bold rounded-md text-on-surface-variant hover:bg-white/5 transition-all';
+        });
+
+        // Simple haptic feedback simulation
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('touchstart', () => {
+                if (window.navigator && window.navigator.vibrate) {
+                    window.navigator.vibrate(5);
+                }
+            });
+        });
+    </script>
+</body></html>

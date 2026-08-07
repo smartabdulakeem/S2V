@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pipeline.validator import validate_file
-from pipeline.voiceover import generate_voiceover
+from pipeline.voiceover import generate_voiceover, stitch_master_audio
 from pipeline.captions import generate_captions
 from pipeline.visuals import fetch_visual, _get_dimensions
 from pipeline.composer import compose_segment
@@ -92,6 +92,7 @@ class RenderOrchestrator:
         total = len(segments)
         video_title  = proj.get("title", "")
         visual_style = proj.get("visual_style", "")
+        disable_captions = proj.get("disable_captions", False)
         aspect_ratio = proj.get("aspect_ratio", "16:9")
         if aspect_ratio not in ("16:9", "9:16", "1:1", "4:3"):
             aspect_ratio = "16:9"
@@ -171,13 +172,17 @@ class RenderOrchestrator:
                     return {"success": False, "error": "Render cancelled by user."}
 
                 # Stage 3 — Captions
-                self._emit("stage", name=f"Captions — segment {idx}/{total}", stage_num=3, total_stages=7)
-                srt_path = generate_captions(
-                    segment_id=seg_id,
-                    audio_path=audio_path,
-                    cache_dir=self.cache_dir,
-                    on_progress=progress,
-                )
+                if disable_captions:
+                    self._progress("processing", idx, total, f"Segment {seg_id} — Captions disabled, skipping Whisper")
+                    srt_path = None
+                else:
+                    self._emit("stage", name=f"Captions — segment {idx}/{total}", stage_num=3, total_stages=7)
+                    srt_path = generate_captions(
+                        segment_id=seg_id,
+                        audio_path=audio_path,
+                        cache_dir=self.cache_dir,
+                        on_progress=progress,
+                    )
 
                 if self._cancelled:
                     return {"success": False, "error": "Render cancelled by user."}
@@ -196,6 +201,13 @@ class RenderOrchestrator:
                     visual_style=visual_style,
                     on_progress=progress,
                     visual_type=seg.get("visual_type", "ai_image"),
+                    magick_filter=seg.get("magick_filter", "vignette"),
+                    use_base_image=seg.get("use_base_image"),
+                    use_base_image_a=seg.get("use_base_image_a"),
+                    use_base_image_b=seg.get("use_base_image_b"),
+                    character_bible=proj.get("character_bible"),
+                    level1_overlay=seg.get("level1_overlay"),
+                    crop=seg.get("crop"),
                 )
 
                 if self._cancelled:
@@ -216,6 +228,8 @@ class RenderOrchestrator:
                     width=width,
                     height=height,
                     on_progress=progress,
+                    sfx=seg.get("sfx"),
+                    level1_overlay=seg.get("level1_overlay"),
                 )
                 segment_paths.append(seg_video)
                 self._log(f"Segment {seg_id} complete: {seg_video}")
@@ -237,9 +251,14 @@ class RenderOrchestrator:
         output_path = os.path.join(self.output_dir, output_filename)
 
         try:
+            segment_audio_paths = [os.path.join(self.cache_dir, f"segment_{seg['segment_id']}_audio.mp3") for seg in segments]
+            master_audio_path = os.path.join(self.cache_dir, "master_narration.mp3")
+            stitch_master_audio(segment_audio_paths, master_audio_path)
+
             stitch_segments(
                 segment_paths=segment_paths,
                 output_path=output_path,
+                master_audio_path=master_audio_path,
                 background_music=proj.get("background_music"),
                 music_volume_db=proj.get("music_volume_db", -20),
                 on_progress=lambda msg: self._log(msg),

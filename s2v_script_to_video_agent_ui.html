@@ -1,0 +1,1101 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg0:#0B0F19;--bg1:#111827;--bg2:#1a2035;--bg3:#1e2640;
+    --glass:rgba(255,255,255,0.04);--glass2:rgba(255,255,255,0.07);
+    --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+    --text1:#f1f5f9;--text2:#94a3b8;--text3:#64748b;
+    --ind:#6366f1;--vio:#8b5cf6;--cyan:#06b6d4;
+    --ind2:#818cf8;--vio2:#a78bfa;
+    --green:#10b981;--amber:#f59e0b;--rose:#f43f5e;--orange:#f97316;
+  }
+  #s2v-root{
+    font-family:'Inter',sans-serif;
+    background:var(--bg0);
+    color:var(--text1);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  /* TOPBAR */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px;height:52px;
+    background:rgba(11,15,25,0.85);
+    border-bottom:1px solid var(--border);
+    backdrop-filter:blur(16px);
+    position:sticky;top:0;z-index:100;
+    flex-shrink:0;
+  }
+  .logo-wrap{display:flex;align-items:center;gap:10px}
+  .logo-icon{
+    width:30px;height:30px;border-radius:8px;
+    background:linear-gradient(135deg,var(--ind),var(--vio));
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.5px;
+  }
+  .logo-text{font-size:16px;font-weight:700;letter-spacing:-0.3px}
+  .logo-text span{background:linear-gradient(90deg,var(--ind2),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .ver-badge{
+    font-size:10px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;
+    padding:2px 7px;border-radius:20px;
+    background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.3);
+    color:var(--ind2);margin-left:4px;
+  }
+  .topbar-center{display:flex;align-items:center;gap:6px}
+  .status-dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 0 2px rgba(16,185,129,0.3);
+    animation:pulse-green 2s ease-in-out infinite;
+  }
+  @keyframes pulse-green{0%,100%{box-shadow:0 0 0 2px rgba(16,185,129,0.3)}50%{box-shadow:0 0 0 5px rgba(16,185,129,0.1)}}
+  .status-label{font-size:11px;color:var(--text2);letter-spacing:0.3px}
+  .topbar-right{display:flex;align-items:center;gap:8px}
+  .icon-btn{
+    width:32px;height:32px;border-radius:8px;border:1px solid var(--border);
+    background:var(--glass);color:var(--text2);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;transition:all 0.2s ease;font-size:15px;
+  }
+  .icon-btn:hover{background:var(--glass2);border-color:var(--border2);color:var(--text1);transform:scale(1.05)}
+  .icon-btn:active{transform:scale(0.94)}
+  /* MAIN GRID */
+  .workspace{
+    display:grid;
+    grid-template-columns:320px 1fr 320px;
+    gap:0;
+    flex:1;
+    overflow:hidden;
+    height:calc(100vh - 52px);
+  }
+  /* PANELS */
+  .panel{
+    border-right:1px solid var(--border);
+    overflow-y:auto;
+    padding:14px;
+    display:flex;flex-direction:column;gap:12px;
+  }
+  .panel:last-child{border-right:none;border-left:1px solid var(--border)}
+  .panel::-webkit-scrollbar{width:4px}
+  .panel::-webkit-scrollbar-track{background:transparent}
+  .panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+  /* GLASS CARD */
+  .card{
+    background:var(--glass);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:14px;
+    backdrop-filter:blur(8px);
+  }
+  .card-header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .card-title{
+    font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;
+    color:var(--text2);
+    display:flex;align-items:center;gap:6px;
+  }
+  .card-title .dot{width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,var(--ind),var(--vio))}
+  /* PILL TABS */
+  .tab-bar{
+    display:flex;align-items:center;
+    background:rgba(0,0,0,0.25);
+    border:1px solid var(--border);
+    border-radius:10px;padding:3px;
+    position:relative;
+    gap:2px;
+    margin-bottom:12px;
+  }
+  .tab-pill{
+    position:absolute;
+    background:linear-gradient(135deg,rgba(99,102,241,0.35),rgba(139,92,246,0.35));
+    border:1px solid rgba(99,102,241,0.4);
+    border-radius:8px;height:30px;
+    transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    z-index:0;
+  }
+  .tab-btn{
+    flex:1;padding:5px 10px;border-radius:8px;border:none;
+    background:transparent;color:var(--text2);
+    font-size:12px;font-weight:500;cursor:pointer;
+    position:relative;z-index:1;transition:color 0.2s;
+    white-space:nowrap;
+  }
+  .tab-btn.active{color:var(--text1)}
+  /* FORM ELEMENTS */
+  .form-group{margin-bottom:10px}
+  .form-label{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px;display:block}
+  .form-input{
+    width:100%;padding:8px 11px;border-radius:8px;
+    border:1px solid var(--border);
+    background:rgba(0,0,0,0.2);
+    color:var(--text1);font-size:13px;font-family:'Inter',sans-serif;
+    outline:none;transition:all 0.25s;
+  }
+  .form-input:focus{border-color:rgba(99,102,241,0.6);box-shadow:0 0 0 3px rgba(99,102,241,0.12),0 0 14px rgba(99,102,241,0.08)}
+  .form-select{
+    width:100%;padding:8px 11px;border-radius:8px;
+    border:1px solid var(--border);
+    background:rgba(0,0,0,0.3);
+    color:var(--text1);font-size:13px;
+    outline:none;cursor:pointer;
+    appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;
+    padding-right:30px;
+    font-family:'Inter',sans-serif;
+  }
+  .form-select:focus{border-color:rgba(99,102,241,0.6);outline:none}
+  .form-textarea{
+    width:100%;padding:10px 12px;border-radius:10px;
+    border:1px solid var(--border);
+    background:rgba(0,0,0,0.2);
+    color:var(--text1);font-size:13px;font-family:'Inter',sans-serif;
+    outline:none;resize:vertical;min-height:90px;line-height:1.6;
+    transition:all 0.25s;
+  }
+  .form-textarea:focus{border-color:rgba(99,102,241,0.6);box-shadow:0 0 0 3px rgba(99,102,241,0.12),0 0 20px rgba(99,102,241,0.06)}
+  /* SCRIPT TEXTAREA SPECIAL */
+  .script-textarea{
+    width:100%;padding:12px;border-radius:10px;
+    border:1px solid var(--border);
+    background:rgba(0,0,0,0.25);
+    color:var(--text1);font-size:13px;font-family:'Inter',sans-serif;
+    outline:none;resize:vertical;min-height:130px;line-height:1.7;
+    transition:all 0.3s;
+  }
+  .script-textarea:focus{
+    border-color:rgba(99,102,241,0.5);
+    box-shadow:0 0 0 3px rgba(99,102,241,0.1),0 0 30px rgba(99,102,241,0.07);
+  }
+  /* RATIO SELECTOR */
+  .ratio-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .ratio-btn{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    padding:8px 6px;border-radius:8px;border:1px solid var(--border);
+    background:rgba(0,0,0,0.2);cursor:pointer;transition:all 0.2s;
+  }
+  .ratio-btn:hover{border-color:var(--border2);background:var(--glass2)}
+  .ratio-btn.active{border-color:rgba(99,102,241,0.5);background:rgba(99,102,241,0.1)}
+  .ratio-frame{border:2px solid currentColor;border-radius:2px;color:var(--text3)}
+  .ratio-btn.active .ratio-frame{color:var(--ind2)}
+  .ratio-label{font-size:10px;color:var(--text3);font-weight:500}
+  .ratio-btn.active .ratio-label{color:var(--ind2)}
+  /* VOICE SELECTOR */
+  .voice-group{
+    border:1px solid var(--border);border-radius:10px;overflow:hidden;
+  }
+  .voice-group-header{
+    padding:9px 12px;background:rgba(0,0,0,0.2);
+    font-size:12px;font-weight:500;color:var(--text2);
+    display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+    transition:background 0.2s;
+  }
+  .voice-group-header:hover{background:rgba(0,0,0,0.3)}
+  .voice-item{
+    padding:7px 12px;display:flex;align-items:center;gap:8px;
+    border-top:1px solid var(--border);cursor:pointer;
+    transition:background 0.15s;font-size:12px;
+  }
+  .voice-item:hover{background:rgba(99,102,241,0.06)}
+  .voice-item.selected{background:rgba(99,102,241,0.1)}
+  .voice-avatar{
+    width:26px;height:26px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:600;flex-shrink:0;
+  }
+  .voice-play{
+    margin-left:auto;width:22px;height:22px;border-radius:50%;
+    border:1px solid var(--border2);background:var(--glass2);
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px;cursor:pointer;color:var(--text2);
+    transition:all 0.2s;
+  }
+  .voice-play:hover{background:rgba(99,102,241,0.2);border-color:rgba(99,102,241,0.4);color:var(--ind2)}
+  /* GENERATE BUTTON */
+  .gen-btn{
+    width:100%;padding:11px;border-radius:10px;border:none;
+    background:linear-gradient(135deg,var(--ind),var(--vio));
+    color:#fff;font-size:13px;font-weight:600;
+    cursor:pointer;transition:all 0.25s;
+    letter-spacing:0.3px;position:relative;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .gen-btn:hover{
+    transform:translateY(-1px);
+    box-shadow:0 6px 24px rgba(99,102,241,0.4),0 0 0 1px rgba(99,102,241,0.3);
+  }
+  .gen-btn:active{transform:scale(0.97) translateY(0)}
+  .gen-btn.loading{
+    pointer-events:none;
+    background:linear-gradient(135deg,rgba(99,102,241,0.7),rgba(139,92,246,0.7));
+  }
+  .gen-btn-loader{
+    display:none;position:absolute;bottom:0;left:0;height:3px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.6),transparent);
+    border-radius:0 0 10px 10px;
+  }
+  .gen-btn.loading .gen-btn-loader{display:block;animation:load-sweep 1.5s linear infinite;width:40%}
+  @keyframes load-sweep{0%{left:-40%}100%{left:100%}}
+  /* CENTER PANEL - STORYBOARD */
+  .center-panel{
+    overflow-y:auto;padding:14px;
+    display:flex;flex-direction:column;gap:10px;
+    background:var(--bg0);
+  }
+  .center-panel::-webkit-scrollbar{width:4px}
+  .center-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
+  .scene-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 2px 8px;border-bottom:1px solid var(--border);
+    margin-bottom:2px;
+  }
+  .scene-count{font-size:11px;color:var(--text2);font-weight:500}
+  .scene-card{
+    background:var(--glass);border:1px solid var(--border);
+    border-radius:12px;overflow:hidden;
+    transition:border-color 0.2s,box-shadow 0.2s;
+  }
+  .scene-card:hover{border-color:var(--border2);box-shadow:0 2px 20px rgba(0,0,0,0.3)}
+  .scene-card-top{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 12px 8px;
+    border-bottom:1px solid var(--border);
+  }
+  .scene-num{
+    font-size:11px;font-weight:700;color:var(--text3);
+    letter-spacing:0.5px;min-width:20px;
+  }
+  .scene-tag{
+    font-size:10px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;
+    padding:2px 8px;border-radius:20px;
+  }
+  .tag-hook{background:rgba(6,182,212,0.15);color:#67e8f9;border:1px solid rgba(6,182,212,0.25)}
+  .tag-body{background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25)}
+  .tag-cta{background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.25)}
+  .tag-conclusion{background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.25)}
+  .scene-actions{margin-left:auto;display:flex;gap:4px}
+  .scene-action-btn{
+    width:24px;height:24px;border-radius:6px;border:1px solid var(--border);
+    background:transparent;color:var(--text3);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:11px;transition:all 0.15s;
+  }
+  .scene-action-btn:hover{background:var(--glass2);color:var(--text1);border-color:var(--border2)}
+  .scene-action-btn:active{transform:scale(0.9)}
+  .scene-card-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .scene-field-label{
+    font-size:10px;font-weight:600;color:var(--text3);
+    letter-spacing:0.8px;text-transform:uppercase;
+    display:flex;align-items:center;gap:5px;margin-bottom:4px;
+  }
+  .speaker-badge{
+    font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;
+    text-transform:uppercase;letter-spacing:0.5px;
+  }
+  .badge-m1{background:rgba(59,130,246,0.2);color:#93c5fd;border:1px solid rgba(59,130,246,0.3)}
+  .badge-f1{background:rgba(236,72,153,0.2);color:#f9a8d4;border:1px solid rgba(236,72,153,0.3)}
+  .scene-narration{
+    font-size:12px;line-height:1.65;color:var(--text1);
+    background:rgba(0,0,0,0.2);
+    border-radius:7px;padding:8px 10px;
+    border:1px solid var(--border);
+    outline:none;width:100%;resize:none;min-height:52px;
+    font-family:'Inter',sans-serif;
+    transition:border-color 0.2s;
+  }
+  .scene-narration:focus{border-color:rgba(99,102,241,0.45)}
+  .scene-broll{
+    font-size:12px;line-height:1.55;color:var(--text2);
+    background:rgba(0,0,0,0.15);
+    border-radius:7px;padding:8px 10px;
+    border:1px solid var(--border);
+    outline:none;width:100%;resize:none;min-height:42px;
+    font-family:'Inter',sans-serif;
+    transition:border-color 0.2s;
+    font-style:italic;
+  }
+  .scene-broll:focus{border-color:rgba(6,182,212,0.4);border-style:solid}
+  /* RIGHT PANEL */
+  .preview-stage{
+    background:rgba(0,0,0,0.35);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;position:relative;
+  }
+  .preview-ratio-16-9{aspect-ratio:16/9}
+  .preview-inner{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:6px;
+  }
+  .preview-placeholder{
+    width:44px;height:44px;border-radius:50%;
+    background:linear-gradient(135deg,rgba(99,102,241,0.2),rgba(139,92,246,0.2));
+    border:1px solid rgba(99,102,241,0.3);
+    display:flex;align-items:center;justify-content:center;
+    font-size:18px;
+  }
+  .preview-label{font-size:11px;color:var(--text3)}
+  .preview-caption-bar{
+    position:absolute;bottom:0;left:0;right:0;
+    padding:8px 12px;
+    background:linear-gradient(transparent,rgba(0,0,0,0.75));
+    font-size:11px;color:#e2e8f0;text-align:center;
+  }
+  .preview-timecode{
+    position:absolute;top:8px;right:10px;
+    font-size:10px;font-family:monospace;
+    color:var(--text3);letter-spacing:0.5px;
+  }
+  /* WAVEFORM */
+  .waveform-wrap{
+    background:rgba(0,0,0,0.2);border:1px solid var(--border);
+    border-radius:10px;padding:10px 12px;
+  }
+  .waveform-label{font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+  .waveform-bars{display:flex;align-items:center;gap:2px;height:32px}
+  .wbar{
+    flex:1;background:rgba(99,102,241,0.25);border-radius:2px;
+    transition:height 0.1s ease;
+  }
+  .wbar.active{background:linear-gradient(0deg,var(--ind),var(--vio))}
+  /* RENDER HUB */
+  .render-hub{
+    background:rgba(0,0,0,0.2);border:1px solid var(--border);
+    border-radius:12px;padding:14px;
+  }
+  .render-btn{
+    width:100%;padding:12px;border-radius:10px;border:none;
+    background:linear-gradient(135deg,var(--ind),var(--vio),var(--cyan));
+    background-size:200% 200%;
+    animation:grad-shift 4s ease infinite;
+    color:#fff;font-size:13px;font-weight:700;
+    cursor:pointer;transition:all 0.25s;
+    letter-spacing:0.5px;
+    box-shadow:0 0 20px rgba(99,102,241,0.3);
+  }
+  @keyframes grad-shift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+  .render-btn:hover{
+    transform:translateY(-1px);
+    box-shadow:0 8px 30px rgba(99,102,241,0.5);
+  }
+  .render-btn:active{transform:scale(0.97)}
+  .log-drawer{
+    margin-top:10px;
+    background:rgba(0,0,0,0.4);border:1px solid var(--border);
+    border-radius:8px;overflow:hidden;
+  }
+  .log-header{
+    padding:7px 10px;display:flex;align-items:center;justify-content:space-between;
+    cursor:pointer;font-size:11px;color:var(--text2);
+    border-bottom:1px solid transparent;
+    transition:all 0.2s;
+  }
+  .log-header:hover{background:rgba(255,255,255,0.03)}
+  .log-header.open{border-bottom-color:var(--border)}
+  .log-body{
+    padding:8px 10px;max-height:100px;overflow-y:auto;
+    font-family:monospace;font-size:10.5px;line-height:1.7;
+    color:#64748b;
+    display:none;
+  }
+  .log-body.visible{display:block}
+  .log-line{display:block;white-space:nowrap}
+  .log-line.ok{color:#34d399}
+  .log-line.info{color:#67e8f9}
+  .log-line.warn{color:#fbbf24}
+  .download-btn{
+    width:100%;padding:9px;border-radius:9px;
+    border:1px solid rgba(16,185,129,0.4);
+    background:rgba(16,185,129,0.1);
+    color:#34d399;font-size:12px;font-weight:600;
+    cursor:pointer;transition:all 0.2s;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    margin-top:8px;
+  }
+  .download-btn:hover{background:rgba(16,185,129,0.18);border-color:rgba(16,185,129,0.6)}
+  .download-btn:active{transform:scale(0.97)}
+  /* SETTINGS MODAL */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;z-index:200;
+    background:rgba(0,0,0,0.6);
+    align-items:center;justify-content:center;
+    backdrop-filter:blur(8px);
+  }
+  .modal-overlay.open{display:flex}
+  .settings-modal{
+    background:linear-gradient(135deg,rgba(17,24,39,0.95),rgba(26,32,53,0.95));
+    border:1px solid var(--border2);
+    border-radius:16px;
+    padding:22px;
+    width:420px;max-width:95vw;
+    backdrop-filter:blur(20px);
+    box-shadow:0 20px 60px rgba(0,0,0,0.6);
+    max-height:80vh;overflow-y:auto;
+  }
+  .modal-title{
+    font-size:15px;font-weight:700;margin-bottom:16px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .modal-section-label{
+    font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;
+    color:var(--text3);margin:14px 0 8px;
+  }
+  .api-input-wrap{position:relative}
+  .api-toggle{
+    position:absolute;right:10px;top:50%;transform:translateY(-50%);
+    font-size:12px;color:var(--text3);cursor:pointer;
+    background:none;border:none;padding:2px 4px;
+  }
+  .api-toggle:hover{color:var(--text1)}
+  .close-btn{
+    width:28px;height:28px;border-radius:7px;border:1px solid var(--border);
+    background:var(--glass);color:var(--text2);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:14px;transition:all 0.2s;
+  }
+  .close-btn:hover{background:rgba(244,63,94,0.15);border-color:rgba(244,63,94,0.3);color:var(--rose)}
+  /* SPEAKER MODE TOGGLE */
+  .toggle-group{display:flex;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:9px;padding:3px;gap:3px}
+  .toggle-opt{
+    flex:1;padding:6px;text-align:center;border-radius:7px;
+    font-size:12px;cursor:pointer;transition:all 0.2s;color:var(--text2);
+  }
+  .toggle-opt.active{
+    background:linear-gradient(135deg,rgba(99,102,241,0.35),rgba(139,92,246,0.35));
+    color:var(--text1);border:1px solid rgba(99,102,241,0.35);
+  }
+  /* RESPONSIVE */
+  @media(max-width:900px){
+    .workspace{grid-template-columns:1fr 1fr;height:auto}
+    .panel:last-child{grid-column:1/-1;border-left:none;border-top:1px solid var(--border)}
+  }
+  @media(max-width:600px){
+    .workspace{grid-template-columns:1fr;height:auto}
+    .center-panel{min-height:400px}
+    .panel:last-child{border-top:1px solid var(--border)}
+  }
+  textarea,input,select{color-scheme:dark}
+</style>
+
+<div id="s2v-root">
+  <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">S2V Script to Video Agent — three-column workspace with script input, storyboard grid, and media production controls</h2>
+
+  <!-- TOP BAR -->
+  <nav class="topbar">
+    <div class="logo-wrap">
+      <div class="logo-icon">S2V</div>
+      <span class="logo-text"><span>S2V</span> Agent</span>
+      <span class="ver-badge">v2.1</span>
+    </div>
+    <div class="topbar-center">
+      <div class="status-dot"></div>
+      <span class="status-label">TTS Engine: Local Supertonic</span>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" title="Notifications" aria-label="Notifications"><i class="ti ti-bell" aria-hidden="true"></i></button>
+      <button class="icon-btn" id="openSettings" title="Settings" aria-label="Open settings"><i class="ti ti-settings" aria-hidden="true"></i></button>
+    </div>
+  </nav>
+
+  <!-- WORKSPACE -->
+  <div class="workspace">
+
+    <!-- LEFT: SCRIPT & PLANNER -->
+    <div class="panel" style="background:linear-gradient(180deg,rgba(17,24,39,0.8) 0%,rgba(11,15,25,0.9) 100%)">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="dot"></span>Project Config</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Project title</label>
+          <input class="form-input" type="text" placeholder="My AI Video Script…" value="The Power of Phonics — Ep. 3">
+        </div>
+
+        <!-- TAB BAR -->
+        <div class="tab-bar" id="tabBar">
+          <div class="tab-pill" id="tabPill"></div>
+          <button class="tab-btn active" id="tab0" onclick="switchTab(0)">⚙️ Core Settings</button>
+          <button class="tab-btn" id="tab1" onclick="switchTab(1)">🧠 AI Guidelines</button>
+        </div>
+
+        <!-- CORE SETTINGS -->
+        <div id="coreTab">
+          <!-- VOICE -->
+          <div class="form-group">
+            <label class="form-label">Voice</label>
+            <div class="voice-group">
+              <div class="voice-group-header" onclick="toggleVoiceGroup(this)">
+                <span>🇬🇧 British English</span>
+                <i class="ti ti-chevron-down" aria-hidden="true" style="font-size:13px;transition:transform 0.2s"></i>
+              </div>
+              <div class="voice-item selected" onclick="selectVoice(this)">
+                <div class="voice-avatar" style="background:rgba(99,102,241,0.2);color:#a5b4fc">OL</div>
+                <div>
+                  <div style="font-size:12px;font-weight:500">Olivia</div>
+                  <div style="font-size:10px;color:var(--text3)">Female · Warm</div>
+                </div>
+                <div class="voice-play" onclick="event.stopPropagation()" title="Preview"><i class="ti ti-player-play" style="font-size:9px" aria-hidden="true"></i></div>
+              </div>
+              <div class="voice-item" onclick="selectVoice(this)">
+                <div class="voice-avatar" style="background:rgba(6,182,212,0.15);color:#67e8f9">JA</div>
+                <div>
+                  <div style="font-size:12px;font-weight:500">James</div>
+                  <div style="font-size:10px;color:var(--text3)">Male · Authoritative</div>
+                </div>
+                <div class="voice-play" onclick="event.stopPropagation()" title="Preview"><i class="ti ti-player-play" style="font-size:9px" aria-hidden="true"></i></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ASPECT RATIO -->
+          <div class="form-group">
+            <label class="form-label">Aspect ratio</label>
+            <div class="ratio-grid">
+              <div class="ratio-btn active" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:28px;height:17px"></div>
+                <span class="ratio-label">16:9</span>
+              </div>
+              <div class="ratio-btn" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:17px;height:28px"></div>
+                <span class="ratio-label">9:16</span>
+              </div>
+              <div class="ratio-btn" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:22px;height:22px"></div>
+                <span class="ratio-label">1:1</span>
+              </div>
+              <div class="ratio-btn" onclick="selectRatio(this)">
+                <div class="ratio-frame" style="width:25px;height:19px"></div>
+                <span class="ratio-label">4:3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- STYLE PRESET -->
+          <div class="form-group">
+            <label class="form-label">Visual style preset</label>
+            <select class="form-select">
+              <option>Cinematic Dark</option>
+              <option>Educational Clean</option>
+              <option>Documentary Realism</option>
+              <option>Animated Infographic</option>
+              <option>Social Media Pop</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- AI GUIDELINES TAB -->
+        <div id="aiTab" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Target dialect</label>
+            <select class="form-select">
+              <option>Nigerian Formal English</option>
+              <option>British English</option>
+              <option>American English</option>
+              <option>General / Neutral</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Narrative tone</label>
+            <select class="form-select">
+              <option>Educational & Authoritative</option>
+              <option>Conversational & Warm</option>
+              <option>Dramatic & Cinematic</option>
+              <option>Energetic & Motivational</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Speaker mode</label>
+            <div class="toggle-group">
+              <div class="toggle-opt active" onclick="setSpeakerMode(this,'single')">Single</div>
+              <div class="toggle-opt" onclick="setSpeakerMode(this,'convo')">Conversational</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custom prompt guideline</label>
+            <textarea class="form-textarea" placeholder="e.g. Always open with a question. Use metaphors from everyday life. Avoid jargon. Emphasize the child-facing outcomes…"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCRIPT INPUT -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:10px"><span class="dot"></span>Script Input</div>
+        <textarea class="script-textarea" id="scriptInput" placeholder="Paste your full script here…&#10;&#10;The magic of phonics begins not in the classroom,&#10;but in the moment a child hears the distinct sound&#10;of each letter and learns to blend them together…"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+          <span style="font-size:10px;color:var(--text3)" id="wordCount">0 words</span>
+          <span style="font-size:10px;color:var(--text3)">≈ 0 min</span>
+        </div>
+      </div>
+
+      <button class="gen-btn" id="genBtn" onclick="triggerGenerate()">
+        <i class="ti ti-sparkles" aria-hidden="true"></i>
+        Generate Storyboard
+        <div class="gen-btn-loader" id="genLoader"></div>
+      </button>
+    </div>
+
+    <!-- CENTER: STORYBOARD -->
+    <div class="center-panel" id="centerPanel">
+      <div class="scene-header">
+        <span class="card-title" style="font-size:11px"><span class="dot"></span>Storyboard</span>
+        <span class="scene-count" id="sceneCountLabel">5 scenes</span>
+      </div>
+
+      <!-- SCENE CARDS -->
+      <div id="sceneList"></div>
+    </div>
+
+    <!-- RIGHT: MEDIA STAGE -->
+    <div class="panel" style="background:linear-gradient(180deg,rgba(17,24,39,0.8) 0%,rgba(11,15,25,0.9) 100%)">
+
+      <div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Preview Stage</div>
+
+      <div class="preview-stage preview-ratio-16-9" id="previewStage">
+        <div class="preview-inner">
+          <div class="preview-placeholder"><i class="ti ti-video" aria-hidden="true" style="color:var(--ind2)"></i></div>
+          <span class="preview-label">No render yet</span>
+        </div>
+        <span class="preview-timecode">00:00:00</span>
+        <div class="preview-caption-bar" style="display:none" id="captionBar"></div>
+      </div>
+
+      <!-- SCENE NAVIGATOR STRIP -->
+      <div id="sceneStrip" style="display:flex;gap:5px;overflow-x:auto;padding:4px 0">
+        <div style="font-size:10px;color:var(--text3);line-height:2.5;white-space:nowrap">Scenes load here ↗</div>
+      </div>
+
+      <!-- AUDIO WAVEFORM -->
+      <div class="waveform-wrap">
+        <div class="waveform-label">
+          <span style="display:flex;align-items:center;gap:5px"><i class="ti ti-wave-sine" aria-hidden="true" style="font-size:13px"></i>TTS Waveform</span>
+          <span id="ttsStatus" style="font-size:10px;color:var(--text3)">Idle</span>
+        </div>
+        <div class="waveform-bars" id="waveBars"></div>
+      </div>
+
+      <!-- RENDER HUB -->
+      <div class="render-hub">
+        <div class="card-title" style="margin-bottom:12px"><span class="dot"></span>Render Production</div>
+
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <div style="flex:1;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">Codec</div>
+            <div style="font-size:12px;font-weight:500">H.264 / AAC</div>
+          </div>
+          <div style="flex:1;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:2px">Quality</div>
+            <div style="font-size:12px;font-weight:500">1080p · 30fps</div>
+          </div>
+        </div>
+
+        <!-- PROGRESS BAR (hidden until render) -->
+        <div id="renderProgress" style="display:none;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-size:10px;color:var(--text2)">Rendering…</span>
+            <span style="font-size:10px;color:var(--ind2)" id="progressPct">0%</span>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);border-radius:4px;height:5px;overflow:hidden">
+            <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--ind),var(--vio));border-radius:4px;transition:width 0.3s ease"></div>
+          </div>
+        </div>
+
+        <button class="render-btn" id="renderBtn" onclick="triggerRender()">
+          <i class="ti ti-player-record" aria-hidden="true"></i>
+          Render Final Video
+        </button>
+
+        <div class="log-drawer">
+          <div class="log-header" id="logHeader" onclick="toggleLog()">
+            <span style="display:flex;align-items:center;gap:5px"><i class="ti ti-terminal-2" aria-hidden="true" style="font-size:12px"></i>Console Log</span>
+            <i class="ti ti-chevron-down" id="logChevron" aria-hidden="true" style="font-size:12px;transition:transform 0.2s"></i>
+          </div>
+          <div class="log-body" id="logBody">
+            <span class="log-line info">[S2V] Engine ready · supertonic-xtts-v2</span>
+            <span class="log-line ok">[TTS] Voice: Olivia loaded</span>
+            <span class="log-line">[FFmpeg] Awaiting render job…</span>
+          </div>
+        </div>
+
+        <button class="download-btn" id="downloadBtn" style="display:none">
+          <i class="ti ti-download" aria-hidden="true"></i>
+          Download Output.mp4
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="settings-modal">
+      <div class="modal-title">
+        <span style="display:flex;align-items:center;gap:8px">
+          <i class="ti ti-settings" aria-hidden="true" style="color:var(--ind2)"></i>
+          Global Settings
+        </span>
+        <button class="close-btn" onclick="closeSettings()" aria-label="Close settings">
+          <i class="ti ti-x" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="modal-section-label">API Keys</div>
+      <div class="form-group">
+        <label class="form-label">Google Gemini API Key</label>
+        <div class="api-input-wrap">
+          <input class="form-input" type="password" id="googleKey" placeholder="AIza…" style="padding-right:70px">
+          <button class="api-toggle" onclick="toggleKey('googleKey',this)">Show</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">DeepSeek API Key</label>
+        <div class="api-input-wrap">
+          <input class="form-input" type="password" id="deepseekKey" placeholder="sk-…" style="padding-right:70px">
+          <button class="api-toggle" onclick="toggleKey('deepseekKey',this)">Show</button>
+        </div>
+      </div>
+
+      <div class="modal-section-label">Output</div>
+      <div class="form-group">
+        <label class="form-label">Output directory</label>
+        <input class="form-input" type="text" value="/home/user/s2v-exports" placeholder="/path/to/output">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assets directory</label>
+        <input class="form-input" type="text" value="/home/user/s2v-assets" placeholder="/path/to/assets">
+      </div>
+
+      <div class="modal-section-label">Advanced</div>
+      <div class="form-group">
+        <label class="form-label">Whisper model size</label>
+        <select class="form-select">
+          <option>tiny</option><option>base</option><option selected>small</option>
+          <option>medium</option><option>large</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">TTS fallback engine</label>
+        <select class="form-select">
+          <option>Edge TTS (Microsoft Online)</option>
+          <option>gTTS (Google Translate)</option>
+          <option>Bark (Offline)</option>
+          <option>Coqui XTTS v2</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max concurrent renders</label>
+        <select class="form-select">
+          <option>1 (safe)</option><option selected>2 (balanced)</option><option>4 (fast)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button onclick="closeSettings()" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all 0.2s;font-family:Inter,sans-serif" onmouseover="this.style.background='var(--glass2)'" onmouseout="this.style.background='transparent'">Cancel</button>
+        <button onclick="saveSettings()" style="flex:1;padding:9px;border-radius:9px;border:1px solid rgba(99,102,241,0.4);background:rgba(99,102,241,0.15);color:var(--ind2);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:Inter,sans-serif">Save Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const scenes=[
+  {num:1,tag:"hook",tagLabel:"Hook",narration:"Did you know that 65% of children struggle to read — not because they can't, but because no one showed them the code? Today, we crack it open.",broll:"Close-up macro shot of a child's wide eyes reading a book, shallow depth of field, warm amber light, cinematic.",speakers:null},
+  {num:2,tag:"body",tagLabel:"Body",narration:"[M1]: Phonics is the foundation. Every word your child will ever read starts here — with sounds. [F1]: And when you pair those sounds with meaning, something extraordinary happens.",broll:"Split-screen: left shows a classroom blackboard with phonics symbols, right shows a child writing. Documentary style.",speakers:["M1","F1"]},
+  {num:3,tag:"body",tagLabel:"Body",narration:"Phase One of the Reading Blueprint covers Sound Foundations — the four core vowel sounds that unlock over 400 words in the first week alone.",broll:"Animated infographic overlay: four vowel sounds radiating outward like a sound wave. Dark background, neon accents.",speakers:null},
+  {num:4,tag:"cta",tagLabel:"CTA",narration:"The Reading Blueprint is live. Hundreds of Nigerian parents and teachers have already started. The link is below — your child's literacy journey starts today.",broll:"Product mockup on a tablet screen, soft studio light. Hand reaching to tap screen. Clean, high-end commercial aesthetic.",speakers:null},
+  {num:5,tag:"conclusion",tagLabel:"End Card",narration:"Subscribe for weekly phonics strategies and share this with one parent who needs it right now. See you in the next episode.",broll:"Channel logo fade-in on dark background. Soft glow behind logo. End screen overlay template."},
+];
+
+function buildSceneCards(){
+  const list=document.getElementById('sceneList');
+  list.innerHTML='';
+  scenes.forEach((s,i)=>{
+    const hasSpeakers=s.speakers&&s.speakers.length;
+    const speakerBadges=hasSpeakers?s.speakers.map(sp=>`<span class="speaker-badge ${sp.startsWith('M')?'badge-m1':'badge-f1'}">${sp}</span>`).join(' '):'';
+    list.innerHTML+=`
+    <div class="scene-card" style="margin-bottom:8px" id="scene${i}">
+      <div class="scene-card-top">
+        <span class="scene-num">#${s.num}</span>
+        <span class="scene-tag tag-${s.tag}">${s.tagLabel}</span>
+        ${hasSpeakers?`<div style="display:flex;gap:3px">${speakerBadges}</div>`:''}
+        <div class="scene-actions">
+          <button class="scene-action-btn" title="Regenerate visual" onclick="regenVisual(${i})"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+          <button class="scene-action-btn" title="Preview speech" onclick="previewSpeech(${i})"><i class="ti ti-player-play" aria-hidden="true"></i></button>
+          <button class="scene-action-btn" title="Delete scene" onclick="deleteScene(${i})" style="color:var(--text3)"><i class="ti ti-trash" aria-hidden="true"></i></button>
+        </div>
+      </div>
+      <div class="scene-card-body">
+        <div>
+          <div class="scene-field-label"><i class="ti ti-microphone" aria-hidden="true" style="font-size:11px"></i>Narration ${hasSpeakers?'<span style="font-size:9px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">multi-speaker</span>':''}</div>
+          <textarea class="scene-narration" oninput="syncScene(${i},'narration',this.value)">${s.narration}</textarea>
+        </div>
+        <div>
+          <div class="scene-field-label"><i class="ti ti-photo" aria-hidden="true" style="font-size:11px"></i>B-Roll Visual Prompt</div>
+          <textarea class="scene-broll" oninput="syncScene(${i},'broll',this.value)">${s.broll}</textarea>
+        </div>
+      </div>
+    </div>`;
+  });
+  buildSceneStrip();
+}
+
+function buildSceneStrip(){
+  const strip=document.getElementById('sceneStrip');
+  const colors={hook:'rgba(6,182,212,0.3)',body:'rgba(99,102,241,0.3)',cta:'rgba(139,92,246,0.3)',conclusion:'rgba(16,185,129,0.3)'};
+  strip.innerHTML=scenes.map((s,i)=>`
+    <div onclick="previewScene(${i})" style="flex-shrink:0;width:44px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:${colors[s.tag]||'rgba(255,255,255,0.05)'};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text2);transition:all 0.15s" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Scene ${s.num}: ${s.tagLabel}">${s.num}</div>
+  `).join('');
+}
+
+function syncScene(i,field,val){scenes[i][field]=val}
+
+function deleteScene(i){
+  if(scenes.length<=1)return;
+  scenes.splice(i,1);
+  scenes.forEach((s,j)=>s.num=j+1);
+  buildSceneCards();
+  document.getElementById('sceneCountLabel').textContent=scenes.length+' scenes';
+}
+
+function regenVisual(i){
+  const card=document.getElementById('scene'+i);
+  const broll=card.querySelector('.scene-broll');
+  broll.style.borderColor='rgba(6,182,212,0.5)';
+  broll.style.color='var(--text3)';
+  broll.value='Regenerating visual prompt…';
+  setTimeout(()=>{
+    broll.style.borderColor='';
+    broll.style.color='';
+    broll.value=scenes[i].broll+' [AI refined: golden-hour lighting, rule of thirds composition, 4K detail]';
+  },1200);
+}
+
+function previewSpeech(i){
+  animateWave(true);
+  document.getElementById('ttsStatus').textContent='Rendering scene '+scenes[i].num+'…';
+  setTimeout(()=>{
+    animateWave(false);
+    document.getElementById('ttsStatus').textContent='Done · 2.3s';
+    previewScene(i);
+  },2000);
+}
+
+function previewScene(i){
+  const preview=document.getElementById('previewStage');
+  const captionBar=document.getElementById('captionBar');
+  const colors={hook:'rgba(6,182,212,0.15)',body:'rgba(99,102,241,0.15)',cta:'rgba(139,92,246,0.15)',conclusion:'rgba(16,185,129,0.15)'};
+  preview.style.background=colors[scenes[i].tag]||'rgba(0,0,0,0.35)';
+  captionBar.style.display='block';
+  const narr=scenes[i].narration.replace(/\[M\d\]:\s*|\[F\d\]:\s*/g,'');
+  captionBar.textContent=narr.length>80?narr.substring(0,80)+'…':narr;
+  preview.querySelector('.preview-inner').innerHTML=`
+    <div style="font-size:11px;font-weight:600;color:var(--text2);letter-spacing:0.5px;text-transform:uppercase">${scenes[i].tagLabel} — Scene ${scenes[i].num}</div>
+    <div style="font-size:10px;color:var(--text3);max-width:180px;text-align:center;line-height:1.5;margin-top:4px">${scenes[i].broll.substring(0,80)}…</div>`;
+}
+
+// WAVEFORM BARS
+function buildWave(){
+  const wrap=document.getElementById('waveBars');
+  wrap.innerHTML='';
+  for(let i=0;i<40;i++){
+    const b=document.createElement('div');
+    b.className='wbar';
+    const h=4+Math.random()*20;
+    b.style.height=h+'px';
+    wrap.appendChild(b);
+  }
+}
+let waveAnim=null;
+function animateWave(on){
+  const bars=document.querySelectorAll('.wbar');
+  if(on){
+    waveAnim=setInterval(()=>{
+      bars.forEach((b,i)=>{
+        const phase=Date.now()/120+i*0.4;
+        const h=4+Math.abs(Math.sin(phase))*26;
+        b.style.height=h+'px';
+        b.classList.toggle('active',h>18);
+      });
+    },60);
+  }else{
+    clearInterval(waveAnim);
+    bars.forEach(b=>{b.classList.remove('active');b.style.height=(4+Math.random()*12)+'px'});
+  }
+}
+
+// TAB SWITCHING
+function switchTab(idx){
+  document.getElementById('coreTab').style.display=idx===0?'':'none';
+  document.getElementById('aiTab').style.display=idx===1?'':'none';
+  document.getElementById('tab0').classList.toggle('active',idx===0);
+  document.getElementById('tab1').classList.toggle('active',idx===1);
+  const bar=document.getElementById('tabBar');
+  const pill=document.getElementById('tabPill');
+  const btns=bar.querySelectorAll('.tab-btn');
+  const btn=btns[idx];
+  pill.style.left=btn.offsetLeft-bar.offsetLeft-3+'px';
+  pill.style.width=btn.offsetWidth+'px';
+}
+
+// SELECT RATIO
+function selectRatio(el){
+  document.querySelectorAll('.ratio-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// SELECT VOICE
+function selectVoice(el){
+  document.querySelectorAll('.voice-item').forEach(v=>v.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// TOGGLE VOICE GROUP
+function toggleVoiceGroup(header){
+  const icon=header.querySelector('i');
+  const items=header.parentElement.querySelectorAll('.voice-item');
+  const open=icon.style.transform==='rotate(180deg)';
+  icon.style.transform=open?'':'rotate(180deg)';
+  items.forEach(it=>it.style.display=open?'flex':'none');
+}
+
+// SPEAKER MODE
+function setSpeakerMode(el,mode){
+  document.querySelectorAll('.toggle-opt').forEach(o=>o.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// GENERATE
+function triggerGenerate(){
+  const btn=document.getElementById('genBtn');
+  const loader=document.getElementById('genLoader');
+  btn.classList.add('loading');
+  btn.querySelector('span')||0;
+  btn.innerHTML=`<i class="ti ti-loader" style="animation:spin 1s linear infinite" aria-hidden="true"></i> Planning Storyboard… <div class="gen-btn-loader" id="genLoader"></div>`;
+  document.getElementById('genLoader');
+  setTimeout(()=>{
+    btn.classList.remove('loading');
+    btn.innerHTML=`<i class="ti ti-check" aria-hidden="true"></i> Storyboard Ready! <div class="gen-btn-loader" id="genLoader"></div>`;
+    btn.style.background='linear-gradient(135deg,rgba(16,185,129,0.7),rgba(6,182,212,0.7))';
+    addLog('ok','[AI] Storyboard generated · 5 scenes · 1240 tokens');
+    addLog('info','[TTS] Pre-caching voice segments…');
+    setTimeout(()=>{
+      btn.style.background='';
+      btn.innerHTML=`<i class="ti ti-sparkles" aria-hidden="true"></i> Generate Storyboard <div class="gen-btn-loader" id="genLoader"></div>`;
+    },3000);
+  },2800);
+}
+
+// RENDER
+let renderInterval=null;
+function triggerRender(){
+  const btn=document.getElementById('renderBtn');
+  btn.disabled=true;
+  btn.textContent='Rendering…';
+  document.getElementById('renderProgress').style.display='block';
+  openLog();
+  let pct=0;
+  const steps=[
+    {t:300,msg:'[FFmpeg] Scene 1/5 · encoding…',cls:'info'},
+    {t:600,msg:'[TTS] Audio track merged',cls:'ok'},
+    {t:1000,msg:'[FFmpeg] Scene 3/5 · 480p pass 1…',cls:'info'},
+    {t:1400,msg:'[Captions] Whisper alignment complete',cls:'ok'},
+    {t:1800,msg:'[FFmpeg] Muxing A/V streams…',cls:'info'},
+    {t:2200,msg:'[S2V] Output.mp4 · 47.2 MB',cls:'ok'},
+  ];
+  steps.forEach(s=>setTimeout(()=>addLog(s.cls,s.msg),s.t));
+  renderInterval=setInterval(()=>{
+    pct=Math.min(pct+2,100);
+    document.getElementById('progressBar').style.width=pct+'%';
+    document.getElementById('progressPct').textContent=pct+'%';
+    if(pct>=100){
+      clearInterval(renderInterval);
+      btn.disabled=false;
+      btn.innerHTML=`<i class="ti ti-check" aria-hidden="true"></i> Render Complete`;
+      document.getElementById('downloadBtn').style.display='flex';
+      animateWave(false);
+    }
+  },50);
+  animateWave(true);
+}
+
+// LOG
+function addLog(cls,msg){
+  const body=document.getElementById('logBody');
+  const line=document.createElement('span');
+  line.className='log-line '+cls;
+  line.textContent=msg;
+  body.appendChild(line);
+  body.scrollTop=body.scrollHeight;
+}
+function toggleLog(){
+  const body=document.getElementById('logBody');
+  const header=document.getElementById('logHeader');
+  const chev=document.getElementById('logChevron');
+  const open=body.classList.toggle('visible');
+  header.classList.toggle('open',open);
+  chev.style.transform=open?'rotate(180deg)':'';
+}
+function openLog(){
+  const body=document.getElementById('logBody');
+  const header=document.getElementById('logHeader');
+  const chev=document.getElementById('logChevron');
+  body.classList.add('visible');
+  header.classList.add('open');
+  chev.style.transform='rotate(180deg)';
+}
+
+// SETTINGS
+document.getElementById('openSettings').addEventListener('click',()=>{
+  document.getElementById('settingsModal').classList.add('open');
+});
+function closeSettings(){document.getElementById('settingsModal').classList.remove('open')}
+function saveSettings(){
+  addLog('ok','[Config] Settings saved');
+  closeSettings();
+}
+function toggleKey(id,btn){
+  const inp=document.getElementById(id);
+  const show=inp.type==='password';
+  inp.type=show?'text':'password';
+  btn.textContent=show?'Hide':'Show';
+}
+document.getElementById('settingsModal').addEventListener('click',function(e){
+  if(e.target===this)closeSettings();
+});
+
+// WORD COUNT
+const scriptInput=document.getElementById('scriptInput');
+scriptInput.addEventListener('input',()=>{
+  const words=scriptInput.value.trim().split(/\s+/).filter(Boolean).length;
+  document.getElementById('wordCount').textContent=words+' words';
+  document.querySelector('.topbar-center+.topbar-right').previousElementSibling;
+  const mins=Math.round(words/140*10)/10;
+  document.querySelector('.panel span[style*="min"]')||0;
+  const minEl=scriptInput.nextElementSibling.lastElementChild;
+  if(minEl)minEl.textContent='≈ '+mins.toFixed(1)+' min';
+});
+
+// SPIN KEYFRAME
+const styleEl=document.createElement('style');
+styleEl.textContent='@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}';
+document.head.appendChild(styleEl);
+
+// INIT
+buildSceneCards();
+buildWave();
+
+// TAB PILL INITIAL POSITION
+requestAnimationFrame(()=>{
+  const tabBar=document.getElementById('tabBar');
+  const tab0=document.getElementById('tab0');
+  const pill=document.getElementById('tabPill');
+  pill.style.left=(tab0.offsetLeft-tabBar.offsetLeft-3)+'px';
+  pill.style.width=tab0.offsetWidth+'px';
+});
+</script>

@@ -32,6 +32,7 @@ def _find_ffmpeg() -> str:
 def stitch_segments(
     segment_paths: list[str],
     output_path: str,
+    master_audio_path: str,
     background_music: str | None = None,
     music_volume_db: int = -20,
     on_progress=None,
@@ -56,42 +57,43 @@ def stitch_segments(
             f.write(f"file '{safe_path}'\n")
 
     try:
+        temp_video = output_path.replace(".mp4", "_novideo.mp4")
+        # Step 1: concat video only
+        cmd1 = [
+            ffmpeg, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_file,
+            "-an",
+            "-c:v", "copy",
+            temp_video
+        ]
+        _run_ffmpeg(cmd1, "concat video")
+
+        # Step 2: add master audio (and optionally background music)
         if not background_music:
-            # Pure lossless concat (copy both streams)
-            cmd = [
+            cmd2 = [
                 ffmpeg, "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file,
-                "-c", "copy",
+                "-i", temp_video,
+                "-i", master_audio_path,
+                "-c:v", "copy",
+                "-c:a", "aac",
                 output_path
             ]
-            _run_ffmpeg(cmd, "concat")
+            _run_ffmpeg(cmd2, "add master audio")
         else:
-            # Step 1: concat to a temp file
-            temp_concat = output_path.replace(".mp4", "_concat_temp.mp4")
-            cmd = [
-                ffmpeg, "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file,
-                "-c", "copy",
-                temp_concat
-            ]
-            _run_ffmpeg(cmd, "concat")
-
-            # Step 2: mix background music (audio re-encode only, video copied)
             if on_progress:
                 on_progress("Mixing background music...")
 
             volume_factor = 10 ** (music_volume_db / 20)
             music_filter = (
-                f"[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=3"
+                f"[1:a][2:a]amix=inputs=2:duration=first:dropout_transition=3"
                 f",volume={volume_factor:.4f}[aout]"
             )
-            cmd = [
+            cmd2 = [
                 ffmpeg, "-y",
-                "-i", temp_concat,
+                "-i", temp_video,
+                "-i", master_audio_path,
                 "-stream_loop", "-1",
                 "-i", background_music,
                 "-filter_complex", music_filter,
@@ -102,9 +104,10 @@ def stitch_segments(
                 "-shortest",
                 output_path
             ]
-            _run_ffmpeg(cmd, "music mix")
+            _run_ffmpeg(cmd2, "music mix")
 
-            os.remove(temp_concat)
+        if os.path.exists(temp_video):
+            os.remove(temp_video)
 
     finally:
         if os.path.exists(concat_file):

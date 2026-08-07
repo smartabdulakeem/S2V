@@ -21,6 +21,21 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
+# OPTIMIZATION: Limit ONNX Runtime CPU threads to prevent active RAM and CPU overhead
+os.environ["SUPERTONIC_INTRA_OP_THREADS"] = "2"
+os.environ["SUPERTONIC_INTER_OP_THREADS"] = "1"
+
+# OPTIMIZATION: Monkey patch ONNX Runtime SessionOptions to disable memory arena
+try:
+    import onnxruntime as ort
+    original_init = ort.SessionOptions.__init__
+    def patched_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        self.enable_cpu_mem_arena = False
+    ort.SessionOptions.__init__ = patched_init
+except Exception:
+    pass
+
 # ── FFmpeg Finder ─────────────────────────────────────────────────────────────
 
 def _find_ffmpeg() -> str:
@@ -77,9 +92,68 @@ def _transcode_to_mp3(input_bytes: bytes, output_path: str, is_raw_pcm: bool = F
         except OSError:
             pass
 
+def _sanitize_text(text: str) -> str:
+    if not text:
+        return ""
+    # Map common non-ASCII punctuation and unsupported ASCII symbols to standard alternatives
+    replacements = {
+        '“': '"', '”': '"',
+        '‘': "'", '’': "'",
+        '—': '-', '–': '-',
+        '…': '...',
+        '•': ' ', '·': ' ',
+        '➔': ' ', '→': ' ',
+        '✔': ' ', '★': ' ',
+        '[': '(', ']': ')',
+        '{': '(', '}': ')',
+        '`': "'",
+        '_': ' ',
+        '\\': ' ',
+        '|': ' ',
+        '@': ' at ',
+        '#': ' ',
+    }
+    for orig, rep in replacements.items():
+        text = text.replace(orig, rep)
+    
+    # Keep only standard printable ASCII (excluding unsupported ones), Arabic characters, and space
+    # (This strips all emojis, complex unicode icons, and unsupported symbols)
+    unsupported_ascii = {'#', '@', '[', '\\', ']', '_', '`', '|'}
+    cleaned = []
+    for char in text:
+        o = ord(char)
+        # ASCII printable (32-126) excluding unsupported, or Arabic Unicode block (0x0600-0x06FF)
+        if ((32 <= o <= 126) and char not in unsupported_ascii) or (0x0600 <= o <= 0x06FF):
+            cleaned.append(char)
+        elif char in '\n\r\t':
+            cleaned.append(' ')
+        else:
+            # Replace unsupported character/emoji with space to avoid merging adjacent words
+            cleaned.append(' ')
+            
+    import re
+    return re.sub(r' +', ' ', ''.join(cleaned)).strip()
+
 # ── Local Supertonic TTS ──────────────────────────────────────────────────────
+import threading
+import gc
 
 _tts_instance = None
+_tts_lock = threading.Lock()
+_tts_last_active_time = time.time()
+_tts_monitor_started = False
+
+def _monitor_tts_inactivity():
+    global _tts_instance, _tts_last_active_time
+    while True:
+        time.sleep(30)
+        with _tts_lock:
+            if _tts_instance is not None:
+                idle_duration = time.time() - _tts_last_active_time
+                if idle_duration > 300:  # 5 minutes of inactivity
+                    print(f"S2V: TTS engine idle for {int(idle_duration)}s. Unloading model weights to free RAM.")
+                    _tts_instance = None
+                    gc.collect()
 
 def _generate_with_local_supertonic(
     narration: str,
@@ -90,10 +164,30 @@ def _generate_with_local_supertonic(
     segment_id: int = 0
 ):
     """Generate audio offline using local Supertonic synthesis."""
-    global _tts_instance
-    if _tts_instance is None:
-        from supertonic import TTS
-        _tts_instance = TTS()
+    global _tts_instance, _tts_last_active_time, _tts_monitor_started
+    
+    # Sanitize narration to prevent tokenizer index errors with emojis/symbols
+    narration = _sanitize_text(narration)
+    if not narration:
+        if on_progress:
+            on_progress(f"Segment {segment_id} — Narration is empty after sanitization")
+        # Generate a tiny bit of silence so the segment is not empty
+        _transcode_to_mp3(b"\x00" * 3200, output_path, is_raw_pcm=True)
+        return
+    
+    with _tts_lock:
+        _tts_last_active_time = time.time()
+        
+        # Start inactivity monitor thread if not already running
+        if not _tts_monitor_started:
+            threading.Thread(target=_monitor_tts_inactivity, daemon=True).start()
+            _tts_monitor_started = True
+            
+        if _tts_instance is None:
+            from supertonic import TTS
+            print("S2V: Loading Multilingual (English/Arabic) TTS model weights...")
+            _tts_instance = TTS()  # Defaults to supertonic-3 (multilingual)
+        tts_instance = _tts_instance
 
     if on_progress:
         on_progress(f"Segment {segment_id} — Generating offline voiceover via Supertonic")
@@ -106,7 +200,7 @@ def _generate_with_local_supertonic(
             voice_name = v_style.upper()
             break
 
-    style = _tts_instance.get_voice_style(voice_name=voice_name)
+    style = tts_instance.get_voice_style(voice_name=voice_name)
 
     # 2. Map rate string to speed coefficient (0.7 - 2.0)
     speed = 1.05
@@ -162,7 +256,7 @@ def _generate_with_local_supertonic(
                 tag_match = re.match(r'^\[((?:M|F)[1-5])\]$', part, re.IGNORECASE)
                 if tag_match:
                     active_voice_name = tag_match.group(1).upper()
-                    active_style = _tts_instance.get_voice_style(voice_name=active_voice_name)
+                    active_style = tts_instance.get_voice_style(voice_name=active_voice_name)
                     continue
                 
                 # This part is narration text. Clean other emotional tags inside it.
@@ -178,7 +272,7 @@ def _generate_with_local_supertonic(
                     continue
                 
                 # Synthesize part
-                part_wav, _ = _tts_instance.synthesize(
+                part_wav, _ = tts_instance.synthesize(
                     text=part_clean,
                     voice_style=active_style,
                     speed=speed,
@@ -186,7 +280,7 @@ def _generate_with_local_supertonic(
                 )
                 
                 temp_part_wav = os.path.join(tempfile.gettempdir(), f"s2v_seg_{segment_id}_part_{part_idx}.wav")
-                _tts_instance.save_audio(part_wav, temp_part_wav)
+                tts_instance.save_audio(part_wav, temp_part_wav)
                 temp_wav_files.append(temp_part_wav)
                 part_idx += 1
                 
@@ -200,7 +294,8 @@ def _generate_with_local_supertonic(
             list_path = os.path.join(tempfile.gettempdir(), f"s2v_seg_{segment_id}_list.txt")
             with open(list_path, "w", encoding="utf-8") as lf:
                 for tf in temp_wav_files:
-                    lf.write(f"file '{tf.replace('\\', '/')}'\n")
+                    safe_tf = tf.replace("\\", "/")
+                    lf.write(f"file '{safe_tf}'\n")
                     
             final_wav = os.path.join(tempfile.gettempdir(), f"s2v_seg_{segment_id}_final.wav")
             
@@ -256,13 +351,13 @@ def _generate_with_local_supertonic(
             temp_wav = tmp.name
 
         try:
-            wav, _ = _tts_instance.synthesize(
+            wav, _ = tts_instance.synthesize(
                 text=clean_text,
                 voice_style=style,
                 speed=speed,
                 lang=lang
             )
-            _tts_instance.save_audio(wav, temp_wav)
+            tts_instance.save_audio(wav, temp_wav)
 
             if not os.path.exists(temp_wav) or os.path.getsize(temp_wav) < 1000:
                 raise RuntimeError("Supertonic generated an empty or invalid WAV file.")
@@ -611,3 +706,27 @@ def get_audio_duration(mp3_path: str) -> float:
     from moviepy.editor import AudioFileClip
     with AudioFileClip(mp3_path) as clip:
         return clip.duration
+
+def stitch_master_audio(segment_audio_paths: list[str], output_path: str):
+    ffmpeg = _find_ffmpeg()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
+        list_file = f.name
+        for path in segment_audio_paths:
+            safe_path = path.replace("\\", "/")
+            f.write(f"file '{safe_path}'\n")
+    try:
+        cmd = [
+            ffmpeg, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", list_file,
+            "-c", "copy",
+            output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"FFmpeg master audio concat failed: {result.stderr}")
+    finally:
+        if os.path.exists(list_file):
+            os.remove(list_file)
+    return output_path

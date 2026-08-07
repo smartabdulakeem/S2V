@@ -197,7 +197,7 @@ class Api:
             ).decode("ascii")
             try:
                 self._window.evaluate_js(
-                    f"window.onParseComplete(JSON.parse(atob('{payload}')))"
+                    f"window.onParseComplete(JSON.parse(window.decodeBase64UTF8('{payload}')))"
                 )
             except Exception:
                 pass
@@ -294,7 +294,7 @@ class Api:
             try:
                 self._window.evaluate_js(
                     f"window.onPipelineEvent("
-                    f"JSON.parse(atob('{payload}')))"
+                    f"JSON.parse(window.decodeBase64UTF8('{payload}')))"
                 )
             except Exception:
                 pass

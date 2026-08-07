@@ -1,0 +1,112 @@
+{
+  "project": {
+    "title": "American Civil War Intro Sample",
+    "output_filename": "civil_war_sample.mp4",
+    "voice": "edge:en-US-BrianNeural",
+    "voice_rate": "+0%",
+    "voice_pitch": "+0Hz",
+    "background_music": null,
+    "visual_style": "animated history style illustration of the american civil war, vintage tactical map textures",
+    "aspect_ratio": "16:9",
+    "disable_captions": true,
+    "character_bible": {
+      "Union": "Union soldier in blue wool uniform and kepi cap",
+      "Confederate": "Confederate soldier in gray wool uniform and kepi cap",
+      "Sumter": "Fort Sumter battle map scene",
+      "Lincoln": "Abraham Lincoln, President of the United States, detailed historical portrait painting"
+    }
+  },
+  "segments": [
+    {
+      "segment_id": 1,
+      "type": "hook",
+      "narration": "In April 1861, tensions between the Union and the Confederacy erupted into war at Fort Sumter, launching the deadliest conflict in American history.",
+      "b_roll_keyword": "bombardment of Fort Sumter battle map, Union and Confederate flags",
+      "visual_type": "ai_image",
+      "magick_filter": "none",
+      "ken_burns": "zoom_in",
+      "use_base_image": "civil_war_map.jpg",
+      "crop": {"x": 0.0, "y": 0.0, "w": 0.8, "h": 0.8},
+      "level1_overlay": {
+        "highlights": [{"x": 700, "y": 480, "radius": 25, "color": "red"}],
+        "labels": [{"text": "Fort Sumter", "x": 700, "y": 440, "color": "yellow", "size": 32}],
+        "arrows": [],
+        "sprites": [{"image": "soldier_union.png", "x": 300, "y": 300, "scale": 0.8, "motion": "slide_in_left"}]
+      },
+      "sfx": [{"name": "whoosh", "offset_ms": 0}],
+      "text_overlay": null,
+      "voice_rate": "+0%",
+      "voice_pitch": "+0Hz",
+      "transition_in": "cut",
+      "transition_out": "cut"
+    },
+    {
+      "segment_id": 2,
+      "type": "body",
+      "narration": "For four long years, the United States fought a brutal war of brother against brother, reshaping the fate of the nation forever.",
+      "b_roll_keyword": "march of the Union soldier regiment",
+      "visual_type": "ai_image",
+      "magick_filter": "none",
+      "ken_burns": "zoom_out",
+      "use_base_image": "civil_war_map.jpg",
+      "crop": null,
+      "level1_overlay": {
+        "highlights": [],
+        "labels": [{"text": "Union March", "x": 620, "y": 180, "color": "white", "size": 32}],
+        "arrows": [{"x1": 660, "y1": 240, "x2": 640, "y2": 320, "color": "blue"}],
+        "sprites": [{"image": "soldier_union.png", "x": 640, "y": 360, "scale": 0.8, "motion": "bounce"}]
+      },
+      "sfx": [{"name": "pop", "offset_ms": 500}],
+      "text_overlay": null,
+      "voice_rate": "+0%",
+      "voice_pitch": "+0Hz",
+      "transition_in": "cut",
+      "transition_out": "cut"
+    },
+    {
+      "segment_id": 3,
+      "type": "body",
+      "narration": "President Abraham Lincoln steered the nation through its greatest trial, determined to preserve the Union at all costs.",
+      "b_roll_keyword": "Lincoln historical portrait in presidential office",
+      "visual_type": "ai_image",
+      "magick_filter": "none",
+      "ken_burns": "zoom_in",
+      "use_base_image": "lincoln.jpg",
+      "crop": null,
+      "level1_overlay": {
+        "highlights": [],
+        "labels": [{"text": "Abraham Lincoln", "x": 640, "y": 620, "color": "yellow", "size": 36}],
+        "arrows": []
+      },
+      "sfx": [{"name": "whoosh", "offset_ms": 0}],
+      "text_overlay": null,
+      "voice_rate": "+0%",
+      "voice_pitch": "+0Hz",
+      "transition_in": "cut",
+      "transition_out": "cut"
+    },
+    {
+      "segment_id": 4,
+      "type": "conclusion",
+      "narration": "Four years later, Union forces captured the Confederate capital of Richmond, bringing a devastating war to its final conclusion.",
+      "b_roll_keyword": "capture of Richmond capital building in ruins",
+      "visual_type": "ai_image",
+      "magick_filter": "none",
+      "ken_burns": "none",
+      "use_base_image": "civil_war_map.jpg",
+      "crop": null,
+      "level1_overlay": {
+        "highlights": [{"x": 640, "y": 320, "radius": 30, "color": "blue", "fill": true}],
+        "labels": [{"text": "Richmond Captured", "x": 640, "y": 380, "color": "white", "size": 32}],
+        "arrows": [{"x1": 660, "y1": 240, "x2": 640, "y2": 320, "color": "blue"}],
+        "sprites": [{"image": "soldier_confed.png", "x": 640, "y": 320, "scale": 0.8, "motion": "slide_in_left_bounce"}]
+      },
+      "sfx": [{"name": "cannon", "offset_ms": 1000}],
+      "text_overlay": null,
+      "voice_rate": "+0%",
+      "voice_pitch": "+0Hz",
+      "transition_in": "cut",
+      "transition_out": "cut"
+    }
+  ]
+}

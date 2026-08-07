@@ -1,0 +1,39 @@
+{
+  "project": {
+    "title": "Vox Collage Sample",
+    "output_filename": "vox_collage_sample.mp4",
+    "voice": "local:supertonic:M1",
+    "voice_rate": "+0%",
+    "voice_pitch": "+0Hz",
+    "background_music": null,
+    "visual_style": "vox_paper_collage",
+    "aspect_ratio": "16:9",
+    "disable_captions": true
+  },
+  "segments": [
+    {
+      "segment_id": 1,
+      "type": "hook",
+      "narration": "In the modern age of digital media, visual storytelling has evolved into a bold art form.",
+      "b_roll_keyword": "Digital media revolution paper collage cutout graphic",
+      "visual_type": "ai_image",
+      "magick_filter": "vox_collage",
+      "ken_burns": "zoom_in",
+      "use_base_image": "segment_1.jpg",
+      "transition_in": "cut",
+      "transition_out": "fade"
+    },
+    {
+      "segment_id": 2,
+      "type": "body",
+      "narration": "By combining newsprint textures, torn edges, and vibrant color blocking, complex topics come alive.",
+      "b_roll_keyword": "Torn newspaper headlines halftone dots vibrant yellow background",
+      "visual_type": "ai_image",
+      "magick_filter": "vox_collage",
+      "ken_burns": "pan_right",
+      "use_base_image": "segment_2.jpg",
+      "transition_in": "fade",
+      "transition_out": "cut"
+    }
+  ]
+}
