@@ -1,6 +1,6 @@
 # S2V — Script-to-Video Pipeline
 
-**Turn a JSON script into a finished 1080p YouTube video — no coding required.**
+**Turn a JSON script into a finished 720p (1280x720) YouTube video — no coding required.**
 
 ---
 
@@ -8,11 +8,11 @@
 
 S2V reads a script you write in a simple text format (JSON), and automatically:
 
-1. Generates a professional AI voiceover (using Microsoft's free neural voices)
-2. Finds matching stock photos from Pexels for each scene
+1. Generates a professional AI voiceover (using Google Cloud TTS or Microsoft Neural voices)
+2. Sources high quality AI visuals using Google Imagen (with Pollinations FLUX fallback)
 3. Applies cinematic Ken Burns motion (slow zoom, pan) to each image
 4. Transcribes the voiceover and burns captions into the video
-5. Assembles everything into a finished 1080p MP4, ready to upload to YouTube
+5. Assembles everything into a finished 1280x720 MP4, ready to upload to YouTube
 
 You write the script → click Render → get a video. That's it.
 
@@ -37,17 +37,6 @@ When it finishes, you'll see: `✅ Setup complete! Double-click run.bat to start
 
 ---
 
-## How to get a free Pixabay API key
-
-Pixabay provides free stock photos. You need a free key to use them.
-
-1. Go to: https://pixabay.com/api/docs/
-2. Click **"Join"** at the top of the page and create a free account (no credit card needed)
-3. Once logged in, go back to https://pixabay.com/api/docs/ — your API key will be shown near the top of the page
-4. Copy it — you'll paste it into the app
-
----
-
 ## How to write your script (JSON format)
 
 Your script is a `.json` file. JSON is just structured text — think of it as a very precise way of writing a list.
@@ -59,7 +48,7 @@ Here is the minimum you need for each scene (called a "segment"):
   "segment_id": 1,
   "type": "hook",
   "narration": "The words you want spoken out loud.",
-  "b_roll_keyword": "what to search on Pexels (e.g. ancient ruins)",
+  "b_roll_keyword": "ancient ruins landscape",
   "visual_type": "stock_photo",
   "ken_burns": "zoom_in",
   "text_overlay": null,
@@ -86,12 +75,10 @@ Here is the minimum you need for each scene (called a "segment"):
 **Voice options** (examples):
 | Voice ID | Description |
 |---|---|
+| `google:en-GB-Neural2-D` | Google Premium British Male |
 | `en-US-GuyNeural` | American male, neutral |
 | `en-US-AriaNeural` | American female, warm |
 | `en-GB-RyanNeural` | British male, authoritative |
-| `en-GB-SoniaNeural` | British female, clear |
-
-See the full list at: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support
 
 Open `samples/sample_script.json` in any text editor to see a complete working example.
 
@@ -101,10 +88,9 @@ Open `samples/sample_script.json` in any text editor to see a complete working e
 
 1. Double-click **`run.bat`** to open the app.
 2. Click **"Load Script (.json)"** and choose your script file.
-3. If you haven't entered your Pexels API key yet, paste it in the key field and click **Save**.
-4. Click **"▶ Render Video"**.
-5. Watch the progress panel. Each segment is processed one at a time.
-6. When finished, click **"Open Output Folder"** to find your MP4.
+3. Click **"▶ Render Video"**.
+4. Watch the progress panel. Each segment is processed one at a time.
+5. When finished, click **"Open Output Folder"** to find your MP4.
 
 Your finished video will be in the `output/` folder inside S2V.
 
@@ -117,9 +103,6 @@ Your finished video will be in the `output/` folder inside S2V.
 
 **"FFmpeg download failed" during setup**
 → Check your internet connection. If it keeps failing, download FFmpeg manually from https://www.gyan.dev/ffmpeg/builds/ — get the "essentials" build, extract it, and place `ffmpeg.exe` inside `S2V\vendor\ffmpeg\bin\`.
-
-**"Pixabay API key is invalid" error during render**
-→ Go to pixabay.com/api/docs, log in, and copy your key again from the top of the page. Make sure there are no spaces before or after the key when you paste it.
 
 **The app opens but the render crashes at a specific segment**
 → Check the `logs/` folder — there will be a file named `render_YYYYMMDD_HHMMSS.log` with detailed error information. The render is resume-capable: if you fix the issue and click Render again, it will skip the segments that already completed.
@@ -139,4 +122,4 @@ Your finished video will be in the `output/` folder inside S2V.
 | `output/` | Your finished MP4 files land here |
 | `cache/` | Temporary files created during render (safe to delete after render) |
 | `logs/` | Error logs if something goes wrong |
-| `config/settings.json` | Where your Pexels key is saved |
+| `config/settings.json` | Where your API keys are saved |

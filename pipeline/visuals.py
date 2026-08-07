@@ -17,6 +17,7 @@ import urllib.request
 import urllib.parse
 import re
 import shutil
+import unicodedata
 from pathlib import Path
 
 from pipeline.magick_processor import process_vignette, process_diptych, process_collage, process_vox_collage
@@ -536,7 +537,8 @@ def fetch_visual(
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_visual.jpg")
     width, height = _get_dimensions(aspect_ratio)
 
-    project_slug = re.sub(r'[^\w\-]', '_', video_title.strip()).strip('_')
+    normalized_title = unicodedata.normalize("NFKD", video_title.strip())
+    project_slug = re.sub(r'[^\w\-]', '_', normalized_title).strip('_')
     if not project_slug:
         project_slug = "my_project"
 
@@ -756,7 +758,8 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     visual_style = proj.get("visual_style", "")
     character_bible = proj.get("character_bible", {})
     
-    project_slug = re.sub(r'[^\w\-]', '_', title.strip()).strip('_')
+    normalized_title = unicodedata.normalize("NFKD", title.strip())
+    project_slug = re.sub(r'[^\w\-]', '_', normalized_title).strip('_')
     if not project_slug:
         project_slug = "my_project"
         
