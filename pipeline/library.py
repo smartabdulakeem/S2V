@@ -20,6 +20,7 @@ IMAGES_DIR = os.path.join(LIBRARY_DIR, "images")
 INDEX_PATH = os.path.join(LIBRARY_DIR, "index.npz")
 REJECTIONS_PATH = os.path.join(LIBRARY_DIR, "rejections.jsonl")
 MANIFEST_PATH = os.path.join(LIBRARY_DIR, "manifest.jsonl")
+CONFIG_PATH = os.path.join(ROOT, "config", "library_config.json")
 WAR_IMAGE_PROMPTS_PATH = os.path.join(LIBRARY_DIR, "WAR_IMAGE_PROMPTS.md")
 
 _MODEL = None
@@ -39,6 +40,33 @@ NEGATIVE_BLOCK = (
 )
 
 DEFAULT_WORLD_ANCHOR = "7th century Arabian Peninsula, early Islamic era"
+FALLBACK_MIN_SCORE = 0.270
+
+def get_calibrated_min_score() -> float:
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                if "min_score" in cfg and isinstance(cfg["min_score"], (int, float)):
+                    return float(cfg["min_score"])
+        except Exception:
+            pass
+    return FALLBACK_MIN_SCORE
+
+
+def save_calibrated_min_score(min_score: float):
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    cfg = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+    cfg["min_score"] = round(float(min_score), 4)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
+
 
 # ── 1. CLIP Model Singleton & Reindex ──────────────────────────────────────────
 
@@ -46,8 +74,8 @@ def _load_clip():
     global _MODEL, _PREPROCESS, _TOKENIZER
     if _MODEL is None:
         import open_clip
-        model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32", pretrained="openai", device="cpu")
-        tokenizer = open_clip.get_tokenizer("ViT-B-32")
+        model, _, preprocess = open_clip.create_model_and_transforms("ViT-B-32-quickgelu", pretrained="openai", device="cpu")
+        tokenizer = open_clip.get_tokenizer("ViT-B-32-quickgelu")
         model.eval()
         _MODEL = model
         _PREPROCESS = preprocess
@@ -197,9 +225,6 @@ def record_rejection(query: str, image_path: str):
     path_clean = image_path.strip().replace("\\", "/")
     
     existing = get_rejected_pairs()
-    if (query_clean, path_clean) in existing:
-        return
-
     record = {"query": query_clean, "image_path": path_clean, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")}
     os.makedirs(os.path.dirname(REJECTIONS_PATH), exist_ok=True)
     with open(REJECTIONS_PATH, "a", encoding="utf-8") as f:
@@ -208,13 +233,16 @@ def record_rejection(query: str, image_path: str):
 
 # ── 3. Diversity Search ────────────────────────────────────────────────────────
 
-def search(query: str, k: int = 5, exclude: set = None, min_score: float = 0.26):
+def search(query: str, k: int = 5, exclude: set = None, min_score: float = None):
     """
     Returns [(path, score)] ranked by score after applying penalties:
       - 1.0 score penalty for image in exclude set (already used in render)
       - 1.0 score penalty for (query, image) in rejections memory
       - 0.03 * lifetime_usage_count penalty from manifest
     """
+    if min_score is None:
+        min_score = get_calibrated_min_score()
+
     if exclude is None:
         exclude = set()
 
@@ -301,13 +329,16 @@ def compose_gap_prompt(
 
 # ── 5. Coverage & Plan Shots ───────────────────────────────────────────────────
 
-def plan_shots(script_data: dict, min_score: float = 0.26):
+def plan_shots(script_data: dict, min_score: float = None):
     """
     Analyzes all shots in a script against the library index.
     Ensures diversity (NO image used twice in a single script).
     Reports 3 states per shot: matched, weak, gap.
     Ranks gaps by reuse value across the script.
     """
+    if min_score is None:
+        min_score = get_calibrated_min_score()
+
     project_info = script_data.get("project", {})
     title = project_info.get("title", "Untitled Project")
     world_anchor = project_info.get("world_anchor") or project_info.get("visual_style") or DEFAULT_WORLD_ANCHOR
@@ -334,7 +365,7 @@ def plan_shots(script_data: dict, min_score: float = 0.26):
                 "segment_id": seg_id,
                 "shot_id": shot.get("shot_id", f"{seg_id}a"),
                 "query": shot.get("query") or seg.get("b_roll_keyword") or "visual landscape",
-                "min_score": shot.get("min_score", min_score),
+                "min_score": shot.get("min_score") or min_score,
                 "narration": narration
             })
 
@@ -396,11 +427,11 @@ def plan_shots(script_data: dict, min_score: float = 0.26):
             "composed_prompt": composed
         })
 
-    # Find and rank gaps by reuse value
+    # Find and rank gaps (both 'gap' and 'weak' states) by reuse value
     gaps_ranked = []
     seen_gap_queries = set()
     for s_rep in shot_reports:
-        if s_rep["state"] == "gap":
+        if s_rep["state"] in ("gap", "weak"):
             q = s_rep["query"]
             if q not in seen_gap_queries:
                 seen_gap_queries.add(q)
@@ -409,6 +440,7 @@ def plan_shots(script_data: dict, min_score: float = 0.26):
                     "query": q,
                     "first_segment_id": s_rep["segment_id"],
                     "first_shot_id": s_rep["shot_id"],
+                    "state": s_rep["state"],
                     "best_score": s_rep["best_score"],
                     "reuse_count": len(related_segs),
                     "related_segments": related_segs,
@@ -446,18 +478,104 @@ def print_coverage_report(script_path: str):
         for i, gap in enumerate(report["ranked_gaps"], 1):
             others = [str(sid) for sid in gap["related_segments"] if sid != gap["first_segment_id"]]
             also_str = f"   also needed by {', '.join(others)}" if others else ""
-            print(f"GAP {i}  segment {gap['first_segment_id']} shot {gap['first_shot_id']}   best {gap['best_score']:.2f}{also_str}")
-            print(f"  → {gap['composed_prompt']}\n")
+            print(f"GAP {i}  segment {gap['first_segment_id']} shot {gap['first_shot_id']}   best {gap['best_score']:.4f}{also_str}")
+            print(f"  -> {gap['composed_prompt']}\n")
     else:
         print("No gaps detected — full library coverage achieved!\n")
 
 
-# ── 6. CLI Entry Point ─────────────────────────────────────────────────────────
+# ── 6. Calibration Command ─────────────────────────────────────────────────────
+
+def calibrate():
+    """
+    Runs ~10 known-good queries and ~10 known-impossible queries against the real index.
+    Prints both distributions and recommends min_score as the midpoint of the clean gap.
+    Saves the recommended min_score into config/library_config.json.
+    """
+    real_queries = [
+        "desert caravan at dusk",
+        "mud brick city walls",
+        "open manuscript with calligraphy",
+        "horse cavalry charging in sandstorm",
+        "oil lamp burning by firelight",
+        "camel riders on sand dunes",
+        "scribe writing on parchment",
+        "war banners on desert ridge",
+        "palm oasis water well",
+        "robed elders in council"
+    ]
+
+    fake_queries = [
+        "astronaut floating in outer space",
+        "a Formula 1 racing car",
+        "penguins on an antarctic ice shelf",
+        "a laptop computer on an office desk",
+        "cyberpunk neon robot in futuristic city",
+        "steampunk locomotive train on tracks",
+        "skyscrapers in modern new york city",
+        "underwater coral reef with tropical fish",
+        "traffic lights at a city intersection",
+        "jet airliner flying above clouds"
+    ]
+
+    embeddings, paths = load_index()
+    if len(paths) == 0:
+        print("Error: Library index is empty. Please run reindex first.")
+        return 0.0
+
+    real_scores = []
+    print("\n--- Real Queries (Known Good) ---")
+    for q in real_queries:
+        q_emb = encode_text_query(q)
+        scores = np.dot(embeddings, q_emb)
+        best = float(np.max(scores))
+        real_scores.append(best)
+        print(f"  {best:.4f}  {q}")
+
+    fake_scores = []
+    print("\n--- Fake Queries (Known Impossible) ---")
+    for q in fake_queries:
+        q_emb = encode_text_query(q)
+        scores = np.dot(embeddings, q_emb)
+        best = float(np.max(scores))
+        fake_scores.append(best)
+        print(f"  {best:.4f}  {q}")
+
+    real_min, real_max = min(real_scores), max(real_scores)
+    real_mean, real_med = float(np.mean(real_scores)), float(np.median(real_scores))
+
+    fake_min, fake_max = min(fake_scores), max(fake_scores)
+    fake_mean, fake_med = float(np.mean(fake_scores)), float(np.median(fake_scores))
+
+    print("\n=== DISTRIBUTION SUMMARY ===")
+    print(f"REAL QUERIES : min={real_min:.4f}, max={real_max:.4f}, mean={real_mean:.4f}, median={real_med:.4f}")
+    print(f"FAKE QUERIES : min={fake_min:.4f}, max={fake_max:.4f}, mean={fake_mean:.4f}, median={fake_med:.4f}")
+
+    gap_low = fake_max
+    gap_high = real_min
+    
+    if gap_high > gap_low:
+        rec_min_score = (gap_low + gap_high) / 2.0
+        print(f"\nCLEAN GAP DETECTED: [{gap_low:.4f}, {gap_high:.4f}]")
+        print(f"RECOMMENDED MIN_SCORE: {rec_min_score:.4f}")
+    else:
+        rec_min_score = fake_max + 0.015
+        print(f"\nOVERLAP WARNING: Highest fake ({fake_max:.4f}) >= lowest real ({real_min:.4f}).")
+        print(f"RECOMMENDED MIN_SCORE: {rec_min_score:.4f}")
+
+    save_calibrated_min_score(rec_min_score)
+    print(f"Saved min_score={rec_min_score:.4f} to {CONFIG_PATH}\n")
+    return rec_min_score
+
+
+# ── 7. CLI Entry Point ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "reindex":
         count, elapsed = reindex(force=True)
         print(f"Reindexed {count} images in {elapsed:.2f}s -> {INDEX_PATH}")
+    elif len(sys.argv) > 1 and sys.argv[1] == "calibrate":
+        calibrate()
     elif len(sys.argv) > 1 and sys.argv[1] == "search":
         if len(sys.argv) < 3:
             print("Usage: python -m pipeline.library search \"<query>\" [k]")
@@ -477,5 +595,6 @@ if __name__ == "__main__":
     else:
         print("Usage:")
         print("  python -m pipeline.library reindex")
+        print("  python -m pipeline.library calibrate")
         print("  python -m pipeline.library search \"<query>\" [k]")
         print("  python -m pipeline.library coverage <script.json>")

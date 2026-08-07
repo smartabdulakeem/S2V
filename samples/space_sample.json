@@ -1,0 +1,43 @@
+{
+  "project": {
+    "title": "Apollo 11 Moon Landing",
+    "output_filename": "apollo11_sample.mp4",
+    "voice": "en-US-News-M",
+    "world_anchor": "1969 NASA Space Program",
+    "character_bible": {
+      "Neil Armstrong": "astronaut in white pressurized space suit"
+    }
+  },
+  "segments": [
+    {
+      "segment_id": 1,
+      "narration": "Saturn V rocket launch from Cape Canaveral.",
+      "shots": [
+        {
+          "shot_id": "1a",
+          "query": "Saturn V rocket launch with fire and smoke trail"
+        }
+      ]
+    },
+    {
+      "segment_id": 2,
+      "narration": "Neil Armstrong steps onto lunar surface.",
+      "shots": [
+        {
+          "shot_id": "2a",
+          "query": "Neil Armstrong astronaut walking on moon surface"
+        }
+      ]
+    },
+    {
+      "segment_id": 3,
+      "narration": "Apollo lunar module resting in sea of tranquility.",
+      "shots": [
+        {
+          "shot_id": "3a",
+          "query": "Apollo lunar lander module on moon crater surface"
+        }
+      ]
+    }
+  ]
+}
