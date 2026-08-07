@@ -230,10 +230,14 @@ class RenderOrchestrator:
         self._emit("stage", name="Captions (Parallel)", stage_num=4, total_stages=7)
         completed_cap = 0
 
-        if disable_captions:
+        captions_cfg = proj.get("captions", {})
+        disable_captions = proj.get("disable_captions", False) or not captions_cfg.get("enabled", True)
+        captions_source = captions_cfg.get("source", "tts_timings")
+
+        if disable_captions or captions_source == "none":
             for seg in segments:
                 srt_paths_map[seg["segment_id"]] = None
-            self._log("Captions disabled in project settings, skipping Whisper transcription")
+            self._log("Captions disabled in project settings (or source='none'), skipping captions")
         else:
             def run_cap(idx, seg):
                 nonlocal completed_cap

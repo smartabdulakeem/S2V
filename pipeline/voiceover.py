@@ -413,9 +413,10 @@ def _generate_with_google_tts(
     google_api_key: str,
     output_path: str,
     on_progress=None,
-    segment_id: int = 0
+    segment_id: int = 0,
+    cache_dir: str = "",
 ):
-    """Generate audio using Google Cloud Text-to-Speech REST API."""
+    """Generate audio using Google Cloud Text-to-Speech REST API and extract SSML word timepoints for captions."""
     if not google_api_key:
         raise ValueError("Google API key is required for Google Premium Voices.")
 
@@ -425,7 +426,7 @@ def _generate_with_google_tts(
     voice_name = voice
     if voice.startswith("google:"):
         voice_name = voice.split(":", 1)[1]
-    
+
     parts = voice_name.split("-")
     language_code = "en-US"
     if len(parts) >= 2:
@@ -455,10 +456,23 @@ def _generate_with_google_tts(
             except ValueError:
                 pass
 
-    input_type = "ssml" if narration.strip().startswith("<speak>") else "text"
+    # Clean narration and build SSML with word mark tags for timepoint generation
+    clean_text = re.sub(r'<[^>]+>', '', narration).strip()
+    words = clean_text.split()
+
+    if not narration.strip().startswith("<speak>"):
+        ssml_parts = ["<speak>"]
+        for idx, w in enumerate(words):
+            w_xml = w.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&apos;")
+            ssml_parts.append(f'<mark name="w{idx}"/>{w_xml}')
+        ssml_parts.append("</speak>")
+        ssml_narration = " ".join(ssml_parts)
+    else:
+        ssml_narration = narration
+
     payload = {
         "input": {
-            input_type: narration
+            "ssml": ssml_narration
         },
         "voice": {
             "languageCode": language_code,
@@ -468,7 +482,8 @@ def _generate_with_google_tts(
             "audioEncoding": "MP3",
             "speakingRate": speaking_rate,
             "pitch": pitch_semitones
-        }
+        },
+        "enableTimepointing": ["SSML_MARK"]
     }
     body = json.dumps(payload).encode("utf-8")
 
@@ -481,13 +496,21 @@ def _generate_with_google_tts(
             req = urllib.request.Request(url, data=body, headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=60) as resp:
                 response_data = json.loads(resp.read().decode("utf-8"))
-            
+
             if "audioContent" not in response_data:
                 raise RuntimeError(f"Google TTS API response missing 'audioContent': {response_data}")
-            
+
             audio_bytes = base64.b64decode(response_data["audioContent"])
             with open(output_path, "wb") as f:
                 f.write(audio_bytes)
+
+            timepoints = response_data.get("timepoints", [])
+            if timepoints and cache_dir:
+                from pipeline.captions import create_srt_from_tts_timings
+                srt_path = os.path.join(cache_dir, f"segment_{segment_id}_captions.srt")
+                create_srt_from_tts_timings(words, timepoints, srt_path)
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Captions generated directly from Google TTS timepoints")
             return
         except Exception as e:
             if attempt < 2:
@@ -675,7 +698,8 @@ def generate_voiceover(
             google_api_key=google_api_key,
             output_path=output_path,
             on_progress=on_progress,
-            segment_id=segment_id
+            segment_id=segment_id,
+            cache_dir=cache_dir
         )
 
     else:
