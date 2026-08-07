@@ -167,6 +167,33 @@ def image_is_bad(data):
     return None
 
 
+def check_watermark(im):
+    """
+    Check if bottom-left or bottom-right corner has high edge density (watermark signal)
+    compared to the center patch (>2.5x center density).
+    """
+    from PIL import ImageFilter
+    import numpy as np
+    w, h = im.size
+    edges = im.convert("L").filter(ImageFilter.FIND_EDGES)
+    edges_np = np.asarray(edges, dtype=np.float32)
+
+    cw = int(w * 0.18)
+    ch = int(h * 0.12)
+
+    bl_density = edges_np[h - ch : h, 0 : cw].mean()
+    br_density = edges_np[h - ch : h, w - cw : w].mean()
+
+    cx_start = (w - cw) // 2
+    cy_start = (h - ch) // 2
+    centre_density = edges_np[cy_start : cy_start + ch, cx_start : cx_start + cw].mean()
+
+    c_mean = max(centre_density, 1.0)
+    if bl_density > 2.5 * c_mean or br_density > 2.5 * c_mean:
+        return True
+    return False
+
+
 def load_seen():
     seen = set()
     if not os.path.exists(MANIFEST):
@@ -230,7 +257,18 @@ def _work(job, seen, gkey, total):
         return
 
     fname = hashlib.sha1(data).hexdigest()[:12] + ".jpg"
-    fpath = os.path.join(DEST, fname)
+    suspect = False
+    try:
+        from io import BytesIO
+        from PIL import Image
+        im = Image.open(BytesIO(data)).convert("RGB")
+        suspect = check_watermark(im)
+    except Exception:
+        pass
+
+    target_dir = os.path.join(DEST, "_suspect_watermark") if suspect else DEST
+    os.makedirs(target_dir, exist_ok=True)
+    fpath = os.path.join(target_dir, fname)
     already = os.path.join(IMAGES, fname)
 
     with lock:
