@@ -30,11 +30,11 @@ def main():
     
     print(f"Starting S2V CLI Render for: {script_path}")
     if google_key:
-        print(f"Google API Key loaded (ending in ...{google_key[-6:] if len(google_key) > 6 else google_key}).")
+        print("Google API Key loaded.")
     else:
         print("Warning: Google API Key is missing.")
     if google_tts_key:
-        print(f"Google Cloud TTS Key loaded (ending in ...{google_tts_key[-6:] if len(google_tts_key) > 6 else google_tts_key}).")
+        print("Google Cloud TTS Key loaded.")
         
     def on_event(event):
         if event.get("type") == "log":
