@@ -567,6 +567,9 @@ def fetch_visual(
     character_bible: dict = None,
     level1_overlay: dict = None,
     crop: dict = None,
+    auto_generate: bool = False,
+    min_score: float = 0.26,
+    exclude_paths: set = None,
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
@@ -700,22 +703,71 @@ def fetch_visual(
         manual_path = png_path if os.path.exists(png_path) else jpg_path
 
         if not os.path.exists(manual_path):
-            if visual_type == "ai_image":
-                prompt = _build_final_prompt(keyword, narration, video_title, visual_style, aspect_ratio, character_bible)
-                success = False
-                if google_api_key:
-                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image via Google Imagen")
-                    success = _fetch_google_imagen_image(segment_id, prompt, width, height, google_api_key, jpg_path, on_progress)
-                if not success:
-                    if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image via Pollinations")
-                    success = _fetch_pollinations_image(segment_id, prompt, width, height, jpg_path, seed=segment_id*100, on_progress=on_progress)
-                if not success:
-                    if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder")
-                    _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
-            else:
-                if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder")
-                _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
-            manual_path = jpg_path
+            # Library-first lookup
+            from pipeline import library
+            lib_results = library.search(keyword, k=1, exclude=exclude_paths or set(), min_score=min_score)
+            best_path, best_score = lib_results[0] if lib_results else (None, 0.0)
+
+            if best_path and best_score >= min_score:
+                abs_lib_path = os.path.join(library.ROOT, best_path)
+                if os.path.exists(abs_lib_path):
+                    shutil.copy(abs_lib_path, jpg_path)
+                    manual_path = jpg_path
+                    if on_progress:
+                        on_progress(f"Segment {segment_id} — Found library match: {best_path} (score: {best_score:.2f})")
+            
+            if not os.path.exists(manual_path):
+                if not auto_generate:
+                    composed_prompt = library.compose_gap_prompt(
+                        shot_query=keyword,
+                        world_anchor=visual_style,
+                        character_bible=character_bible,
+                        script_context=narration
+                    )
+                    raise ValueError(
+                        f"Library miss for segment {segment_id} query '{keyword}' (best score: {best_score:.2f} < {min_score}). "
+                        f"Composed prompt:\n{composed_prompt}"
+                    )
+                else:
+                    if visual_type == "ai_image":
+                        prompt = _build_final_prompt(keyword, narration, video_title, visual_style, aspect_ratio, character_bible)
+                        success = False
+                        if google_api_key:
+                            if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image via Google Imagen")
+                            success = _fetch_google_imagen_image(segment_id, prompt, width, height, google_api_key, jpg_path, on_progress)
+                        if not success:
+                            if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image via Pollinations")
+                            success = _fetch_pollinations_image(segment_id, prompt, width, height, jpg_path, seed=segment_id*100, on_progress=on_progress)
+                        if not success:
+                            if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder")
+                            _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
+                    else:
+                        if on_progress: on_progress(f"Segment {segment_id} — Generating placeholder")
+                        _generate_placeholder_image(jpg_path, segment_id, keyword, narration, width, height)
+
+                    # Newly generated image joins the library, manifest, and index
+                    if os.path.exists(jpg_path):
+                        import hashlib
+                        with open(jpg_path, "rb") as f:
+                            img_data = f.read()
+                        fname = hashlib.sha1(img_data).hexdigest()[:12] + ".jpg"
+                        lib_target = os.path.join(library.IMAGES_DIR, fname)
+                        if not os.path.exists(lib_target):
+                            os.makedirs(library.IMAGES_DIR, exist_ok=True)
+                            shutil.copy(jpg_path, lib_target)
+                            
+                        # Record in manifest
+                        manifest_record = {
+                            "path": f"library/images/{fname}",
+                            "prompt": keyword,
+                            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        }
+                        with open(library.MANIFEST_PATH, "a", encoding="utf-8") as mf:
+                            mf.write(json.dumps(manifest_record) + "\n")
+                        
+                        library.reindex(force=True)
+
+                    manual_path = jpg_path
             
         needs_update = True
         if os.path.exists(output_path):
