@@ -169,8 +169,9 @@ def image_is_bad(data):
 
 def check_watermark(im):
     """
-    Check if bottom-left or bottom-right corner has high edge density (watermark signal)
-    compared to the center patch (>2.5x center density).
+    Check if bottom-left or bottom-right corner strip has high edge density
+    compared to its own local background band immediately above it (>4.8x)
+    and contains text-like high-contrast transitions.
     """
     from PIL import ImageFilter
     import numpy as np
@@ -178,19 +179,22 @@ def check_watermark(im):
     edges = im.convert("L").filter(ImageFilter.FIND_EDGES)
     edges_np = np.asarray(edges, dtype=np.float32)
 
-    cw = int(w * 0.18)
-    ch = int(h * 0.12)
+    y1, y2 = int(h * 0.90), int(h * 0.98)
+    ref_y1, ref_y2 = int(h * 0.78), int(h * 0.88)
 
-    bl_density = edges_np[h - ch : h, 0 : cw].mean()
-    br_density = edges_np[h - ch : h, w - cw : w].mean()
+    for x1, x2 in [(int(w * 0.02), int(w * 0.20)), (int(w * 0.80), int(w * 0.98))]:
+        corner = edges_np[y1:y2, x1:x2]
+        ref = edges_np[ref_y1:ref_y2, x1:x2]
 
-    cx_start = (w - cw) // 2
-    cy_start = (h - ch) // 2
-    centre_density = edges_np[cy_start : cy_start + ch, cx_start : cx_start + cw].mean()
+        c_mean = corner.mean()
+        r_mean = max(ref.mean(), 1.0)
 
-    c_mean = max(centre_density, 1.0)
-    if bl_density > 2.5 * c_mean or br_density > 2.5 * c_mean:
-        return True
+        if c_mean > 4.8 * r_mean:
+            binary = (corner > 60).astype(np.uint8)
+            diffs = np.abs(np.diff(binary, axis=1))
+            transitions = diffs.sum()
+            if transitions > 380:
+                return True
     return False
 
 
@@ -257,18 +261,7 @@ def _work(job, seen, gkey, total):
         return
 
     fname = hashlib.sha1(data).hexdigest()[:12] + ".jpg"
-    suspect = False
-    try:
-        from io import BytesIO
-        from PIL import Image
-        im = Image.open(BytesIO(data)).convert("RGB")
-        suspect = check_watermark(im)
-    except Exception:
-        pass
-
-    target_dir = os.path.join(DEST, "_suspect_watermark") if suspect else DEST
-    os.makedirs(target_dir, exist_ok=True)
-    fpath = os.path.join(target_dir, fname)
+    fpath = os.path.join(DEST, fname)
     already = os.path.join(IMAGES, fname)
 
     with lock:
