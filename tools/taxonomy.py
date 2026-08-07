@@ -231,15 +231,23 @@ def build_batches():
             world = world_for(code)
             prompts = []
             for n, (subject, shot, light) in enumerate(chunk):
-                text = f"{shot} of {subject}, {light}"
-                # World anchor goes early — diffusion models weight leading tokens heavily.
-                full = f"{text}, {world}, {STYLE}" if world else f"{text}, {STYLE}"
-                seed = SEEDS[(n + 1) % len(SEEDS)]
                 prompt_tier = "q" if (theme_tier == "q" or is_living_subject(subject)) else "b"
+
+                if prompt_tier == "b" and is_living_subject(subject):
+                    effective_shot = "wide establishing shot" if shot in ("medium shot", "close detail shot") else shot
+                    suffix = ", distant figures, silhouetted, no facial detail"
+                else:
+                    effective_shot = shot
+                    suffix = ""
+
+                text = f"{effective_shot} of {subject}, {light}"
+                # World anchor goes early — diffusion models weight leading tokens heavily.
+                full = f"{text}{suffix}, {world}, {STYLE}" if world else f"{text}{suffix}, {STYLE}"
+                seed = SEEDS[(n + 1) % len(SEEDS)]
                 prompts.append({
                     "text": text,
                     "prompt": full,
-                    "subject": subject, "shot": shot, "light": light,
+                    "subject": subject, "shot": effective_shot, "light": light,
                     "seed": seed,
                     "url": pollinations_url(full, seed),
                     "tier": prompt_tier,
