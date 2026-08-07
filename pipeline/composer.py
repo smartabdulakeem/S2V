@@ -41,6 +41,23 @@ def _find_ffmpeg() -> str:
     return "ffmpeg"
 
 
+def _find_ffprobe() -> str:
+    """Find ffprobe binary path robustly across environments."""
+    env_path = os.environ.get("IMAGEIO_FFPROBE_EXE", "")
+    if env_path and os.path.exists(env_path):
+        return env_path
+    
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    vendor_ffprobe = os.path.join(base_dir, "vendor", "ffmpeg", "bin", "ffprobe.exe")
+    if os.path.exists(vendor_ffprobe):
+        return vendor_ffprobe
+
+    found = shutil.which("ffprobe")
+    if found:
+        return found
+    return "ffprobe"
+
+
 def _get_best_encoder(on_progress=None) -> tuple[str, list[str]]:
     """
     Probe system once at startup to select the fastest reliable H.264 encoder.
@@ -482,20 +499,21 @@ def compose_segment(
     mixed_audio_path = os.path.join(cache_dir, f"segment_{segment_id}_mixed_audio.wav")
     final_audio_path = _overlay_sound_effects(audio_path, sfx, mixed_audio_path, cache_dir, on_progress)
 
-    # Calculate total segment audio duration
-    ffmpeg_bin = _find_ffmpeg()
+    # Calculate total segment audio duration strictly using ffprobe
+    ffprobe_bin = _find_ffprobe()
     probe_cmd = [
-        ffmpeg_bin, "-i", final_audio_path,
+        ffprobe_bin, "-i", final_audio_path,
         "-show_entries", "format=duration",
         "-v", "quiet", "-of", "csv=p=0"
     ]
-    total_audio_duration = 5.0
+    dur_res = subprocess.run(probe_cmd, capture_output=True, text=True)
+    if dur_res.returncode != 0 or not dur_res.stdout.strip():
+        raise RuntimeError(f"ffprobe failed to probe audio duration for '{final_audio_path}'. Error: {dur_res.stderr.strip()}")
+
     try:
-        dur_res = subprocess.run(probe_cmd, capture_output=True, text=True)
-        if dur_res.returncode == 0 and dur_res.stdout.strip():
-            total_audio_duration = float(dur_res.stdout.strip())
-    except Exception:
-        pass
+        total_audio_duration = float(dur_res.stdout.strip())
+    except ValueError as e:
+        raise RuntimeError(f"ffprobe returned non-numeric audio duration '{dur_res.stdout.strip()}' for '{final_audio_path}'") from e
 
     # Extract shot list from segment_dict (Schema v2) or build single shot (Schema v1)
     shots = []
@@ -557,6 +575,7 @@ def compose_segment(
         shot_clip_paths.append(shot_mp4)
 
     # If single shot segment, combine visual + audio directly
+    ffmpeg_bin = _find_ffmpeg()
     if len(shot_clip_paths) == 1:
         combine_cmd = [
             ffmpeg_bin, "-y",
