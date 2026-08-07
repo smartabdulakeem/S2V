@@ -29,5 +29,5 @@ def test_pillow_magick_processor_filters():
             out_path = os.path.join(tmpdir, f"out_{filter_name}.jpg")
             func(out_path)
             assert os.path.exists(out_path), f"Output file for {filter_name} missing"
-            out_img = Image.open(out_path)
-            assert out_img.size == (640, 360), f"Incorrect dimensions for {filter_name}"
+            with Image.open(out_path) as out_img:
+                assert out_img.size == (640, 360), f"Incorrect dimensions for {filter_name}"
