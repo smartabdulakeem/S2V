@@ -1,6 +1,7 @@
 {
   "project": {
     "title": "Apollo 11 Moon Landing",
+    "series_slug": "space",
     "output_filename": "apollo11_sample.mp4",
     "voice": "en-US-News-M",
     "world_anchor": "1969 NASA Space Program",
@@ -15,7 +16,7 @@
       "shots": [
         {
           "shot_id": "1a",
-          "query": "Saturn V rocket launch with fire and smoke trail"
+          "query": "Apollo 11 Saturn V rocket launching from Cape Canaveral launching pad"
         }
       ]
     },
@@ -25,17 +26,17 @@
       "shots": [
         {
           "shot_id": "2a",
-          "query": "Neil Armstrong astronaut walking on moon surface"
+          "query": "astronaut floating in outer space zero gravity"
         }
       ]
     },
     {
       "segment_id": 3,
-      "narration": "Apollo lunar module resting in sea of tranquility.",
+      "narration": "Antarctic scientific base observation.",
       "shots": [
         {
           "shot_id": "3a",
-          "query": "Apollo lunar lander module on moon crater surface"
+          "query": "penguins standing on antarctic ice shelf sheet"
         }
       ]
     }

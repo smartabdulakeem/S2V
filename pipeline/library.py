@@ -21,40 +21,39 @@ INDEX_PATH = os.path.join(LIBRARY_DIR, "index.npz")
 REJECTIONS_PATH = os.path.join(LIBRARY_DIR, "rejections.jsonl")
 MANIFEST_PATH = os.path.join(LIBRARY_DIR, "manifest.jsonl")
 CONFIG_PATH = os.path.join(ROOT, "config", "library_config.json")
+SERIES_CONFIG_DIR = os.path.join(ROOT, "config", "series")
 WAR_IMAGE_PROMPTS_PATH = os.path.join(LIBRARY_DIR, "WAR_IMAGE_PROMPTS.md")
 
 _MODEL = None
 _PREPROCESS = None
 _TOKENIZER = None
 
-STYLE_BLOCK = (
-    "Shot on 35mm film, cinematic documentary photography, natural directional light, "
-    "shallow depth of field, muted earth palette of ochre sand, dust grey and deep indigo shadow, "
-    "fine film grain, historically accurate 7th century Arabian Peninsula, early Islamic era."
-)
+FALLBACK_MIN_SCORE = 0.2796
+FALLBACK_WEAK_BAND = 0.0045
 
-NEGATIVE_BLOCK = (
-    "No modern objects, no firearms, no curved scimitars, no Ottoman or Persian costume, "
-    "no plate armour, no European castles, no text, no watermark, no signature, no logo, "
-    "no lens flare, no plastic-looking skin."
-)
-
-DEFAULT_WORLD_ANCHOR = "7th century Arabian Peninsula, early Islamic era"
-FALLBACK_MIN_SCORE = 0.270
-
-def get_calibrated_min_score() -> float:
+def get_calibration_config() -> dict:
     if os.path.exists(CONFIG_PATH):
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-                if "min_score" in cfg and isinstance(cfg["min_score"], (int, float)):
-                    return float(cfg["min_score"])
+                return {
+                    "min_score": float(cfg.get("min_score", FALLBACK_MIN_SCORE)),
+                    "weak_band": float(cfg.get("weak_band", FALLBACK_WEAK_BAND))
+                }
         except Exception:
             pass
-    return FALLBACK_MIN_SCORE
+    return {"min_score": FALLBACK_MIN_SCORE, "weak_band": FALLBACK_WEAK_BAND}
 
 
-def save_calibrated_min_score(min_score: float):
+def get_calibrated_min_score() -> float:
+    return get_calibration_config()["min_score"]
+
+
+def get_calibrated_weak_band() -> float:
+    return get_calibration_config()["weak_band"]
+
+
+def save_calibration_config(min_score: float, weak_band: float):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     cfg = {}
     if os.path.exists(CONFIG_PATH):
@@ -64,8 +63,52 @@ def save_calibrated_min_score(min_score: float):
         except Exception:
             cfg = {}
     cfg["min_score"] = round(float(min_score), 4)
+    cfg["weak_band"] = round(float(weak_band), 4)
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
+
+
+def get_series_config(series_slug: str = None, world_anchor: str = None) -> dict:
+    """
+    Resolves per-series prompt configuration (world_anchor, style_block, negative_block).
+    Prevents cross-domain prompt pollution (e.g. scimitars in space prompts).
+    """
+    # 1. Direct slug match
+    if series_slug:
+        slug_clean = series_slug.strip().lower().replace("-", "_")
+        slug_path = os.path.join(SERIES_CONFIG_DIR, f"{slug_clean}.json")
+        if os.path.exists(slug_path):
+            try:
+                with open(slug_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+    # 2. Match via world_anchor text
+    if world_anchor:
+        anchor_lower = world_anchor.lower()
+        if any(term in anchor_lower for term in ["arabian", "islamic", "7th century", "mecca", "medina", "baghdad"]):
+            return get_series_config("islamic_history")
+        elif any(term in anchor_lower for term in ["civil war", "1861", "1865", "confederate", "union soldier"]):
+            return get_series_config("civil_war")
+        elif any(term in anchor_lower for term in ["nasa", "space", "apollo", "moon"]):
+            return get_series_config("space")
+
+    # 3. Default neutral fallback
+    default_path = os.path.join(SERIES_CONFIG_DIR, "default.json")
+    if os.path.exists(default_path):
+        try:
+            with open(default_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    return {
+        "series_slug": "default",
+        "world_anchor": world_anchor or "",
+        "style_block": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted color palette, fine film grain.",
+        "negative_block": "No text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin, no blur, no distortion."
+    }
 
 
 # ── 1. CLIP Model Singleton & Reindex ──────────────────────────────────────────
@@ -294,12 +337,13 @@ def compose_gap_prompt(
     shot_query: str,
     world_anchor: str = None,
     character_bible: dict = None,
-    script_context: str = ""
+    script_context: str = "",
+    series_slug: str = None
 ) -> str:
     """
-    Composes a ready-to-use prompt for a library gap:
-      shot query + world_anchor + character_bible entries matching + style block + negative block + framing bias
+    Composes a ready-to-use prompt for a library gap using per-series prompt configuration.
     """
+    series_cfg = get_series_config(series_slug=series_slug, world_anchor=world_anchor)
     parts = []
 
     # Framing bias toward wide/silhouette/detail rather than mid-distance faces
@@ -311,8 +355,9 @@ def compose_gap_prompt(
 
     parts.append(f"{framing_bias}{shot_query}")
 
-    anchor = world_anchor or DEFAULT_WORLD_ANCHOR
-    parts.append(anchor)
+    anchor = world_anchor or series_cfg.get("world_anchor")
+    if anchor:
+        parts.append(anchor)
 
     # Character bible matching
     if character_bible:
@@ -321,27 +366,35 @@ def compose_gap_prompt(
             if re.search(pattern, shot_query, re.IGNORECASE) or (script_context and re.search(pattern, script_context, re.IGNORECASE)):
                 parts.append(f"featuring: {char_desc}")
 
-    parts.append(STYLE_BLOCK)
-    parts.append(f"Negative prompt: {NEGATIVE_BLOCK}")
+    style_block = series_cfg.get("style_block")
+    negative_block = series_cfg.get("negative_block")
+
+    if style_block:
+        parts.append(style_block)
+    if negative_block:
+        parts.append(f"Negative prompt: {negative_block}")
 
     return ", ".join(parts)
 
 
 # ── 5. Coverage & Plan Shots ───────────────────────────────────────────────────
 
-def plan_shots(script_data: dict, min_score: float = None):
+def plan_shots(script_data: dict, min_score: float = None, weak_band: float = None):
     """
     Analyzes all shots in a script against the library index.
     Ensures diversity (NO image used twice in a single script).
     Reports 3 states per shot: matched, weak, gap.
-    Ranks gaps by reuse value across the script.
+    Keeps GAPS and WEAK lists separated so counters and lists match strictly.
     """
     if min_score is None:
         min_score = get_calibrated_min_score()
+    if weak_band is None:
+        weak_band = get_calibrated_weak_band()
 
     project_info = script_data.get("project", {})
     title = project_info.get("title", "Untitled Project")
-    world_anchor = project_info.get("world_anchor") or project_info.get("visual_style") or DEFAULT_WORLD_ANCHOR
+    series_slug = project_info.get("series_slug")
+    world_anchor = project_info.get("world_anchor") or project_info.get("visual_style")
     character_bible = project_info.get("character_bible") or {}
 
     segments = script_data.get("segments", [])
@@ -381,6 +434,7 @@ def plan_shots(script_data: dict, min_score: float = None):
     for s in all_shots:
         q = s["query"]
         target_min = s["min_score"]
+        target_weak = target_min - weak_band
         
         if q not in query_to_segments:
             query_to_segments[q] = []
@@ -396,7 +450,7 @@ def plan_shots(script_data: dict, min_score: float = None):
             if best_score >= target_min:
                 state = "matched"
                 script_used_images.add(best_path)
-            elif target_min - 0.05 <= best_score < target_min:
+            elif target_weak <= best_score < target_min:
                 state = "weak"
                 script_used_images.add(best_path)
             else:
@@ -413,7 +467,8 @@ def plan_shots(script_data: dict, min_score: float = None):
             shot_query=q,
             world_anchor=world_anchor,
             character_bible=character_bible,
-            script_context=s["narration"]
+            script_context=s["narration"],
+            series_slug=series_slug
         )
 
         shot_reports.append({
@@ -427,27 +482,45 @@ def plan_shots(script_data: dict, min_score: float = None):
             "composed_prompt": composed
         })
 
-    # Find and rank gaps (both 'gap' and 'weak' states) by reuse value
-    gaps_ranked = []
+    # Rank WEAK matches
+    ranked_weak = []
+    seen_weak_queries = set()
+    for s_rep in shot_reports:
+        if s_rep["state"] == "weak":
+            q = s_rep["query"]
+            if q not in seen_weak_queries:
+                seen_weak_queries.add(q)
+                ranked_weak.append({
+                    "query": q,
+                    "first_segment_id": s_rep["segment_id"],
+                    "first_shot_id": s_rep["shot_id"],
+                    "state": "weak",
+                    "best_score": s_rep["best_score"],
+                    "best_path": s_rep["best_path"],
+                    "alternatives": s_rep["alternatives"]
+                })
+
+    # Rank GAPS strictly (state == 'gap' only!)
+    ranked_gaps = []
     seen_gap_queries = set()
     for s_rep in shot_reports:
-        if s_rep["state"] in ("gap", "weak"):
+        if s_rep["state"] == "gap":
             q = s_rep["query"]
             if q not in seen_gap_queries:
                 seen_gap_queries.add(q)
                 related_segs = sorted(list(set(query_to_segments[q])))
-                gaps_ranked.append({
+                ranked_gaps.append({
                     "query": q,
                     "first_segment_id": s_rep["segment_id"],
                     "first_shot_id": s_rep["shot_id"],
-                    "state": s_rep["state"],
+                    "state": "gap",
                     "best_score": s_rep["best_score"],
                     "reuse_count": len(related_segs),
                     "related_segments": related_segs,
                     "composed_prompt": s_rep["composed_prompt"]
                 })
 
-    gaps_ranked.sort(key=lambda x: (x["reuse_count"], x["best_score"]), reverse=True)
+    ranked_gaps.sort(key=lambda x: (x["reuse_count"], x["best_score"]), reverse=True)
 
     return {
         "title": title,
@@ -456,7 +529,8 @@ def plan_shots(script_data: dict, min_score: float = None):
         "weak": weak_count,
         "gaps": gap_count,
         "shot_reports": shot_reports,
-        "ranked_gaps": gaps_ranked,
+        "ranked_weak": ranked_weak,
+        "ranked_gaps": ranked_gaps,
         "used_images": list(script_used_images)
     }
 
@@ -474,13 +548,25 @@ def print_coverage_report(script_path: str):
     print(f"\n{report['title']}   ·  {report['total_shots']} shots")
     print(f"COVERED  {report['matched']}   WEAK  {report['weak']}   GAPS  {report['gaps']}\n")
 
+    if report["ranked_weak"]:
+        print(f"--- WEAK MATCHES ({len(report['ranked_weak'])}) ---")
+        for i, w in enumerate(report["ranked_weak"], 1):
+            alt_str = ""
+            if w.get("alternatives"):
+                alt_path, alt_score = w["alternatives"][0]
+                alt_str = f"   (alt: {alt_path} {alt_score:.4f})"
+            print(f"WEAK {i}  segment {w['first_segment_id']} shot {w['first_shot_id']}   best {w['best_score']:.4f} ({w['best_path']}){alt_str}")
+        print()
+
     if report["ranked_gaps"]:
+        print(f"--- GAPS TO FILL ({len(report['ranked_gaps'])}) ---")
         for i, gap in enumerate(report["ranked_gaps"], 1):
             others = [str(sid) for sid in gap["related_segments"] if sid != gap["first_segment_id"]]
             also_str = f"   also needed by {', '.join(others)}" if others else ""
             print(f"GAP {i}  segment {gap['first_segment_id']} shot {gap['first_shot_id']}   best {gap['best_score']:.4f}{also_str}")
             print(f"  -> {gap['composed_prompt']}\n")
-    else:
+
+    if not report["ranked_weak"] and not report["ranked_gaps"]:
         print("No gaps detected — full library coverage achieved!\n")
 
 
@@ -489,8 +575,8 @@ def print_coverage_report(script_path: str):
 def calibrate():
     """
     Runs ~10 known-good queries and ~10 known-impossible queries against the real index.
-    Prints both distributions and recommends min_score as the midpoint of the clean gap.
-    Saves the recommended min_score into config/library_config.json.
+    Prints both distributions, recommends min_score and weak_band.
+    Saves results into config/library_config.json.
     """
     real_queries = [
         "desert caravan at dusk",
@@ -521,7 +607,7 @@ def calibrate():
     embeddings, paths = load_index()
     if len(paths) == 0:
         print("Error: Library index is empty. Please run reindex first.")
-        return 0.0
+        return 0.0, 0.0
 
     real_scores = []
     print("\n--- Real Queries (Known Good) ---")
@@ -551,21 +637,22 @@ def calibrate():
     print(f"REAL QUERIES : min={real_min:.4f}, max={real_max:.4f}, mean={real_mean:.4f}, median={real_med:.4f}")
     print(f"FAKE QUERIES : min={fake_min:.4f}, max={fake_max:.4f}, mean={fake_mean:.4f}, median={fake_med:.4f}")
 
-    gap_low = fake_max
-    gap_high = real_min
-    
-    if gap_high > gap_low:
+    if real_min > fake_max:
+        gap_low = fake_max
+        gap_high = real_min
         rec_min_score = (gap_low + gap_high) / 2.0
+        rec_weak_band = round(gap_high - rec_min_score, 4)
         print(f"\nCLEAN GAP DETECTED: [{gap_low:.4f}, {gap_high:.4f}]")
-        print(f"RECOMMENDED MIN_SCORE: {rec_min_score:.4f}")
+        print(f"RECOMMENDED MIN_SCORE: {rec_min_score:.4f}, WEAK_BAND: {rec_weak_band:.4f}")
     else:
         rec_min_score = fake_max + 0.015
+        rec_weak_band = 0.0050
         print(f"\nOVERLAP WARNING: Highest fake ({fake_max:.4f}) >= lowest real ({real_min:.4f}).")
-        print(f"RECOMMENDED MIN_SCORE: {rec_min_score:.4f}")
+        print(f"RECOMMENDED MIN_SCORE: {rec_min_score:.4f}, WEAK_BAND: {rec_weak_band:.4f}")
 
-    save_calibrated_min_score(rec_min_score)
-    print(f"Saved min_score={rec_min_score:.4f} to {CONFIG_PATH}\n")
-    return rec_min_score
+    save_calibration_config(rec_min_score, rec_weak_band)
+    print(f"Saved min_score={rec_min_score:.4f}, weak_band={rec_weak_band:.4f} to {CONFIG_PATH}\n")
+    return rec_min_score, rec_weak_band
 
 
 # ── 7. CLI Entry Point ─────────────────────────────────────────────────────────

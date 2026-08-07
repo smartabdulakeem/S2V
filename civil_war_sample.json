@@ -1,7 +1,8 @@
 {
   "project": {
     "title": "American Civil War Intro Sample",
-    "output_filename": "civil_war_sample.mp4",
+    "series_slug": "civil_war",
+    "output_filename": "civil_war_intro.mp4",
     "voice": "edge:en-US-BrianNeural",
     "voice_rate": "+0%",
     "voice_pitch": "+0Hz",

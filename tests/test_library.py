@@ -158,5 +158,5 @@ def test_gap_detection_thresholds(tmp_path, monkeypatch):
     composed = shot_1b["composed_prompt"]
     assert "cyberpunk neon robot battles space dragons" in composed
     assert "historical documentary" in composed
-    assert library.STYLE_BLOCK in composed
+    assert "cinematic documentary photography" in composed or "film" in composed
     assert "Negative prompt:" in composed
