@@ -13,6 +13,49 @@ def _seconds_to_srt_time(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+import threading
+
+_WHISPER_MODELS = {}
+_WHISPER_LOCK = threading.Lock()
+_WHISPER_LOAD_COUNT = 0
+
+
+def get_whisper_load_count() -> int:
+    """Return the total number of times a Whisper model was loaded from disk in this process."""
+    global _WHISPER_LOAD_COUNT
+    with _WHISPER_LOCK:
+        return _WHISPER_LOAD_COUNT
+
+
+def _get_whisper_model(model_name: str = "base", on_progress=None):
+    """
+    Get or lazily load a Whisper model singleton (thread-safe).
+    Ensures model loads at most once per process across concurrent threads.
+    """
+    global _WHISPER_MODELS, _WHISPER_LOAD_COUNT
+    with _WHISPER_LOCK:
+        if model_name in _WHISPER_MODELS:
+            return _WHISPER_MODELS[model_name]
+
+        import whisper
+        if on_progress:
+            on_progress(f"Loading Whisper model '{model_name}' (singleton load #{_WHISPER_LOAD_COUNT + 1})")
+
+        try:
+            model = whisper.load_model(model_name)
+        except (RuntimeError, MemoryError):
+            if on_progress:
+                on_progress(f"Not enough memory for '{model_name}' model, falling back to 'tiny'")
+            model_name = "tiny"
+            if model_name in _WHISPER_MODELS:
+                return _WHISPER_MODELS[model_name]
+            model = whisper.load_model("tiny")
+
+        _WHISPER_MODELS[model_name] = model
+        _WHISPER_LOAD_COUNT += 1
+        return model
+
+
 def generate_captions(
     segment_id: int,
     audio_path: str,
@@ -37,15 +80,7 @@ def generate_captions(
 
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
-    import whisper
-
-    try:
-        model = whisper.load_model(model_name)
-    except (RuntimeError, MemoryError):
-        if on_progress:
-            on_progress(f"Segment {segment_id} — not enough memory for '{model_name}' model, falling back to 'tiny'")
-        model = whisper.load_model("tiny")
-
+    model = _get_whisper_model(model_name, on_progress)
     result = model.transcribe(audio_path, word_timestamps=False)
 
     segments = result.get("segments", [])
