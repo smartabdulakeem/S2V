@@ -104,51 +104,7 @@ def _create_black_frame(output_path: str, width: int, height: int):
     img.save(output_path, "JPEG", quality=95)
 
 
-def _build_final_prompt(
-    keyword: str, 
-    narration: str, 
-    video_title: str, 
-    visual_style: str, 
-    aspect_ratio: str,
-    character_bible: dict = None
-) -> str:
-    """Builds a rich prompt string by combining keyword, character details from bible, narration context, style, and ratio."""
-    context = narration.strip()
-    if len(context) > 120:
-        context = context[:120].rsplit(" ", 1)[0]
 
-    raw_style = visual_style.strip().lower() if visual_style else ""
-    if raw_style in STYLE_PRESETS:
-        style = STYLE_PRESETS[raw_style]
-    elif raw_style:
-        style = visual_style.strip()
-    else:
-        style = STYLE_PRESETS["vintage_documentary"]
-
-    parts = []
-    if video_title:
-        parts.append(f"Scene for '{video_title}'")
-    
-    # Check for character bible matches in keyword and narration
-    character_matches = []
-    if character_bible:
-        for char_name, char_desc in character_bible.items():
-            pattern = r'\b' + re.escape(char_name) + r'\b'
-            if re.search(pattern, keyword, re.IGNORECASE) or re.search(pattern, narration, re.IGNORECASE):
-                if char_desc not in character_matches:
-                    character_matches.append(char_desc)
-
-    parts.append(keyword)
-    
-    # Inject character descriptions if found
-    for match in character_matches:
-        parts.append(f"featuring: {match}")
-
-    if context:
-        parts.append(f"depicting: {context}")
-    parts.append(style)
-    parts.append(f"{aspect_ratio} aspect ratio")
-    return ", ".join(parts)
 
 
 
@@ -570,12 +526,20 @@ def fetch_visual(
     auto_generate: bool = False,
     min_score: float = 0.26,
     exclude_paths: set = None,
+    series_slug: str = None,
+    on_library_hit=None,
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
     Looks inside the local manual projects directory projects/<title_slug>/.
     Generates structured Pillow placeholders if no manual images exist yet.
+
+    on_library_hit: optional callable(library_relative_path). Called when a library
+    image is retrieved for this segment, or when a newly generated image joins the
+    library. The caller decides whether the render completed; this only reports use.
     """
+    from pipeline import library
+
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_visual.jpg")
     width, height = _get_dimensions(aspect_ratio)
 
@@ -646,7 +610,14 @@ def fetch_visual(
         
         if not os.path.exists(path_a) and not os.path.exists(path_a.replace(".jpg", ".png")):
             if visual_type == "ai_image":
-                prompt_a = _build_final_prompt(f"{keyword} (Left part)", narration, video_title, visual_style, aspect_ratio, character_bible)
+                prompt_a = library.compose_gap_prompt(
+                    shot_query=f"{keyword} (Left part)",
+                    world_anchor=visual_style,
+                    character_bible=character_bible,
+                    script_context=narration,
+                    series_slug=series_slug,
+                    project_title=video_title
+                )
                 success = False
                 if google_api_key:
                     if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image A via Google Imagen")
@@ -662,7 +633,14 @@ def fetch_visual(
                 _generate_placeholder_image(path_a, f"{segment_id}a", keyword, narration, width, height)
         if not os.path.exists(path_b) and not os.path.exists(path_b.replace(".jpg", ".png")):
             if visual_type == "ai_image":
-                prompt_b = _build_final_prompt(f"{keyword} (Right part)", narration, video_title, visual_style, aspect_ratio, character_bible)
+                prompt_b = library.compose_gap_prompt(
+                    shot_query=f"{keyword} (Right part)",
+                    world_anchor=visual_style,
+                    character_bible=character_bible,
+                    script_context=narration,
+                    series_slug=series_slug,
+                    project_title=video_title
+                )
                 success = False
                 if google_api_key:
                     if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image B via Google Imagen")
@@ -704,7 +682,6 @@ def fetch_visual(
 
         if not os.path.exists(manual_path):
             # Library-first lookup
-            from pipeline import library
             lib_results = library.search(keyword, k=1, exclude=exclude_paths or set(), min_score=min_score)
             best_path, best_score = lib_results[0] if lib_results else (None, 0.0)
 
@@ -713,24 +690,28 @@ def fetch_visual(
                 if os.path.exists(abs_lib_path):
                     shutil.copy(abs_lib_path, jpg_path)
                     manual_path = jpg_path
+                    if on_library_hit:
+                        on_library_hit(best_path)
                     if on_progress:
                         on_progress(f"Segment {segment_id} — Found library match: {best_path} (score: {best_score:.2f})")
             
             if not os.path.exists(manual_path):
+                composed_prompt = library.compose_gap_prompt(
+                    shot_query=keyword,
+                    world_anchor=visual_style,
+                    character_bible=character_bible,
+                    script_context=narration,
+                    series_slug=series_slug,
+                    project_title=video_title
+                )
                 if not auto_generate:
-                    composed_prompt = library.compose_gap_prompt(
-                        shot_query=keyword,
-                        world_anchor=visual_style,
-                        character_bible=character_bible,
-                        script_context=narration
-                    )
                     raise ValueError(
                         f"Library miss for segment {segment_id} query '{keyword}' (best score: {best_score:.2f} < {min_score}). "
                         f"Composed prompt:\n{composed_prompt}"
                     )
                 else:
                     if visual_type == "ai_image":
-                        prompt = _build_final_prompt(keyword, narration, video_title, visual_style, aspect_ratio, character_bible)
+                        prompt = composed_prompt
                         success = False
                         if google_api_key:
                             if on_progress: on_progress(f"Segment {segment_id} — Fetching AI image via Google Imagen")
@@ -764,7 +745,10 @@ def fetch_visual(
                         }
                         with open(library.MANIFEST_PATH, "a", encoding="utf-8") as mf:
                             mf.write(json.dumps(manifest_record) + "\n")
-                        
+
+                        if on_library_hit:
+                            on_library_hit(f"library/images/{fname}")
+
                         library.reindex(force=True)
 
                     manual_path = jpg_path
@@ -814,13 +798,13 @@ def fetch_visual(
 
     # Create/update the project-specific visual prompts text file
     prompts_file = os.path.join(project_dir, "image_prompts.txt")
-    prompt_desc = _build_final_prompt(
-        keyword=keyword,
-        narration=narration,
-        video_title=video_title,
-        visual_style=visual_style,
-        aspect_ratio=aspect_ratio,
-        character_bible=character_bible
+    prompt_desc = library.compose_gap_prompt(
+        shot_query=keyword,
+        world_anchor=visual_style,
+        character_bible=character_bible,
+        script_context=narration,
+        series_slug=series_slug,
+        project_title=video_title
     )
     
     existing_lines = {}
@@ -904,13 +888,14 @@ def initialize_project_sourcing(script_dict: dict) -> str:
                 _generate_placeholder_image(jpg_path, f"Base ({base_img})", keyword, narration, width, height)
             
         # 2. Build rich prompt for image_prompts.txt
-        prompt_desc = _build_final_prompt(
-            keyword=keyword,
-            narration=narration,
-            video_title=title,
-            visual_style=visual_style,
-            aspect_ratio=aspect_ratio,
-            character_bible=character_bible
+        series_slug = proj.get("series_slug")
+        prompt_desc = library.compose_gap_prompt(
+            shot_query=keyword,
+            world_anchor=visual_style,
+            character_bible=character_bible,
+            script_context=narration,
+            series_slug=series_slug,
+            project_title=title
         )
         lines.append(f"Segment {segment_id}: {prompt_desc}")
         

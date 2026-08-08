@@ -134,6 +134,7 @@ def test_gap_detection_thresholds(tmp_path, monkeypatch):
     script_data = {
         "project": {
             "title": "Test Gap Project",
+            "series_slug": "default",
             "visual_style": "historical documentary"
         },
         "segments": [
@@ -160,3 +161,112 @@ def test_gap_detection_thresholds(tmp_path, monkeypatch):
     assert "historical documentary" in composed
     assert "cinematic documentary photography" in composed or "film" in composed
     assert "Negative prompt:" in composed
+
+
+# ── Adversarial Regression Tests ─────────────────────────────────────────────
+
+def test_islamic_series_prompt_composition():
+    """Script with series_slug 'islamic_history' must include 7th century anchor & scimitar negative block."""
+    cfg = library.get_series_config(series_slug="islamic_history")
+    assert "7th century" in cfg["world_anchor"].lower()
+    assert "scimitar" in cfg["negative_block"].lower()
+
+    composed = library.compose_gap_prompt(
+        shot_query="desert caravan",
+        series_slug="islamic_history"
+    )
+    assert "7th century" in composed.lower()
+    assert "scimitar" in composed.lower()
+
+
+def test_space_series_prompt_composition():
+    """Script with series_slug 'space' must contain neither scimitars nor Arabian Peninsula anchors."""
+    cfg = library.get_series_config(series_slug="space")
+    assert "scimitar" not in cfg.get("negative_block", "").lower()
+    assert "arabian" not in cfg.get("world_anchor", "").lower()
+
+    composed = library.compose_gap_prompt(
+        shot_query="lunar rover on dusty crater rim",
+        series_slug="space"
+    )
+    assert "scimitar" not in composed.lower()
+    assert "arabian" not in composed.lower()
+    assert "7th century" not in composed.lower()
+
+
+def test_missing_series_slug_warning():
+    """Script with missing series_slug must emit UserWarning naming project title."""
+    with pytest.warns(UserWarning, match="The Rise of Baghdad") as record:
+        cfg = library.get_series_config(series_slug=None, project_title="The Rise of Baghdad")
+    assert cfg["series_slug"] == "default"
+
+
+def test_unknown_series_slug_raises():
+    """Unknown series_slug must raise ValueError listing available series packs."""
+    with pytest.raises(ValueError) as exc_info:
+        library.get_series_config(series_slug="martian_chronicles")
+    err_str = str(exc_info.value)
+    assert "martian_chronicles" in err_str
+    assert "islamic_history" in err_str
+
+
+def test_no_composed_prompt_contains_title_or_narration():
+    """Composed prompts must never include video title or raw narration sentences directly."""
+    title = "The Great Siege of 1863"
+    narration = "The army marched thirty miles through heavy rain without stopping for food or rest."
+    composed = library.compose_gap_prompt(
+        shot_query="soldiers marching through rain",
+        script_context=narration,
+        series_slug="civil_war",
+        project_title=title
+    )
+    assert title not in composed
+    assert narration not in composed
+
+
+def test_report_counters_agree_with_lists(tmp_path, monkeypatch):
+    """Counters report['gaps'] and report['weak'] must strictly equal list lengths."""
+    images_dir = tmp_path / "images"
+    images_dir.mkdir(parents=True)
+    index_file = tmp_path / "index.npz"
+
+    img = Image.new("RGB", (100, 100), color=(100, 100, 100))
+    img.save(images_dir / "sample.jpg")
+
+    monkeypatch.setattr(library, "ROOT", str(tmp_path))
+    monkeypatch.setattr(library, "LIBRARY_DIR", str(tmp_path))
+    monkeypatch.setattr(library, "IMAGES_DIR", str(images_dir))
+    monkeypatch.setattr(library, "INDEX_PATH", str(index_file))
+
+    library.reindex(force=True)
+
+    script_data = {
+        "project": {
+            "title": "Test Agreement Project",
+            "series_slug": "default"
+        },
+        "segments": [
+            {
+                "segment_id": 1,
+                "narration": "First scene narration",
+                "shots": [
+                    {"shot_id": "1a", "query": "impossible query delta alpha 999", "min_score": 0.99}
+                ]
+            }
+        ]
+    }
+
+    report = library.plan_shots(script_data, min_score=0.99)
+    assert report["gaps"] == len(report["ranked_gaps"])
+    assert report["weak"] == len(report["ranked_weak"])
+
+
+def test_weak_band_read_from_config(monkeypatch):
+    """Categorization changes dynamically when weak_band in config is modified."""
+    monkeypatch.setattr(library, "get_calibration_config", lambda: {"min_score": 0.28, "weak_band": 0.05})
+    band1 = library.get_calibrated_weak_band()
+    assert band1 == 0.05
+
+    monkeypatch.setattr(library, "get_calibration_config", lambda: {"min_score": 0.28, "weak_band": 0.001})
+    band2 = library.get_calibrated_weak_band()
+    assert band2 == 0.001

@@ -109,6 +109,7 @@ a single-shot list. Nothing in `samples/` breaks.
 | `background_music` | string\|null | `null` | path |
 | `music_volume_db` | number | `-20` | |
 | `visual_style` | string | `""` | preset name or free text |
+| `series_slug` | string | `""` | Series identifier matching `config/series/<series_slug>.json` |
 | `world_anchor` | string | `""` | Prepended to every generated prompt. Absent from v1, and its absence produced 111 of 160 off-brief images |
 | `character_bible` | object | `{}` | name → description |
 | `budget.max_generated_clips` | int | `0` | Hard ceiling on paid motion clips. `0` disables generative motion |

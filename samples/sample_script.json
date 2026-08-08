@@ -1,6 +1,7 @@
 {
   "project": {
     "title": "The Rise of Baghdad — Islamic Golden Age",
+    "series_slug": "islamic_history",
     "output_filename": "rise_of_baghdad_sample.mp4",
     "voice": "en-US-GuyNeural",
     "voice_rate": "+0%",

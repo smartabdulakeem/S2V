@@ -115,6 +115,10 @@ class RenderOrchestrator:
         proj = script["project"]
         segments = script["segments"]
         total = len(segments)
+
+        # Library images used by this render. Committed to the usage counter only
+        # when the render completes — a cancelled or failed render records nothing.
+        used_library_paths = set()
         video_title = proj.get("title", "")
         visual_style = proj.get("visual_style", "")
         disable_captions = proj.get("disable_captions", False)
@@ -290,6 +294,10 @@ class RenderOrchestrator:
             def progress_cb(msg):
                 self._log(f"[Segment {seg_id} Visuals] {msg}")
 
+            def library_hit_cb(lib_path):
+                with self._lock:
+                    used_library_paths.add(lib_path)
+
             try:
                 vis_path = fetch_visual(
                     segment_id=seg_id,
@@ -310,6 +318,8 @@ class RenderOrchestrator:
                     character_bible=proj.get("character_bible"),
                     level1_overlay=seg.get("level1_overlay"),
                     crop=seg.get("crop"),
+                    series_slug=proj.get("series_slug"),
+                    on_library_hit=library_hit_cb,
                 )
                 with self._lock:
                     visual_paths_map[seg_id] = vis_path
@@ -411,6 +421,16 @@ class RenderOrchestrator:
             error_msg = f"Failed to stitch final video.\n\nError: {e}"
             self._emit("error", message=error_msg)
             return {"success": False, "error": error_msg}
+
+        # Render completed — now, and only now, commit library usage.
+        # Once per image per render: used_library_paths is a set.
+        if used_library_paths:
+            from pipeline import library
+            for lib_path in sorted(used_library_paths):
+                try:
+                    library.record_render_usage(lib_path)
+                except Exception as e:
+                    self._log(f"Could not record library usage for {lib_path}: {e}")
 
         # Done
         self._emit("complete", output_path=output_path)

@@ -253,6 +253,20 @@ def validate(script_data: dict) -> list[str]:
     if "character_bible" in proj and not isinstance(proj["character_bible"], dict):
         errors.append("project.character_bible: must be an object mapping names to descriptions")
 
+    if "series_slug" in proj and proj["series_slug"] is not None:
+        slug_val = proj["series_slug"]
+        if not isinstance(slug_val, str):
+            errors.append("project.series_slug: must be a string")
+        elif slug_val.strip():
+            slug_clean = slug_val.strip().lower().replace("-", "_")
+            series_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "series")
+            slug_file = os.path.join(series_dir, f"{slug_clean}.json")
+            if not os.path.exists(slug_file):
+                available = []
+                if os.path.exists(series_dir):
+                    available = sorted([p.stem for p in Path(series_dir).glob("*.json")])
+                errors.append(f'project.series_slug: "{slug_val}" is not a known series pack. Available packs: {", ".join(available)}.')
+
     max_clips = 0
     max_spend = 0.0
     if "budget" in proj and isinstance(proj["budget"], dict):

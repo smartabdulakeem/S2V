@@ -455,6 +455,106 @@ def build_script_with_ai(
         speaker_mode=speaker_mode or "single"
     )
 
+import hashlib
+import random
+import time
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _resolve_cache_dir() -> str:
+    """
+    Planning cache lives under the configured cache_dir, never under config/ —
+    that directory holds settings.json with live API keys.
+    """
+    cache_dir = "cache"
+    settings_file = os.path.join(_ROOT, "config", "settings.json")
+    if os.path.exists(settings_file):
+        try:
+            with open(settings_file, "r", encoding="utf-8") as f:
+                configured = json.load(f).get("cache_dir", "").strip()
+                if configured:
+                    cache_dir = configured
+        except Exception:
+            pass
+    if not os.path.isabs(cache_dir):
+        cache_dir = os.path.join(_ROOT, cache_dir)
+    return os.path.join(cache_dir, "planning")
+
+
+CACHE_DIR = _resolve_cache_dir()
+
+
+def _http_request_with_backoff(req, timeout=90, max_retries=3):
+    """
+    Execute HTTP request with exponential backoff and jitter on 429 and 503 errors.
+    Caps at max_retries=3.
+    """
+    delay = 1.0
+    for attempt in range(1, max_retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as err:
+            if err.code in (429, 503) and attempt < max_retries:
+                jitter = random.uniform(0.1, 0.5)
+                sleep_time = delay + jitter
+                sys.stderr.write(f"HTTP {err.code} rate limited/busy on attempt {attempt}/{max_retries}. Backing off {sleep_time:.2f}s...\n")
+                time.sleep(sleep_time)
+                delay *= 2.0
+            else:
+                raise err
+        except urllib.error.URLError as err:
+            if attempt < max_retries:
+                jitter = random.uniform(0.1, 0.5)
+                sleep_time = delay + jitter
+                sys.stderr.write(f"URL error on attempt {attempt}/{max_retries}: {err}. Backing off {sleep_time:.2f}s...\n")
+                time.sleep(sleep_time)
+                delay *= 2.0
+            else:
+                raise err
+
+
+def _get_planning_cache_key(text: str, title: str, voice: str, visual_style: str, ai_guideline: str, voice_dialect: str, narrative_tone: str, speaker_mode: str) -> str:
+    raw = f"{text}:{title}:{voice}:{visual_style}:{ai_guideline}:{voice_dialect}:{narrative_tone}:{speaker_mode}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _get_cached_plan(cache_key: str) -> dict | None:
+    cache_path = os.path.join(CACHE_DIR, f"planning_{cache_key}.json")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
+
+
+def _save_cached_plan(cache_key: str, plan_data: dict):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cache_path = os.path.join(CACHE_DIR, f"planning_{cache_key}.json")
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(plan_data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+    cache_key = _get_planning_cache_key(text, title, voice, visual_style, ai_guideline, voice_dialect, narrative_tone, speaker_mode)
+    cached = _get_cached_plan(cache_key)
+    if cached:
+        return cached
+
+    prompt = _SPLIT_PROMPT.format(
+        title=title.strip() or "My Video",
+        visual_style=visual_style.strip(),
+        script=text.strip(),
+        ai_guideline=ai_guideline or "None",
+        voice_dialect=voice_dialect or "Standard English",
+        narrative_tone=narrative_tone or "Dramatic Documentary",
+        speaker_mode=speaker_mode or "single"
+    )
+
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -474,8 +574,8 @@ def build_script_with_ai(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            data = json.loads(resp.read())
+        resp_bytes = _http_request_with_backoff(req, timeout=90, max_retries=3)
+        data = json.loads(resp_bytes.decode("utf-8"))
 
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
@@ -497,7 +597,9 @@ def build_script_with_ai(
             except Exception:
                 pass
             raise RuntimeError(f"JSONDecodeError: {jde}. Raw response saved to logs/failed_gemini_resp.json")
-        return _assemble_script_dict(parsed, title, voice, output_filename, visual_style, ai_guideline)
+        res = _assemble_script_dict(parsed, title, voice, output_filename, visual_style, ai_guideline)
+        _save_cached_plan(cache_key, res)
+        return res
 
     except Exception as e:
         # Raise detailed exception so the orchestrator/agent knows planning failed and reports it
@@ -523,6 +625,11 @@ def build_script_with_deepseek_and_gemini(
     and Gemini as an Oversight Agent to verify text verbatim compliance
     and write custom voice-steering prompts.
     """
+    cache_key = _get_planning_cache_key(text, title, voice, visual_style, ai_guideline, voice_dialect, narrative_tone, speaker_mode)
+    cached = _get_cached_plan(cache_key)
+    if cached:
+        return cached
+
     if not deepseek_api_key:
         return build_script_with_ai(
             text=text,
@@ -576,7 +683,7 @@ def build_script_with_deepseek_and_gemini(
             else:
                 seg["type"] = "body"
                 
-        return {
+        res = {
             "project": {
                 "title": title.strip() or "My Video",
                 "output_filename": sanitize_output_filename(output_filename),
@@ -592,6 +699,8 @@ def build_script_with_deepseek_and_gemini(
             },
             "segments": all_segments,
         }
+        _save_cached_plan(cache_key, res)
+        return res
 
     # 1. DeepSeek Storyboard Planning
     prompt_ds = _SPLIT_PROMPT.format(
@@ -624,8 +733,8 @@ def build_script_with_deepseek_and_gemini(
             },
             method="POST",
         )
-        with urllib.request.urlopen(req_ds, timeout=90) as resp:
-            ds_data = json.loads(resp.read().decode("utf-8"))
+        ds_bytes = _http_request_with_backoff(req_ds, timeout=90, max_retries=3)
+        ds_data = json.loads(ds_bytes.decode("utf-8"))
         
         raw_text_ds = ds_data["choices"][0]["message"]["content"].strip()
         if raw_text_ds.startswith("```"):
@@ -656,11 +765,12 @@ def build_script_with_deepseek_and_gemini(
 
     # 2. Gemini Oversight Verification & Voice-steering
     if not google_api_key:
-        # If Gemini is missing, just build the schema from DeepSeek results directly
-        return _assemble_script_dict(
+        res = _assemble_script_dict(
             parsed_ds, title, voice, output_filename, visual_style, ai_guideline,
             voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
         )
+        _save_cached_plan(cache_key, res)
+        return res
 
     prompt_gemini = _OVERSIGHT_PROMPT.format(
         original_script=text.strip(),
@@ -690,8 +800,8 @@ def build_script_with_deepseek_and_gemini(
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req_gemini, timeout=90) as resp:
-            gemini_data = json.loads(resp.read().decode("utf-8"))
+        gemini_bytes = _http_request_with_backoff(req_gemini, timeout=90, max_retries=3)
+        gemini_data = json.loads(gemini_bytes.decode("utf-8"))
         
         raw_text_gemini = gemini_data["candidates"][0]["content"]["parts"][0]["text"].strip()
         if raw_text_gemini.startswith("```"):
@@ -709,16 +819,20 @@ def build_script_with_deepseek_and_gemini(
             except Exception:
                 pass
             raise RuntimeError(f"JSONDecodeError: {jde}. Raw response saved to logs/failed_gemini_oversight_resp.json")
-        return _assemble_script_dict(
+        res = _assemble_script_dict(
             parsed_gemini, title, voice, output_filename, visual_style, ai_guideline,
             voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
         )
+        _save_cached_plan(cache_key, res)
+        return res
     except Exception as e:
-        print(f"Gemini Oversight QC failed ({e}). Returning DeepSeek storyboard directly.")
-        return _assemble_script_dict(
+        sys.stderr.write(f"WARNING: Gemini oversight step rate-limited/throttled or failed ({e}). Degrading gracefully to primary LLM (DeepSeek) script output.\n")
+        res = _assemble_script_dict(
             parsed_ds, title, voice, output_filename, visual_style, ai_guideline,
             voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
         )
+        _save_cached_plan(cache_key, res)
+        return res
 
 
 def _assemble_script_dict(

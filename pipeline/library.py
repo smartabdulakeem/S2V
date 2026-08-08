@@ -22,6 +22,7 @@ REJECTIONS_PATH = os.path.join(LIBRARY_DIR, "rejections.jsonl")
 MANIFEST_PATH = os.path.join(LIBRARY_DIR, "manifest.jsonl")
 CONFIG_PATH = os.path.join(ROOT, "config", "library_config.json")
 SERIES_CONFIG_DIR = os.path.join(ROOT, "config", "series")
+RENDER_USAGE_PATH = os.path.join(LIBRARY_DIR, "render_usage.json")
 WAR_IMAGE_PROMPTS_PATH = os.path.join(LIBRARY_DIR, "WAR_IMAGE_PROMPTS.md")
 
 _MODEL = None
@@ -30,6 +31,10 @@ _TOKENIZER = None
 
 FALLBACK_MIN_SCORE = 0.2796
 FALLBACK_WEAK_BAND = 0.0045
+RENDER_USAGE_PENALTY = 0.0008
+
+import warnings
+
 
 def get_calibration_config() -> dict:
     if os.path.exists(CONFIG_PATH):
@@ -68,12 +73,19 @@ def save_calibration_config(min_score: float, weak_band: float):
         json.dump(cfg, f, indent=2)
 
 
-def get_series_config(series_slug: str = None, world_anchor: str = None) -> dict:
+def get_series_config(series_slug: str = None, project_title: str = None) -> dict:
     """
     Resolves per-series prompt configuration (world_anchor, style_block, negative_block).
-    Prevents cross-domain prompt pollution (e.g. scimitars in space prompts).
+    - Resolves strictly from series_slug.
+    - An unknown slug raises ValueError listing available series packs.
+    - A missing slug emits a UserWarning with the project title and falls back to default.json.
+    - No keyword substring guessing.
     """
-    # 1. Direct slug match
+    available_packs = {}
+    if os.path.exists(SERIES_CONFIG_DIR):
+        for p in Path(SERIES_CONFIG_DIR).glob("*.json"):
+            available_packs[p.stem] = p.name
+
     if series_slug:
         slug_clean = series_slug.strip().lower().replace("-", "_")
         slug_path = os.path.join(SERIES_CONFIG_DIR, f"{slug_clean}.json")
@@ -81,20 +93,20 @@ def get_series_config(series_slug: str = None, world_anchor: str = None) -> dict
             try:
                 with open(slug_path, "r", encoding="utf-8") as f:
                     return json.load(f)
-            except Exception:
-                pass
+            except Exception as e:
+                raise ValueError(f"Failed to read series pack '{slug_clean}.json': {e}")
+        
+        sorted_packs = sorted(list(available_packs.keys()))
+        raise ValueError(
+            f"Unknown series_slug '{series_slug}'. Available series packs in config/series/: {', '.join(sorted_packs)}"
+        )
 
-    # 2. Match via world_anchor text
-    if world_anchor:
-        anchor_lower = world_anchor.lower()
-        if any(term in anchor_lower for term in ["arabian", "islamic", "7th century", "mecca", "medina", "baghdad"]):
-            return get_series_config("islamic_history")
-        elif any(term in anchor_lower for term in ["civil war", "1861", "1865", "confederate", "union soldier"]):
-            return get_series_config("civil_war")
-        elif any(term in anchor_lower for term in ["nasa", "space", "apollo", "moon"]):
-            return get_series_config("space")
+    # Missing series_slug -> emit warning naming project title and fall back to default
+    title_str = project_title or "Untitled Project"
+    warning_msg = f"Project '{title_str}' has no 'series_slug' specified; falling back to 'default' series pack."
+    warnings.warn(warning_msg, UserWarning)
+    sys.stderr.write(f"WARNING: {warning_msg}\n")
 
-    # 3. Default neutral fallback
     default_path = os.path.join(SERIES_CONFIG_DIR, "default.json")
     if os.path.exists(default_path):
         try:
@@ -105,7 +117,7 @@ def get_series_config(series_slug: str = None, world_anchor: str = None) -> dict
 
     return {
         "series_slug": "default",
-        "world_anchor": world_anchor or "",
+        "world_anchor": "",
         "style_block": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted color palette, fine film grain.",
         "negative_block": "No text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin, no blur, no distortion."
     }
@@ -222,7 +234,28 @@ def encode_text_query(query: str):
     return text_features.cpu().numpy()[0]
 
 
-# ── 2. Manifest Usage & Rejection Memory ──────────────────────────────────────
+# ── 2. Render Usage Counter & Rejection Memory ─────────────────────────────
+
+def get_render_usage_counts() -> dict:
+    """Returns per-image render usage counts from render_usage.json."""
+    if not os.path.exists(RENDER_USAGE_PATH):
+        return {}
+    try:
+        with open(RENDER_USAGE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def record_render_usage(image_path: str):
+    """Increments render usage count for image_path when it is used in a completed render."""
+    norm_path = image_path.strip().replace("\\", "/")
+    counts = get_render_usage_counts()
+    counts[norm_path] = counts.get(norm_path, 0) + 1
+    os.makedirs(os.path.dirname(RENDER_USAGE_PATH), exist_ok=True)
+    with open(RENDER_USAGE_PATH, "w", encoding="utf-8") as f:
+        json.dump(counts, f, indent=2)
+
 
 def get_manifest_usage_counts():
     counts = {}
@@ -281,7 +314,7 @@ def search(query: str, k: int = 5, exclude: set = None, min_score: float = None)
     Returns [(path, score)] ranked by score after applying penalties:
       - 1.0 score penalty for image in exclude set (already used in render)
       - 1.0 score penalty for (query, image) in rejections memory
-      - 0.03 * lifetime_usage_count penalty from manifest
+      - RENDER_USAGE_PENALTY (0.0008) * render_usage_count penalty
     """
     if min_score is None:
         min_score = get_calibrated_min_score()
@@ -297,7 +330,7 @@ def search(query: str, k: int = 5, exclude: set = None, min_score: float = None)
     q_emb = encode_text_query(query)
     raw_scores = np.dot(embeddings, q_emb)
 
-    manifest_counts = get_manifest_usage_counts()
+    render_usage_counts = get_render_usage_counts()
     rejected_pairs = get_rejected_pairs()
     query_lower = query.strip().lower()
 
@@ -315,9 +348,9 @@ def search(query: str, k: int = 5, exclude: set = None, min_score: float = None)
 
         penalized_score = float(raw_score)
 
-        # Lifetime manifest usage penalty
-        lifetime_use = manifest_counts.get(norm_path, 0)
-        penalized_score -= (0.03 * lifetime_use)
+        # Real render usage penalty (small relative to weak_band=0.0045)
+        uses = render_usage_counts.get(norm_path, 0)
+        penalized_score -= (RENDER_USAGE_PENALTY * uses)
 
         adjusted_results.append((norm_path, penalized_score, float(raw_score)))
 
@@ -338,12 +371,15 @@ def compose_gap_prompt(
     world_anchor: str = None,
     character_bible: dict = None,
     script_context: str = "",
-    series_slug: str = None
+    series_slug: str = None,
+    project_title: str = None
 ) -> str:
     """
     Composes a ready-to-use prompt for a library gap using per-series prompt configuration.
+    Never includes project_title or raw narration text directly in the prompt.
+    Script context (narration) is ONLY used for character-bible matching.
     """
-    series_cfg = get_series_config(series_slug=series_slug, world_anchor=world_anchor)
+    series_cfg = get_series_config(series_slug=series_slug, project_title=project_title)
     parts = []
 
     # Framing bias toward wide/silhouette/detail rather than mid-distance faces
@@ -359,7 +395,7 @@ def compose_gap_prompt(
     if anchor:
         parts.append(anchor)
 
-    # Character bible matching
+    # Character bible matching using script_context / shot_query
     if character_bible:
         for char_name, char_desc in character_bible.items():
             pattern = r'\b' + re.escape(char_name) + r'\b'
@@ -468,7 +504,8 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             world_anchor=world_anchor,
             character_bible=character_bible,
             script_context=s["narration"],
-            series_slug=series_slug
+            series_slug=series_slug,
+            project_title=title
         )
 
         shot_reports.append({

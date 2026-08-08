@@ -36,6 +36,7 @@ library/images/
 library/_inbox/
 library/_sheets/
 library/_rejected/
+library/render_usage.json
 
 projects/
 temp_animated_drawings/
