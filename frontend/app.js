@@ -859,7 +859,9 @@ async function loadLibraryData(query = "") {
   try {
     const res = await window.pywebview.api.get_library_data(query);
     renderLibraryGrid(res.images || []);
-    document.getElementById("lib-counts-label").textContent = `${res.total_images} images · ${res.sounds_count} sounds · ${res.beds_count} music beds`;
+    const pending = res.sounds_pending ? ` · ${res.sounds_pending} awaiting review` : "";
+    document.getElementById("lib-counts-label").textContent =
+      `${res.total_images} images · ${res.sounds_count} sounds${pending}`;
     document.getElementById("house-active-count").textContent = res.total_images;
   } catch (e) {
     console.error("Failed to load library data:", e);

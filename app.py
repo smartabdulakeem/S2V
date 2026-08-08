@@ -129,23 +129,43 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def _count_sounds(self) -> dict:
+        """
+        Count what is actually on disk. These were hardcoded to 87 and 12, which
+        showed a library ten times the real size — the Library screen must never
+        report a number nobody counted.
+        """
+        sounds_dir = os.path.join(BASE_DIR, "library", "sounds")
+        audio = (".mp3", ".wav", ".ogg", ".flac", ".m4a")
+
+        def count(path):
+            if not os.path.isdir(path):
+                return 0
+            return len([f for f in os.listdir(path) if f.lower().endswith(audio)])
+
+        return {
+            "sounds_count": count(sounds_dir),
+            "sounds_pending": count(os.path.join(sounds_dir, "_inbox")),
+        }
+
     def get_library_data(self, query: str = "") -> dict:
         """Return library image count, coverage stats, and matching images."""
         images_dir = os.path.join(BASE_DIR, "library", "images")
+        sounds = self._count_sounds()
+
         if not os.path.exists(images_dir):
-            return {"total_images": 0, "images": [], "sounds_count": 87, "beds_count": 12}
-        
+            return {"total_images": 0, "images": [], **sounds}
+
         img_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
         if query:
             q_lower = query.lower()
             img_files = [f for f in img_files if q_lower in f.lower()]
-        
+
         images_info = [{"filename": f, "path": f"library/images/{f}"} for f in img_files[:60]]
         return {
             "total_images": len(img_files),
             "images": images_info,
-            "sounds_count": 87,
-            "beds_count": 12
+            **sounds,
         }
 
     def delete_library_image(self, filename: str) -> dict:
