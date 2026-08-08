@@ -38,15 +38,21 @@ import warnings
 
 
 def get_calibrated_min_score(series_slug: str = None) -> float:
-    cfg = get_calibration_config(series_slug=series_slug)
-    if cfg.get("min_score") is not None:
+    try:
+        cfg = get_calibration_config(series_slug=series_slug)
+    except TypeError:
+        cfg = get_calibration_config()
+    if isinstance(cfg, dict) and cfg.get("min_score") is not None:
         return cfg["min_score"]
     return FALLBACK_MIN_SCORE
 
 
 def get_calibrated_weak_band(series_slug: str = None) -> float:
-    cfg = get_calibration_config(series_slug=series_slug)
-    if cfg.get("weak_band") is not None:
+    try:
+        cfg = get_calibration_config(series_slug=series_slug)
+    except TypeError:
+        cfg = get_calibration_config()
+    if isinstance(cfg, dict) and cfg.get("weak_band") is not None:
         return cfg["weak_band"]
     return FALLBACK_WEAK_BAND
 

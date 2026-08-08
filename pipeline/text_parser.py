@@ -622,11 +622,12 @@ def build_script_with_ai(
     pack_voice = series_cfg.get("voice", {})
     resolved_voice = voice or pack_voice.get("id", "google:en-US-Neural2-D")
 
-    # 3. Check planning cache
+    # 3. Check planning cache (only if default provider is used)
     cache_key = _get_planning_cache_key(text_clean, title, resolved_voice, visual_style, ai_guideline, voice_dialect, narrative_tone, speaker_mode)
-    cached_plan = _get_cached_plan(cache_key)
-    if cached_plan:
-        return cached_plan
+    if llm_provider is None:
+        cached_plan = _get_cached_plan(cache_key)
+        if cached_plan:
+            return cached_plan
 
     # 4. Resolve LLM provider
     provider = llm_provider or get_llm_provider()
