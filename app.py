@@ -125,6 +125,47 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    _THUMB_CACHE: dict = {}
+
+    @classmethod
+    def _thumb(cls, repo_relative_path: str, width: int = 320) -> str:
+        """
+        A small JPEG encoded straight into the page as a data URI.
+
+        file:// URLs are refused as subresources by the WebView2 control that hosts
+        this page, so every thumbnail rendered as a broken-image icon. Embedding the
+        bytes sidesteps the protocol entirely. Downscaled to `width`, so a board of
+        fifty shots costs a few hundred KB rather than fifty full-size images.
+        """
+        if not repo_relative_path:
+            return ""
+        key = (repo_relative_path, width)
+        if key in cls._THUMB_CACHE:
+            return cls._THUMB_CACHE[key]
+
+        abs_path = os.path.join(BASE_DIR, str(repo_relative_path).replace("/", os.sep))
+        if not os.path.exists(abs_path):
+            return ""
+        try:
+            import base64
+            import io as _io
+            from PIL import Image
+
+            with Image.open(abs_path) as im:
+                im = im.convert("RGB")
+                ratio = width / float(im.width) if im.width else 1.0
+                im = im.resize((width, max(1, int(im.height * ratio))), Image.LANCZOS)
+                buf = _io.BytesIO()
+                im.save(buf, "JPEG", quality=72)
+            uri = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+        except Exception:
+            return ""
+
+        if len(cls._THUMB_CACHE) > 400:
+            cls._THUMB_CACHE.clear()
+        cls._THUMB_CACHE[key] = uri
+        return uri
+
     @staticmethod
     def _media_url(repo_relative_path: str) -> str:
         """
@@ -147,9 +188,9 @@ class Api:
 
             # Attach displayable URLs so the board can actually show what it matched.
             for shot in report.get("shot_reports", []):
-                shot["best_url"] = self._media_url(shot.get("best_path"))
+                shot["best_url"] = self._thumb(shot.get("best_path"))
                 shot["alternative_urls"] = [
-                    {"url": self._media_url(p), "path": p, "score": score}
+                    {"url": self._thumb(p, 160), "path": p, "score": score}
                     for p, score in (shot.get("alternatives") or [])
                 ]
             return {"success": True, "report": report}
@@ -204,7 +245,7 @@ class Api:
                 }, ensure_ascii=False) + "\n")
 
             library.reindex(force=True)
-            return {"success": True, "path": rel, "url": self._media_url(rel), "filename": name}
+            return {"success": True, "path": rel, "url": self._thumb(rel), "filename": name}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -244,7 +285,7 @@ class Api:
             {
                 "filename": f,
                 "path": f"library/images/{f}",
-                "url": self._media_url(f"library/images/{f}"),
+                "url": self._thumb(f"library/images/{f}", 240),
             }
             for f in img_files[:60]
         ]
@@ -575,7 +616,16 @@ def main():
 
     api.set_window(window)
 
-    webview.start(debug=False, gui='edgechromium')
+    def _focus_window():
+        # Without this the window opens behind everything and sits in the taskbar.
+        try:
+            window.restore()
+            window.on_top = True
+            window.on_top = False
+        except Exception:
+            pass
+
+    webview.start(_focus_window, debug=False, gui='edgechromium')
 
 
 if __name__ == "__main__":
