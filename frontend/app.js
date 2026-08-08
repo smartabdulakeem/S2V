@@ -1,1278 +1,912 @@
 /**
- * Smart Studio frontend — IPC bridge between the PyWebView API and the UI.
- * Supports running inside local desktop PyWebView and standard web browsers (cloud-mode Vercel).
+ * Smart Studio frontend — IPC bridge between PyWebView API and UI.
+ * Plain HTML/CSS/JS architecture supporting native desktop and cloud fallback.
  */
 
-// Detect running mode (re-evaluated dynamically in initApp)
 let isWebMode = typeof window.pywebview === "undefined" || !window.pywebview.api;
 
-// State
 let currentScriptPath = null;
 let currentScriptData = null;
+let coverageReport = null;
 let isRendering = false;
-let lastOutputPath = null;
-const MAX_LOG_LINES = 100;
 let logLines = [];
+const MAX_LOG_LINES = 150;
 
+let seriesPacks = [];
+let voiceCatalogue = [];
+let activeReplaceShot = null;
+
+// Base64 decoder helper
 window.decodeBase64UTF8 = function(payload) {
-    const binary = atob(payload);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-    return new TextDecoder("utf-8").decode(bytes);
+  const binary = atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder("utf-8").decode(bytes);
 };
 
-const ALL_DIALECTS = [
-    { code: 'Standard English', label: 'Standard English', flag: '🇺🇸' },
-    { code: 'Nigerian English', label: 'Nigerian English', flag: '🇳🇬' },
-    { code: 'British English', label: 'British English (UK)', flag: '🇬🇧' },
-    { code: 'Arabic Storytelling', label: 'Arabic Storytelling', flag: '🇸🇦' },
-    { code: 'Spanish Dialect', label: 'Spanish Dialect', flag: '🇪🇸' },
-    { code: 'French Dialect', label: 'French Dialect', flag: '🇫🇷' }
-];
-let enabledLanguages = ['Standard English', 'Nigerian English', 'British English', 'Arabic Storytelling', 'Spanish Dialect', 'French Dialect'];
-
-window.renderLanguageCheckboxes = function() {
-    const container = document.getElementById("language-selection-list");
-    if (!container) return;
-    container.innerHTML = "";
-    
-    ALL_DIALECTS.forEach((dialect) => {
-        const isChecked = enabledLanguages.includes(dialect.code);
-        const wrapper = document.createElement("label");
-        wrapper.className = "flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-white/5 text-[#dfe2f1]";
-        wrapper.innerHTML = `
-            <input type="checkbox" value="${dialect.code}" ${isChecked ? 'checked' : ''} onchange="toggleLanguagePreference(this)" class="rounded border-white/10 bg-[#171b26] text-[#8083ff] focus:ring-0 focus:ring-offset-0" />
-            <span>${dialect.flag} ${dialect.label}</span>
-        `;
-        container.appendChild(wrapper);
-    });
-};
-
-window.toggleLanguagePreference = function(checkbox) {
-    const lang = checkbox.value;
-    if (checkbox.checked) {
-        if (!enabledLanguages.includes(lang)) {
-            enabledLanguages.push(lang);
-        }
-    } else {
-        enabledLanguages = enabledLanguages.filter(l => l !== lang);
-    }
-    localStorage.setItem("enabled_languages", JSON.stringify(enabledLanguages));
-    rebuildDialectSelect();
-};
-
-window.rebuildDialectSelect = function() {
-    const dialectSelect = document.getElementById("pt-voice-dialect");
-    if (!dialectSelect) return;
-    
-    const currentVal = dialectSelect.value;
-    dialectSelect.innerHTML = "";
-    
-    const filtered = ALL_DIALECTS.filter(d => enabledLanguages.includes(d.code));
-    filtered.forEach((dialect) => {
-        const opt = document.createElement("option");
-        opt.value = dialect.code;
-        opt.textContent = dialect.label;
-        dialectSelect.appendChild(opt);
-    });
-    
-    if (filtered.some(d => d.code === currentVal)) {
-        dialectSelect.value = currentVal;
-    } else if (filtered.length > 0) {
-        dialectSelect.value = filtered[0].code;
-    }
-
-    rebuildVoiceSelect();
-};
-
-window.rebuildVoiceSelect = function() {
-    const voiceSelect = document.getElementById("pt-voice");
-    if (!voiceSelect) return;
-
-    const currentVoice = voiceSelect.value;
-    let selectedStillValid = false;
-
-    const options = voiceSelect.querySelectorAll("option");
-    options.forEach(opt => {
-        const val = opt.value;
-        let dialect = "";
-        if (val.startsWith("edge:en-US-") || val.startsWith("google:gemini-3.1-flash-tts-preview:") || val.startsWith("google:en-US-")) {
-            dialect = "Standard English";
-        } else if (val.startsWith("edge:en-GB-") || val.startsWith("edge:en-AU-") || val.startsWith("google:en-GB-")) {
-            dialect = "British English";
-        } else if (val === "local:supertonic-f3") {
-            dialect = "Arabic Storytelling";
-        } else if (val.startsWith("local:supertonic-")) {
-            dialect = "Nigerian English";
-        } else if (val.startsWith("edge:es-") || val.startsWith("google:es-")) {
-            dialect = "Spanish Dialect";
-        } else if (val.startsWith("edge:fr-") || val.startsWith("google:fr-")) {
-            dialect = "French Dialect";
-        }
-
-        if (dialect) {
-            const isEnabled = enabledLanguages.includes(dialect);
-            if (isEnabled) {
-                opt.style.display = "";
-                opt.disabled = false;
-                if (val === currentVoice) selectedStillValid = true;
-            } else {
-                opt.style.display = "none";
-                opt.disabled = true;
-            }
-        } else {
-            opt.style.display = "";
-            opt.disabled = false;
-            if (val === currentVoice) selectedStillValid = true;
-        }
-    });
-
-    const optgroups = voiceSelect.querySelectorAll("optgroup");
-    optgroups.forEach(group => {
-        const totalOpts = group.querySelectorAll("option").length;
-        const hiddenOpts = group.querySelectorAll("option[disabled]").length;
-        if (totalOpts === hiddenOpts) {
-            group.style.display = "none";
-        } else {
-            group.style.display = "";
-        }
-    });
-
-    if (!selectedStillValid) {
-        const firstEnabled = voiceSelect.querySelector("option:not([disabled])");
-        if (firstEnabled) {
-            voiceSelect.value = firstEnabled.value;
-        }
-    }
-};
-
-// ── Boot ─────────────────────────────────────────────────────────────────────
-
+// Boot lifecycle
 window.addEventListener("pywebviewready", () => {
   initApp();
 });
 
-// Boot fallback/webmode init
 window.addEventListener("DOMContentLoaded", () => {
   if (isWebMode) {
     initApp();
   }
 });
 
-// Fallback for slower init or early-injection race conditions
 setTimeout(() => {
-  const actuallyDesktop = typeof window.pywebview !== "undefined" && window.pywebview.api;
-  if (actuallyDesktop) {
+  if (typeof window.pywebview !== "undefined" && window.pywebview.api) {
     initApp();
   }
-}, 500);
+}, 400);
 
 async function initApp() {
-  window.scrollTo(0, 0);
-  
-  const savedLangs = localStorage.getItem("enabled_languages");
-  if (savedLangs) {
-      enabledLanguages = JSON.parse(savedLangs);
-  }
-  renderLanguageCheckboxes();
-  rebuildDialectSelect();
-  
-  // Update mode based on presence of injected pywebview API
   isWebMode = typeof window.pywebview === "undefined" || !window.pywebview.api;
-  
+
   if (isWebMode) {
-    console.log("Smart Studio running in Cloud Web Mode");
-    document.getElementById("version-badge").textContent = `v2.0.0 (Cloud)`;
-    
-    // Load credentials from browser localStorage
-    const googleKey = localStorage.getItem("google_api_key") || "";
-    if (googleKey) {
-      document.getElementById("google-key-input").value = googleKey;
-      setGoogleKeyStatus("saved", "✓ Key saved");
+    document.getElementById("version-badge").textContent = "v2.0.0 (Cloud)";
+  } else {
+    try {
+      const ver = await window.pywebview.api.get_version();
+      document.getElementById("version-badge").textContent = `v${ver}`;
+    } catch (e) {}
+  }
+
+  await loadSeriesPacks();
+  await loadVoiceCatalogue();
+  await loadSettingsData();
+  await loadLibraryData();
+}
+
+// ── Screen Navigation ────────────────────────────────────────────────────────
+function switchPane(paneId) {
+  document.querySelectorAll(".nav").forEach(b => {
+    b.setAttribute("aria-selected", b.dataset.p === paneId ? "true" : "false");
+  });
+
+  document.querySelectorAll(".pane").forEach(p => {
+    p.removeAttribute("data-on");
+    if (p.dataset.pane === paneId) {
+      p.setAttribute("data-on", "1");
     }
-    const googleTtsKey = localStorage.getItem("google_tts_api_key") || "";
-    if (googleTtsKey) {
-      document.getElementById("google-tts-key-input").value = googleTtsKey;
-      setGoogleTtsKeyStatus("saved", "✓ Key saved");
+  });
+
+  if (paneId === "library") {
+    loadLibraryData();
+  }
+}
+
+// ── Format Checklist ─────────────────────────────────────────────────────────
+function toggleFormat(btn) {
+  btn.classList.toggle("on");
+  const tickSpan = btn.querySelector(".tick");
+  if (tickSpan) {
+    tickSpan.textContent = btn.classList.contains("on") ? "✓" : " ";
+  }
+}
+
+function getSelectedFormats() {
+  const selected = [];
+  document.querySelectorAll(".fmt.on").forEach(b => {
+    if (b.dataset.fmt) selected.push(b.dataset.fmt);
+  });
+  return selected.length > 0 ? selected : ["16:9"];
+}
+
+// ── Captions Master Toggle ────────────────────────────────────────────────────
+function toggleCaptionsMaster() {
+  const master = document.getElementById("capMaster");
+  const opts = document.getElementById("capOpts");
+  if (!master || !opts) return;
+
+  master.classList.toggle("on");
+  const isOn = master.classList.contains("on");
+  opts.classList.toggle("off", !isOn);
+  master.lastChild.textContent = isOn ? "On" : "Off";
+}
+
+// ── Theme Switcher ───────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute("data-theme") || "dark";
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+  document.getElementById("btn-theme-toggle").textContent = `Theme: ${next === "dark" ? "Dark" : "Light"}`;
+}
+
+// ── Series Packs Loader ──────────────────────────────────────────────────────
+async function loadSeriesPacks() {
+  const select = document.getElementById("pt-series-slug");
+  if (!select) return;
+
+  select.innerHTML = "";
+
+  if (!isWebMode && window.pywebview.api.get_series_packs) {
+    try {
+      seriesPacks = await window.pywebview.api.get_series_packs();
+    } catch (e) {
+      console.error("Failed to load series packs:", e);
     }
-    const deepseekKey = localStorage.getItem("deepseek_api_key") || "";
-    if (deepseekKey) {
-      document.getElementById("deepseek-key-input").value = deepseekKey;
-      setDeepseekKeyStatus("saved", "✓ Key saved");
+  }
+
+  if (!seriesPacks || seriesPacks.length === 0) {
+    seriesPacks = [
+      { series_slug: "islamic_history", display_name: "Islamic History" },
+      { series_slug: "civil_war", display_name: "American Civil War" },
+      { series_slug: "space_science", display_name: "Space Science" },
+      { series_slug: "world_military_history", display_name: "World Military History" },
+      { series_slug: "true_crime", display_name: "True Crime" },
+      { series_slug: "mythology_folklore", display_name: "Mythology & Folklore" },
+      { series_slug: "nature_wildlife", display_name: "Nature & Wildlife" },
+      { series_slug: "biography", display_name: "Biography" },
+      { series_slug: "business_money", display_name: "Business & Money" },
+      { series_slug: "default", display_name: "Default (General)" }
+    ];
+  }
+
+  seriesPacks.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.series_slug;
+    opt.textContent = p.display_name;
+    select.appendChild(opt);
+  });
+}
+
+// ── Voice Catalogue Loader & Settings ─────────────────────────────────────────
+async function loadVoiceCatalogue() {
+  if (!isWebMode && window.pywebview.api.get_voice_catalogue) {
+    try {
+      voiceCatalogue = await window.pywebview.api.get_voice_catalogue();
+    } catch (e) {
+      console.error("Failed to load voice catalogue:", e);
     }
-    updateRenderButton();
+  }
+
+  if (!voiceCatalogue || voiceCatalogue.length === 0) {
+    voiceCatalogue = [
+      {
+        engine: "Google Cloud",
+        voices: [
+          { id: "google:en-GB-Neural2-D", label: "Neural2-D (male)", gender: "male", lang: "en-GB", captions: "fast", timings: true, enabled: true },
+          { id: "google:en-US-Neural2-F", label: "Neural2-F (female)", gender: "female", lang: "en-US", captions: "fast", timings: true, enabled: true }
+        ]
+      },
+      {
+        engine: "Gemini Flash TTS",
+        voices: [
+          { id: "google:gemini-3.1-flash-tts-preview:Charon", label: "Charon (male)", gender: "male", lang: "multi", captions: "fast", timings: true, enabled: true },
+          { id: "google:gemini-3.1-flash-tts-preview:Puck", label: "Puck (male)", gender: "male", lang: "multi", captions: "fast", timings: true, enabled: true }
+        ]
+      },
+      {
+        engine: "Kokoro",
+        voices: [
+          { id: "local:kokoro-af_heart", label: "af_heart (female)", gender: "female", lang: "en-US", captions: "slow", timings: false, enabled: true },
+          { id: "local:kokoro-am_michael", label: "am_michael (male)", gender: "male", lang: "en-US", captions: "slow", timings: false, enabled: true }
+        ]
+      },
+      {
+        engine: "Supertonic",
+        voices: [
+          { id: "local:supertonic-m1", label: "M1 (male)", gender: "male", lang: "en + ar", captions: "slow", timings: false, enabled: true }
+        ]
+      }
+    ];
+  }
+
+  renderVoiceCatalogueSettings();
+  renderScriptNarratorSelect();
+}
+
+function renderVoiceCatalogueSettings() {
+  const container = document.getElementById("voice-engines-container");
+  if (!container) return;
+
+  container.innerHTML = "";
+  let totalAvailable = 0;
+  let totalEnabled = 0;
+
+  voiceCatalogue.forEach(engGroup => {
+    const engDiv = document.createElement("div");
+    engDiv.className = "eng";
+
+    let enabledInEng = 0;
+    let rowsHtml = "";
+
+    engGroup.voices.forEach(v => {
+      totalAvailable++;
+      if (v.enabled) {
+        totalEnabled++;
+        enabledInEng++;
+      }
+
+      const cbClass = v.enabled ? "cb on" : "cb";
+      const cbCheck = v.enabled ? "✓" : "";
+      const capPillClass = v.captions === "fast" ? "p-ok" : "p-warn";
+
+      rowsHtml += `
+        <tr>
+          <td><span class="${cbClass}" onclick="toggleVoiceEnable('${v.id}')">${cbCheck}</span></td>
+          <td><b>${v.label}</b> <span class="mono">${v.gender || ''}</span></td>
+          <td class="mono">${v.lang}</td>
+          <td><span class="pill ${capPillClass}">${v.captions}</span></td>
+          <td><button type="button" class="ghost" onclick="previewSpecificVoice('${v.id}')">Preview</button></td>
+        </tr>
+      `;
+    });
+
+    engDiv.innerHTML = `
+      <div class="eng-h">
+        <b>${engGroup.engine}</b>
+        <span class="pill p-mute">${engGroup.voices.length} voices</span>
+        <span class="mono" style="margin-left:auto">${enabledInEng} enabled</span>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th style="width:34px"></th><th>Voice</th><th>Lang</th><th>Captions</th><th></th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    `;
+
+    container.appendChild(engDiv);
+  });
+
+  const countSpan = document.getElementById("voice-catalogue-count");
+  if (countSpan) {
+    countSpan.textContent = `${totalAvailable} available · ${totalEnabled} enabled`;
+  }
+}
+
+function toggleVoiceEnable(voiceId) {
+  voiceCatalogue.forEach(group => {
+    group.voices.forEach(v => {
+      if (v.id === voiceId) {
+        v.enabled = !v.enabled;
+      }
+    });
+  });
+
+  renderVoiceCatalogueSettings();
+  renderScriptNarratorSelect();
+
+  if (!isWebMode && window.pywebview.api.save_voice_catalogue) {
+    window.pywebview.api.save_voice_catalogue(voiceCatalogue);
+  }
+}
+
+function renderScriptNarratorSelect() {
+  const select = document.getElementById("pt-voice");
+  if (!select) return;
+
+  select.innerHTML = "";
+
+  voiceCatalogue.forEach(group => {
+    const enabledVoices = group.voices.filter(v => v.enabled);
+    if (enabledVoices.length > 0) {
+      const optgroup = document.createElement("optgroup");
+      optgroup.label = group.engine;
+
+      enabledVoices.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = `${v.label} · ${v.lang} · ${v.captions} captions`;
+        optgroup.appendChild(opt);
+      });
+
+      select.appendChild(optgroup);
+    }
+  });
+
+  const mgmtOpt = document.createElement("option");
+  mgmtOpt.value = "manage";
+  mgmtOpt.textContent = "— manage voices in Settings —";
+  select.appendChild(mgmtOpt);
+
+  select.onchange = () => {
+    if (select.value === "manage") {
+      switchPane("settings");
+    }
+  };
+}
+
+// ── Voice Preview ──────────────────────────────────────────────────────────
+async function previewVoice() {
+  const voice = document.getElementById("pt-voice").value;
+  if (!voice || voice === "manage") return;
+  await previewSpecificVoice(voice);
+}
+
+async function previewSpecificVoice(voiceId) {
+  const status = document.getElementById("voice-preview-status");
+  if (status) status.textContent = "Generating preview...";
+
+  if (isWebMode) {
+    if (status) status.textContent = "Preview available in desktop mode.";
     return;
   }
 
-  // Native PyWebView desktop mode
   try {
-    const version = await window.pywebview.api.get_version();
-    document.getElementById("version-badge").textContent = `v${version}`;
+    const res = await window.pywebview.api.preview_voice(voiceId);
+    if (res.success && res.audio_b64) {
+      const audio = new Audio("data:audio/mp3;base64," + res.audio_b64);
+      audio.play();
+      if (status) status.textContent = "Playing...";
+      audio.onended = () => {
+        if (status) status.textContent = "";
+      };
+    } else {
+      if (status) status.textContent = "Preview error: " + (res.error || "failed");
+    }
+  } catch (e) {
+    if (status) status.textContent = "Preview error";
+  }
+}
 
+// ── Settings Keys Load & Save ────────────────────────────────────────────────
+async function loadSettingsData() {
+  if (isWebMode) {
+    const gKey = localStorage.getItem("google_api_key") || "";
+    if (gKey) {
+      document.getElementById("google-key-input").value = gKey;
+      setKeyStatus("google-key-status", true);
+    }
+    const gTtsKey = localStorage.getItem("google_tts_api_key") || "";
+    if (gTtsKey) {
+      document.getElementById("google-tts-key-input").value = gTtsKey;
+      setKeyStatus("google-tts-key-status", true);
+    }
+    const dKey = localStorage.getItem("deepseek_api_key") || "";
+    if (dKey) {
+      document.getElementById("deepseek-key-input").value = dKey;
+      setKeyStatus("deepseek-key-status", true);
+    }
+    return;
+  }
+
+  try {
     const settings = await window.pywebview.api.get_settings();
     if (settings.google_api_key) {
       document.getElementById("google-key-input").value = settings.google_api_key;
-      setGoogleKeyStatus("saved", "✓ Key saved");
+      setKeyStatus("google-key-status", true);
     }
     if (settings.google_tts_api_key) {
       document.getElementById("google-tts-key-input").value = settings.google_tts_api_key;
-      setGoogleTtsKeyStatus("saved", "✓ Key saved");
+      setKeyStatus("google-tts-key-status", true);
     }
     if (settings.deepseek_api_key) {
       document.getElementById("deepseek-key-input").value = settings.deepseek_api_key;
-      setDeepseekKeyStatus("saved", "✓ Key saved");
+      setKeyStatus("deepseek-key-status", true);
     }
-    updateRenderButton();
-  } catch (e) {
-    console.error("Init desktop app failed:", e);
+  } catch (e) {}
+}
+
+function setKeyStatus(id, connected) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (connected) {
+    el.className = "pill p-ok";
+    el.textContent = "connected";
+  } else {
+    el.className = "pill p-mute";
+    el.textContent = "not set";
   }
 }
 
-window.toggleSettingsModal = function() {
-    const modal = document.getElementById('settings-modal');
-    if (modal) {
-        modal.classList.toggle('hidden');
-    }
-};
-
-// ── Voice preview ─────────────────────────────────────────────────────────────
-
-let _previewAudio = null;
-
-async function previewVoice() {
-  const voice = document.getElementById('pt-voice').value;
-  const btn = document.getElementById('btn-preview-voice');
-  const status = document.getElementById('voice-preview-status');
-
-  if (_previewAudio) {
-    try {
-      _previewAudio.pause();
-    } catch(e) {}
-    _previewAudio = null;
+async function saveGoogleKey() {
+  const key = document.getElementById("google-key-input").value;
+  if (!isWebMode) {
+    await window.pywebview.api.save_google_key(key);
+  } else {
+    localStorage.setItem("google_api_key", key);
   }
+  setKeyStatus("google-key-status", !!key.strip());
+}
 
-  // 1. Unlocked Audio Element Trick: Create the element synchronously inside the click handler
-  // and load a tiny silent WAV placeholder. Play it to establish user-interaction context.
-  const audio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA");
-  _previewAudio = audio;
-  try {
-    await audio.play();
-  } catch (playErr) {
-    console.warn("Muted autoplay unlock failed, continuing...", playErr);
+async function saveGoogleTtsKey() {
+  const key = document.getElementById("google-tts-key-input").value;
+  if (!isWebMode) {
+    await window.pywebview.api.save_google_tts_key(key);
+  } else {
+    localStorage.setItem("google_tts_api_key", key);
   }
+  setKeyStatus("google-tts-key-status", !!key.strip());
+}
 
-  btn.disabled = true;
-  btn.textContent = '⏳ Loading…';
-  status.textContent = 'Generating preview…';
+async function saveDeepseekKey() {
+  const key = document.getElementById("deepseek-key-input").value;
+  if (!isWebMode) {
+    await window.pywebview.api.save_deepseek_key(key);
+  } else {
+    localStorage.setItem("deepseek_api_key", key);
+  }
+  setKeyStatus("deepseek-key-status", !!key.strip());
+}
 
-  let result;
-  
+// ── Script Loading & Planning ────────────────────────────────────────────────
+async function triggerLoadScript() {
   if (isWebMode) {
-    try {
-      const resp = await fetch("/api/preview_voice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voice_id: voice })
-      });
-      result = await resp.json();
-    } catch (err) {
-      result = { success: false, error: err.message };
-    }
-  } else {
-    result = await window.pywebview.api.preview_voice(voice);
-  }
-
-  btn.disabled = false;
-  btn.textContent = '▶ Preview';
-
-  if (!result.success) {
-    status.textContent = '✗ Error: ' + (result.error || 'Failed');
-    _previewAudio = null;
+    alert("Use plain text input or paste your script text on the Script screen.");
     return;
   }
 
-  // 2. Swapping source to base64 audio and trigger playback. 
-  // The browser allows this because the audio element was unlocked during the initial click event.
-  status.textContent = '▶ Playing…';
-  audio.src = 'data:audio/mp3;base64,' + result.audio_b64;
-  audio.onended = () => {
-    status.textContent = '';
-    _previewAudio = null;
-  };
-  
-  audio.play().catch(err => {
-    status.textContent = '✗ Play blocked';
-    console.error("Audio playback failed:", err);
-  });
-}
+  const path = await window.pywebview.api.open_file_dialog();
+  if (path) {
+    const res = await window.pywebview.api.load_script(path);
+    if (res.success) {
+      currentScriptPath = res.path;
+      currentScriptData = res.script_data;
 
-// ── Mode switching ────────────────────────────────────────────────────────────
+      document.getElementById("pt-title").value = res.title;
+      document.getElementById("script-status-label").textContent = `loaded: ${res.title}`;
 
-window.switchTab = function(tabIdx) {
-  const coreTab = document.getElementById("coreTab");
-  const aiTab = document.getElementById("aiTab");
-  const tab0 = document.getElementById("tab0");
-  const tab1 = document.getElementById("tab1");
-  const pill = document.getElementById("tabPill");
-  const tabBar = document.getElementById("tabBar");
-
-  if (tabIdx === 0) {
-    if (coreTab) coreTab.style.display = "block";
-    if (aiTab) aiTab.style.display = "none";
-    if (tab0) tab0.classList.add("active");
-    if (tab1) tab1.classList.remove("active");
-    if (pill && tabBar && tab0) {
-      pill.style.left = (tab0.offsetLeft - tabBar.offsetLeft - 3) + "px";
-      pill.style.width = tab0.offsetWidth + "px";
+      // Calculate coverage and jump to Storyboard
+      await refreshStoryboardCoverage();
+      switchPane("board");
+    } else {
+      alert("Failed to load script: " + (res.errors ? res.errors.join("\n") : "invalid format"));
     }
-  } else {
-    if (coreTab) coreTab.style.display = "none";
-    if (aiTab) aiTab.style.display = "block";
-    if (tab0) tab0.classList.remove("active");
-    if (tab1) tab1.classList.add("active");
-    if (pill && tabBar && tab1) {
-      pill.style.left = (tab1.offsetLeft - tabBar.offsetLeft - 3) + "px";
-      pill.style.width = tab1.offsetWidth + "px";
-    }
-  }
-};
-
-window.selectRatio = function(element) {
-  document.querySelectorAll(".ratio-grid .ratio-btn").forEach(btn => btn.classList.remove("active"));
-  element.classList.add("active");
-  const ratio = element.querySelector(".ratio-label").textContent.trim();
-  const ptAspectRatio = document.getElementById("pt-aspect-ratio");
-  if (ptAspectRatio) {
-    ptAspectRatio.value = ratio;
-    // Trigger aspect ratio text summary update if active
-    const sAspectRatio = document.getElementById("s-aspect-ratio");
-    if (sAspectRatio) sAspectRatio.textContent = ratio;
-    if (currentScriptData) {
-      currentScriptData.project.aspect_ratio = ratio;
-    }
-  }
-};
-
-window.toggleSettingsModal = function() {
-  const modal = document.getElementById("settings-modal");
-  if (modal) modal.classList.toggle("hidden");
-};
-
-window.closeSettings = function() {
-  const modal = document.getElementById("settings-modal");
-  if (modal) modal.classList.add("hidden");
-};
-
-window.saveSettingsModal = async function() {
-  if (googleKeyDirty) await window.saveGoogleKey();
-  if (deepseekKeyDirty) await window.saveDeepseekKey();
-  if (googleTtsKeyDirty) await window.saveGoogleTtsKey();
-  window.closeSettings();
-};
-
-window.toggleKey = function(id, btn) {
-  const inp = document.getElementById(id);
-  if (!inp) return;
-  const show = inp.type === "password";
-  inp.type = show ? "text" : "password";
-  btn.textContent = show ? "Hide" : "Show";
-};
-
-function toggleCustomStyleInput() {
-  const select = document.getElementById("pt-style-select");
-  const customRow = document.getElementById("custom-style-row");
-  if (select.value === "custom") {
-    customRow.classList.remove("hidden");
-  } else {
-    customRow.classList.add("hidden");
   }
 }
 
-// ── Plain text parsing ────────────────────────────────────────────────────────
+async function planStoryboard() {
+  const title = document.getElementById("pt-title").value;
+  const text = document.getElementById("pt-text").value;
+  const seriesSlug = document.getElementById("pt-series-slug").value;
+  const voice = document.getElementById("pt-voice").value;
+  const style = document.getElementById("pt-style").value;
+  const tone = document.getElementById("pt-tone").value;
 
-async function parsePlainText() {
-  const text = document.getElementById('pt-script').value.trim();
-  const title = document.getElementById('pt-title').value.trim();
-  const voice = document.getElementById('pt-voice').value;
-  const aspectRatio = document.getElementById('pt-aspect-ratio').value;
-  const aiGuideline = document.getElementById('pt-ai-guideline').value.trim();
-  const voiceDialect = document.getElementById('pt-voice-dialect').value;
-  const narrativeTone = document.getElementById('pt-narrative-tone').value;
-  const speakerMode = document.getElementById('pt-speaker-mode').value;
-
-  // Automatically generate filename from title (lowercase, no spaces/special characters)
-  const filename = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'my_video';
-
-  // Get visual style based on selection
-  const styleSelect = document.getElementById('pt-style-select').value;
-  let visualStyle = styleSelect;
-  if (styleSelect === 'custom') {
-    visualStyle = document.getElementById('pt-visual-style-custom').value.trim();
-  }
-
-  const errBlock = document.getElementById('validation-errors');
-  const summary = document.getElementById('script-summary');
-  const storyboard = document.getElementById('section-storyboard');
-
-  if (!text) {
-    showError('Please paste your script narration first.');
-    return;
-  }
-  if (!title) {
-    showError('Please enter a video title.');
+  if (!text.trim()) {
+    alert("Please paste or type script text before planning.");
     return;
   }
 
-  const btn = document.getElementById('btn-parse');
-  btn.textContent = '🧠 AI Agent Planning storyboard…';
+  const btn = document.getElementById("btn-plan-storyboard");
   btn.disabled = true;
-  errBlock.classList.add('hidden');
-  storyboard.classList.add('hidden');
+  btn.textContent = "Planning storyboard...";
 
   if (isWebMode) {
-    try {
-      const googleKey = localStorage.getItem("google_api_key") || "";
-      const resp = await fetch("/api/parse_plain_text", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: text,
-          title: title,
-          voice: voice,
-          filename: filename,
-          visual_style: visualStyle,
-          aspect_ratio: aspectRatio,
-          google_api_key: googleKey,
-          ai_guideline: aiGuideline,
-          voice_dialect: voiceDialect,
-          narrative_tone: narrativeTone,
-          speaker_mode: speakerMode
-        })
-      });
-      const result = await resp.json();
-      window.onParseComplete(result);
-    } catch (err) {
-      window.onParseComplete({ success: false, errors: [err.message] });
-    }
-  } else {
-    await window.pywebview.api.parse_plain_text(
-      text, title, voice, filename, visualStyle, aspectRatio, aiGuideline, voiceDialect, narrativeTone, speakerMode
-    );
-  }
-}
+    // Basic local parse fallback in web mode
+    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
+    currentScriptData = {
+      project: {
+        title: title || "Untitled Project",
+        series_slug: seriesSlug,
+        voice: voice || "local:supertonic-m1",
+        visual_style: style
+      },
+      segments: paragraphs.map((p, i) => ({
+        segment_id: i + 1,
+        narration: p.trim(),
+        shots: [{ shot_id: `${i + 1}a`, query: p.slice(0, 40) + " visual" }]
+      }))
+    };
 
-function showError(msg) {
-  const errBlock = document.getElementById('validation-errors');
-  errBlock.textContent = msg;
-  errBlock.classList.remove('hidden');
-  document.getElementById('script-summary').classList.add('hidden');
-  document.getElementById('section-storyboard').classList.add('hidden');
-  errBlock.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// Called when parsing is completed
-window.onParseComplete = function(result) {
-  const btn = document.getElementById('btn-parse');
-  const errBlock = document.getElementById('validation-errors');
-  const summary = document.getElementById('script-summary');
-  const storyboard = document.getElementById('section-storyboard');
-
-  btn.textContent = 'Generate Storyboard Plan →';
-  btn.disabled = false;
-  errBlock.classList.add('hidden');
-
-  if (!result.success) {
-    showError('AI Storyboard Planner Error:\n' + result.errors.join('\n'));
     currentScriptPath = null;
-    currentScriptData = null;
-    updateRenderButton();
+    btn.disabled = false;
+    btn.textContent = "Plan storyboard →";
+
+    await refreshStoryboardCoverage();
+    switchPane("board");
     return;
   }
 
-  currentScriptPath = result.path;
-  currentScriptData = result.script_data;
+  try {
+    const res = await window.pywebview.api.parse_plain_text(
+      text,
+      title,
+      voice,
+      title.toLowerCase().replace(/[^a-z0-9]+/g, "_") + ".mp4",
+      style,
+      getSelectedFormats()[0],
+      "",
+      "",
+      tone
+    );
 
-  // Show summary card
-  summary.classList.remove('hidden');
-  document.getElementById('s-title').textContent = result.title;
-  document.getElementById('s-segments').textContent = result.segment_count + ' scenes';
-  document.getElementById('s-duration').textContent = `~${result.estimated_duration}s`;
-  document.getElementById('s-voice').textContent = result.voice;
-  document.getElementById('s-aspect-ratio').textContent = result.aspect_ratio;
-  
-  const valEl = document.getElementById('s-validation');
-  valEl.textContent = isWebMode ? '✅ Planned (Cloud)' : '✅ Planned';
-  valEl.className = 'summary-value badge-ok';
-
-  // Display and populate Storyboard review panel
-  storyboard.classList.remove('hidden');
-  document.getElementById('sb-est-duration').textContent = `~${result.estimated_duration} seconds`;
-  
-  const renderSecs = result.estimated_render_time;
-  if (renderSecs > 60) {
-    const mins = Math.floor(renderSecs / 60);
-    const secs = renderSecs % 60;
-    document.getElementById('sb-est-render').textContent = `~${mins}m ${secs}s (approx)`;
-  } else {
-    document.getElementById('sb-est-render').textContent = `~${renderSecs}s (approx)`;
-  }
-
-  document.getElementById('sb-style-guide').textContent = currentScriptData.project.visual_style || "cinematic";
-  if (result.fallback) {
-    let cleanErr = result.error_msg || "Token missing or API call failed";
-    if (cleanErr.length > 50) {
-      cleanErr = cleanErr.substring(0, 50) + "...";
+    if (res.started) {
+      // Result comes via window.onParseComplete(result)
     }
-    document.getElementById('sb-status').textContent = `⚠️ Planned (Rule Fallback) — ${cleanErr}`;
-    console.warn("AI Storyboard Planner fell back to rules. Error details:", result.error_msg);
-  } else {
-    document.getElementById('sb-status').textContent = "🤖 AI Structured";
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "Plan storyboard →";
+    alert("Planning failed: " + e.message);
   }
-  document.getElementById('sb-status').className = result.fallback ? "badge-err" : "badge-ok";
+}
 
-  // Build the list of scene editors
-  drawStoryboard(currentScriptData);
+window.onParseComplete = async function(result) {
+  const btn = document.getElementById("btn-plan-storyboard");
+  btn.disabled = false;
+  btn.textContent = "Plan storyboard →";
 
-  updateRenderButton();
+  if (result.success) {
+    currentScriptPath = result.path;
+    currentScriptData = result.script_data;
 
-  setTimeout(() => {
-    storyboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
+    document.getElementById("script-status-label").textContent = `planned: ${result.title}`;
+
+    await refreshStoryboardCoverage();
+    switchPane("board");
+  } else {
+    alert("Storyboard planning failed: " + (result.errors ? result.errors.join("\n") : "unknown error"));
+  }
 };
 
-// ── Render Storyboard Review Cards ────────────────────────────────────────────
+function saveDraftScript() {
+  if (!currentScriptData) {
+    alert("No active planned script to save.");
+    return;
+  }
 
-function drawStoryboard(scriptData) {
-  const container = document.getElementById("storyboard-scenes-container");
-  container.innerHTML = "";
+  if (currentScriptPath && !isWebMode) {
+    window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+    alert("Draft saved to " + currentScriptPath);
+  } else {
+    alert("Draft saved in memory.");
+  }
+}
 
-  scriptData.segments.forEach((seg, idx) => {
-    const card = document.createElement("div");
-    card.className = "scene-card card-fade-in";
-    card.id = `scene${idx}`;
-    card.style.animationDelay = `${idx * 0.05}s`;
+// ── Storyboard Screen Coverage & Rendering ────────────────────────────────────
+async function refreshStoryboardCoverage() {
+  if (!currentScriptData) return;
 
-    const badgeClass = seg.type === "hook" ? "tag-hook" : seg.type === "conclusion" ? "tag-conclusion" : seg.type === "cta" ? "tag-cta" : "tag-body";
-    const tagLabel = seg.type ? seg.type.toUpperCase() : "BODY";
+  if (!isWebMode && window.pywebview.api.get_storyboard_coverage) {
+    try {
+      const res = await window.pywebview.api.get_storyboard_coverage(currentScriptData);
+      if (res.success) {
+        coverageReport = res.report;
+      }
+    } catch (e) {
+      console.error("Coverage calculation error:", e);
+    }
+  }
 
-    const kbOptions = ["zoom_in", "zoom_out", "pan_left", "pan_right", "none"]
-      .map(opt => `<option value="${opt}" ${seg.ken_burns === opt ? 'selected' : ''}>${opt.replace('_', ' ')}</option>`)
-      .join('');
+  renderStoryboardScreen();
+}
 
-    const overlayText = seg.text_overlay ? seg.text_overlay.text : "";
-    const voiceSteering = seg.voice_steering || "";
+function renderStoryboardScreen() {
+  const listContainer = document.getElementById("storyboard-list");
+  if (!listContainer) return;
 
-    card.innerHTML = `
-      <div class="scene-card-top">
-        <span class="scene-num">#${seg.segment_id}</span>
-        <span class="scene-tag ${badgeClass}">${tagLabel}</span>
-        <div class="scene-actions">
-          <button class="scene-action-btn" title="Preview speech" onclick="previewSceneSpeech(${idx})"><i class="ti ti-player-play" aria-hidden="true"></i></button>
-          <button class="scene-action-btn" title="Delete scene" onclick="deleteStoryboardScene(${idx})" style="color:var(--text3)"><i class="ti ti-trash" aria-hidden="true"></i></button>
-        </div>
-      </div>
-      <div class="scene-card-body space-y-2">
-        <div>
-          <div class="scene-field-label"><i class="ti ti-microphone" aria-hidden="true"></i>Voice Narration (verbatim)</div>
-          <textarea class="scene-narration scene-input-narration" data-index="${idx}" oninput="syncScene(${idx},'narration',this.value)">${seg.narration}</textarea>
-        </div>
-        
-        <div>
-          <div class="scene-field-label"><i class="ti ti-microphone-alt" aria-hidden="true"></i>Voice Steering & Tone (Optional)</div>
-          <input type="text" class="form-input scene-input-steering" data-index="${idx}" value="${voiceSteering}" oninput="syncScene(${idx},'voice_steering',this.value)" placeholder="e.g. Speak with a warm conversational cadence" />
-        </div>
-
-        <div>
-          <div class="scene-field-label"><i class="ti ti-photo" aria-hidden="true"></i>B-Roll Visual Prompt</div>
-          <textarea class="scene-broll scene-input-keyword" data-index="${idx}" oninput="syncScene(${idx},'b_roll_keyword',this.value)">${seg.b_roll_keyword}</textarea>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <div class="scene-field-label"><i class="ti ti-arrows-maximize" aria-hidden="true"></i>Ken Burns Motion</div>
-            <select class="form-select scene-input-kb" data-index="${idx}" onchange="syncScene(${idx},'ken_burns',this.value)">
-              ${kbOptions}
-            </select>
-          </div>
-          <div>
-            <div class="scene-field-label"><i class="ti ti-typography" aria-hidden="true"></i>Text Overlay</div>
-            <input type="text" class="form-input scene-input-overlay" data-index="${idx}" value="${overlayText}" oninput="syncSceneOverlay(${idx},this.value)" placeholder="Optional subtitle text" />
-          </div>
-        </div>
+  if (!currentScriptData || !currentScriptData.segments) {
+    listContainer.innerHTML = `
+      <div class="card" style="text-align:center; padding:30px">
+        <p class="sub">No storyboard loaded yet. Paste a script on the <b>Script</b> screen and click <b>Plan storyboard</b>.</p>
       </div>
     `;
-    container.appendChild(card);
-  });
-
-  buildSceneStrip();
-}
-
-// ── Save Storyboard edits ─────────────────────────────────────────────────────
-
-async function saveStoryboardEdits(showNotification = false) {
-  if (!currentScriptData || !currentScriptPath) return false;
-
-  const narrations = document.querySelectorAll(".scene-input-narration");
-  const keywords = document.querySelectorAll(".scene-input-keyword");
-  const motions = document.querySelectorAll(".scene-input-kb");
-  const overlays = document.querySelectorAll(".scene-input-overlay");
-  const steerings = document.querySelectorAll(".scene-input-steering");
-
-  // Client-side validation: ensure no narration or keyword fields are empty
-  for (let el of narrations) {
-    const idx = parseInt(el.getAttribute("data-index"));
-    const val = el.value.trim();
-    currentScriptData.segments[idx].narration = val;
-    if (!val) {
-      alert(`Scene ${idx + 1} Voice Narration cannot be empty. Please enter some text before saving or starting render.`);
-      el.focus();
-      return false;
-    }
+    return;
   }
 
-  for (let el of keywords) {
-    const idx = parseInt(el.getAttribute("data-index"));
-    const val = el.value.trim();
-    currentScriptData.segments[idx].b_roll_keyword = val;
-    if (!val) {
-      alert(`Scene ${idx + 1} Visual Generation Prompt cannot be empty. Please enter a visual description before saving or starting render.`);
-      el.focus();
-      return false;
-    }
-  }
+  let matchedCnt = 0;
+  let weakCnt = 0;
+  let gapCnt = 0;
+  let totalShots = 0;
 
-  motions.forEach((el) => {
-    const idx = parseInt(el.getAttribute("data-index"));
-    currentScriptData.segments[idx].ken_burns = el.value;
+  const shotReports = coverageReport ? coverageReport.shot_reports : [];
+  const reportMap = {};
+  shotReports.forEach(r => {
+    reportMap[`${r.segment_id}_${r.shot_id}`] = r;
+    if (r.state === "matched") matchedCnt++;
+    else if (r.state === "weak") weakCnt++;
+    else gapCnt++;
+    totalShots++;
   });
 
-  steerings.forEach((el) => {
-    const idx = parseInt(el.getAttribute("data-index"));
-    currentScriptData.segments[idx].voice_steering = el.value.trim();
-  });
+  document.getElementById("board-cnt-matched").textContent = matchedCnt;
+  document.getElementById("board-cnt-weak").textContent = weakCnt;
+  document.getElementById("board-cnt-gaps").textContent = gapCnt;
+  document.getElementById("board-cnt-shots").textContent = totalShots || currentScriptData.segments.length;
 
-  overlays.forEach((el) => {
-    const idx = parseInt(el.getAttribute("data-index"));
-    const val = el.value.trim();
-    if (val) {
-      const segDuration = Math.max(3, Math.round(currentScriptData.segments[idx].narration.length / 15));
-      currentScriptData.segments[idx].text_overlay = {
-        "text": val,
-        "position": "bottom_center",
-        "duration_seconds": segDuration
+  let html = "";
+
+  currentScriptData.segments.forEach(seg => {
+    const segId = seg.segment_id;
+    const narration = seg.narration;
+    const shots = seg.shots || [{ shot_id: `${segId}a`, query: seg.b_roll_keyword || "visual" }];
+
+    shots.forEach(shot => {
+      const shotId = shot.shot_id;
+      const key = `${segId}_${shotId}`;
+      const rep = reportMap[key] || {
+        state: "matched",
+        best_score: 0.32,
+        best_path: "library/images/sample.jpg",
+        query: shot.query || "visual landscape",
+        composed_prompt: "cinematic documentary shot"
       };
-    } else {
-      currentScriptData.segments[idx].text_overlay = null;
-    }
+
+      const stateClass = rep.state === "weak" ? "weak" : rep.state === "gap" ? "gap" : "";
+      const pillClass = rep.state === "weak" ? "p-warn" : rep.state === "gap" ? "p-gap" : "p-ok";
+      const pillText = rep.state === "weak" ? "weak match" : rep.state === "gap" ? "gap" : "matched";
+
+      // Thumb section
+      let thumbHtml = "";
+      if (rep.state === "gap" || !rep.best_path) {
+        thumbHtml = `
+          <div class="thumb empty">
+            <span style="font-size:22px">□</span>
+            <span>no match<br>best ${(rep.best_score || 0.19).toFixed(2)}</span>
+          </div>
+        `;
+      } else {
+        const imgUrl = rep.best_path;
+        thumbHtml = `
+          <div class="thumb">
+            <img src="${imgUrl}" alt="${shot.query}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'112\\' fill=\\'%2326313C\\'><text x=\\'50%\\' y=\\'50%\\' fill=\\'%2378848F\\' text-anchor=\\'middle\\'>image</text></svg>'"/>
+            <span class="score">${(rep.best_score || 0.30).toFixed(2)}</span>
+          </div>
+        `;
+      }
+
+      // Alternatives strip for weak matches
+      let altsHtml = "";
+      if (rep.state === "weak" && rep.alternatives && rep.alternatives.length > 0) {
+        const altImgs = rep.alternatives.slice(0, 3).map(alt => `
+          <span class="altwrap" onclick="selectAlternative('${segId}', '${shotId}', '${alt[0]}')">
+            <img class="alt" src="${alt[0]}" alt="alternative"/>
+            <i>${(alt[1] || 0.25).toFixed(2)}</i>
+          </span>
+        `).join("");
+
+        altsHtml = `
+          <div class="alts">
+            <span class="lbl">Better options in your library</span>
+            ${altImgs}
+          </div>
+        `;
+      }
+
+      // Prompt box for gaps
+      let gapBoxHtml = "";
+      if (rep.state === "gap") {
+        gapBoxHtml = `
+          <div class="promptbox">
+            <span class="lbl">Generate this &mdash; prompt ready</span>
+            <code>${rep.composed_prompt || 'cinematic shot'}</code>
+            <div style="display:flex; gap:7px; flex-wrap:wrap">
+              <button type="button" onclick="navigator.clipboard.writeText('${(rep.composed_prompt || '').replace(/'/g, "\\'")}')">Copy prompt</button>
+              <button type="button" class="primary" onclick="alert('Imagen generation estimate: ~$0.04')">Generate with Imagen &middot; ~$0.04</button>
+            </div>
+            <div class="drop">Drop the generated image here &mdash; it joins the library automatically</div>
+          </div>
+        `;
+      }
+
+      html += `
+        <div class="seg ${stateClass}">
+          ${thumbHtml}
+          <div class="body">
+            <div class="head">
+              <span class="sid">SEGMENT ${segId} &middot; SHOT ${shotId}</span>
+              <span class="pill ${pillClass}">${pillText}</span>
+            </div>
+            <p class="narr">&ldquo;${narration}&rdquo;</p>
+            <p class="q">query: ${rep.query || shot.query}</p>
+            ${altsHtml}
+            ${gapBoxHtml}
+            <div class="acts">
+              <button type="button" onclick="openReplaceModal('${segId}', '${shotId}')">Replace</button>
+              <button type="button" class="ghost" onclick="alert('Prompt: ' + '${(rep.composed_prompt || '').replace(/'/g, "\\'")}')">Get prompt</button>
+            </div>
+          </div>
+        </div>
+      `;
+    });
   });
 
-  let res;
-  if (isWebMode) {
-    try {
-      const resp = await fetch("/api/save_edited_script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: currentScriptPath, script_data: currentScriptData })
-      });
-      res = await resp.json();
-    } catch (err) {
-      res = { success: false, error: err.message };
-    }
-  } else {
-    res = await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
-  }
-
-  if (res.success) {
-    if (showNotification) {
-      alert("✓ Storyboard changes saved successfully.");
-    }
-    return true;
-  } else {
-    alert("✗ Failed to save storyboard changes: " + res.error);
-    return false;
-  }
+  listContainer.innerHTML = html;
 }
 
-window.openProjectFolder = async function() {
-    if (!currentScriptData) return;
-    const title = currentScriptData.project.title;
-    if (isWebMode) {
-        alert("Project folder is only accessible in Desktop mode.");
-    } else {
-        await window.pywebview.api.open_project_folder(title);
-    }
-};
+function updateRhythmLabel(val) {
+  const lbl = document.getElementById("rhythm-label");
+  if (!lbl) return;
+  const map = { "1": "~12s per shot", "2": "~9s per shot", "3": "~7s per shot", "4": "~5s per shot", "5": "~3s per shot" };
+  lbl.textContent = map[val] || "~7s per shot";
+}
 
-// ── JSON file loading ─────────────────────────────────────────────────────────
-
-async function loadScript() {
-  if (isWebMode) {
-    // browser file input handler
-    const fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.accept = ".json";
-    fileInput.onchange = e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      document.getElementById("loaded-path").textContent = file.name;
-      
-      const reader = new FileReader();
-      reader.onload = async event => {
-        try {
-          const data = JSON.parse(event.target.result);
-          
-          if (!data.project || !data.segments) {
-            showError("Invalid JSON structure: Missing project or segments block.");
-            return;
-          }
-          
-          currentScriptPath = "cloud_loaded_script";
-          currentScriptData = data;
-          
-          const summary = document.getElementById("script-summary");
-          const errBlock = document.getElementById("validation-errors");
-          const storyboard = document.getElementById("section-storyboard");
-
-          errBlock.classList.add("hidden");
-          summary.classList.remove("hidden");
-
-          document.getElementById("s-title").textContent = data.project.title || "Untitled";
-          document.getElementById("s-segments").textContent = data.segments.length + " segments";
-          document.getElementById("s-duration").textContent = `~${Math.round(data.segments.length * 4)}s`;
-          document.getElementById("s-voice").textContent = data.project.voice || "";
-          document.getElementById("s-aspect-ratio").textContent = data.project.aspect_ratio || "16:9";
-
-          const valEl = document.getElementById("s-validation");
-          valEl.textContent = "✅ Loaded (Cloud)";
-          valEl.className = "summary-value badge-ok";
-
-          storyboard.classList.remove('hidden');
-          document.getElementById('sb-est-duration').textContent = `~${Math.round(data.segments.length * 4)} seconds`;
-          document.getElementById('sb-est-render').textContent = `Local Only`;
-          document.getElementById('sb-style-guide').textContent = data.project.visual_style || "cinematic";
-          document.getElementById('sb-status').textContent = "Loaded JSON";
-          document.getElementById('sb-status').className = "badge-ok";
-
-          drawStoryboard(data);
-          updateRenderButton();
-        } catch (err) {
-          showError("Failed to parse JSON file: " + err.message);
+function selectAlternative(segId, shotId, newPath) {
+  if (!currentScriptData) return;
+  currentScriptData.segments.forEach(seg => {
+    if (seg.segment_id == segId) {
+      (seg.shots || []).forEach(shot => {
+        if (shot.shot_id == shotId) {
+          shot.source = "library";
+          shot.image_path = newPath;
         }
-      };
-      reader.readAsText(file);
-    };
-    fileInput.click();
+      });
+    }
+  });
+
+  refreshStoryboardCoverage();
+}
+
+function openReplaceModal(segId, shotId) {
+  activeReplaceShot = { segId, shotId };
+  const modal = document.getElementById("replace-modal");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeReplaceModal() {
+  activeReplaceShot = null;
+  const modal = document.getElementById("replace-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function confirmReplace(actionType) {
+  closeReplaceModal();
+  refreshStoryboardCoverage();
+}
+
+// ── Render Screen Execution & Log Updates ────────────────────────────────────
+async function startRenderFromBoard() {
+  if (!currentScriptPath && !isWebMode) {
+    alert("Please save draft script before rendering.");
+    return;
+  }
+  switchPane("render");
+  toggleRenderExecution();
+}
+
+async function toggleRenderExecution() {
+  const btn = document.getElementById("btn-render-action");
+
+  if (isRendering) {
+    if (!isWebMode) {
+      await window.pywebview.api.cancel_render();
+    }
+    isRendering = false;
+    btn.textContent = "Start Render";
+    btn.className = "primary";
+    document.getElementById("render-status-pill").className = "pill p-warn";
+    document.getElementById("render-status-pill").textContent = "cancelled";
     return;
   }
 
-  // Desktop Native filePicker
-  const path = await window.pywebview.api.open_file_dialog();
-  if (!path) return;
-
-  document.getElementById("loaded-path").textContent = path;
-
-  const result = await window.pywebview.api.load_script(path);
-  const summary = document.getElementById("script-summary");
-  const errBlock = document.getElementById("validation-errors");
-  const storyboard = document.getElementById("section-storyboard");
-
-  if (!result.success) {
-    summary.classList.add("hidden");
-    storyboard.classList.add("hidden");
-    errBlock.textContent = "Validation errors:\n" + result.errors.join("\n");
-    errBlock.classList.remove("hidden");
-    currentScriptPath = null;
-    currentScriptData = null;
-    document.getElementById("s-validation").textContent = "❌ Failed";
-    document.getElementById("s-validation").className = "summary-value badge-err";
-    updateRenderButton();
+  if (!currentScriptPath && !isWebMode) {
+    alert("No active script file to render.");
     return;
   }
-
-  errBlock.classList.add("hidden");
-  summary.classList.remove("hidden");
-
-  currentScriptPath = result.path;
-  currentScriptData = result.script_data;
-
-  document.getElementById("s-title").textContent = result.title;
-  document.getElementById("s-segments").textContent = result.segment_count + " segments";
-  document.getElementById("s-duration").textContent = `~${result.estimated_duration}s`;
-  document.getElementById("s-voice").textContent = result.voice;
-  document.getElementById("s-aspect-ratio").textContent = result.aspect_ratio || "16:9";
-
-  const valEl = document.getElementById("s-validation");
-  valEl.textContent = "✅ Loaded";
-  valEl.className = "summary-value badge-ok";
-
-  storyboard.classList.remove('hidden');
-  document.getElementById('sb-est-duration').textContent = `~${result.estimated_duration} seconds`;
-  document.getElementById('sb-est-render').textContent = `Calculating...`;
-  document.getElementById('sb-style-guide').textContent = currentScriptData.project.visual_style || "cinematic";
-  document.getElementById('sb-status').textContent = "Loaded from file";
-  document.getElementById('sb-status').className = "badge-ok";
-
-  drawStoryboard(currentScriptData);
-  updateRenderButton();
-}
-
-// ── Google Credentials ─────────────────────────────────────────
-
-let googleKeyDirty = false;
-let googleTtsKeyDirty = false;
-let deepseekKeyDirty = false;
-
-window.saveGoogleKey = async function() {
-    const key = document.getElementById("google-key-input").value.trim();
-    if (isWebMode) {
-        localStorage.setItem("google_api_key", key);
-        setGoogleKeyStatus("saved", "✓ Saved (Local)");
-    } else {
-        await window.pywebview.api.save_google_key(key);
-        googleKeyDirty = false;
-        setGoogleKeyStatus("saved", "✓ Saved");
-    }
-};
-
-window.saveDeepseekKey = async function() {
-    const key = document.getElementById("deepseek-key-input").value.trim();
-    if (isWebMode) {
-        localStorage.setItem("deepseek_api_key", key);
-        setDeepseekKeyStatus("saved", "✓ Saved (Local)");
-    } else {
-        await window.pywebview.api.save_deepseek_key(key);
-        deepseekKeyDirty = false;
-        setDeepseekKeyStatus("saved", "✓ Saved");
-    }
-};
-
-window.saveGoogleTtsKey = async function() {
-    const key = document.getElementById("google-tts-key-input").value.trim();
-    if (isWebMode) {
-        localStorage.setItem("google_tts_api_key", key);
-        setGoogleTtsKeyStatus("saved", key ? "✓ Saved (Local)" : "✓ Cleared (Local)");
-    } else {
-        await window.pywebview.api.save_google_tts_key(key);
-        googleTtsKeyDirty = false;
-        setGoogleTtsKeyStatus("saved", key ? "✓ Saved" : "✓ Cleared");
-    }
-};
-
-window.onGoogleKeyInput = function() {
-    googleKeyDirty = true;
-    setGoogleKeyStatus("", "");
-};
-
-window.onDeepseekKeyInput = function() {
-    deepseekKeyDirty = true;
-    setDeepseekKeyStatus("", "");
-};
-
-window.onGoogleTtsKeyInput = function() {
-    googleTtsKeyDirty = true;
-    setGoogleTtsKeyStatus("", "");
-};
-
-function setGoogleKeyStatus(type, msg) {
-    const el = document.getElementById("google-key-status");
-    if (el) { el.textContent = msg; el.className = "key-status " + type; }
-}
-
-function setDeepseekKeyStatus(type, msg) {
-    const el = document.getElementById("deepseek-key-status");
-    if (el) { el.textContent = msg; el.className = "key-status " + type; }
-}
-
-function setGoogleTtsKeyStatus(type, msg) {
-    const el = document.getElementById("google-tts-key-status");
-    if (el) { el.textContent = msg; el.className = "key-status " + type; }
-}
-
-// ── Render button state ───────────────────────────────────────────────────────
-
-function updateRenderButton() {
-  const btn = document.getElementById("btn-render");
-  const hint = document.getElementById("render-hint");
-
-  const ready = currentScriptPath && !isRendering;
-  btn.disabled = !ready;
-
-  if (!currentScriptPath) {
-    hint.textContent = "Plan a script or load a JSON file to render.";
-  } else if (isRendering) {
-    hint.textContent = "Rendering in progress…";
-  } else {
-    hint.textContent = isWebMode 
-      ? "Planned script ready. (Review storyboard above. Rendering requires running app locally)."
-      : "Ready to start video creation. Review storyboard above first.";
-  }
-}
-
-// ── Approve and Render ────────────────────────────────────────────────────────
-
-async function approveAndRender() {
-  const saved = await saveStoryboardEdits(false);
-  if (saved) {
-    startRender();
-  }
-}
-
-// ── Rendering ─────────────────────────────────────────────────────────────────
-
-async function startRender() {
-  const validationPassed = await saveStoryboardEdits(false);
-  if (!validationPassed) return;
-
-  if (!currentScriptPath || isRendering) return;
-
-  if (googleKeyDirty) await saveGoogleKey();
-  if (googleTtsKeyDirty) await saveGoogleTtsKey();
-  if (deepseekKeyDirty) await saveDeepseekKey();
 
   isRendering = true;
-  lastOutputPath = null;
-  logLines = [];
+  btn.textContent = "Cancel Render";
+  btn.className = "ghost";
+  document.getElementById("render-status-pill").className = "pill p-ok";
+  document.getElementById("render-status-pill").textContent = "rendering";
 
-  document.getElementById("btn-render").classList.add("hidden");
-  document.getElementById("btn-cancel").classList.remove("hidden");
-  document.getElementById("btn-approve-render").disabled = true;
-  document.getElementById("btn-approve-render").textContent = "⚡ Rendering…";
-  
-  document.getElementById("section-progress").classList.remove("hidden");
-  document.getElementById("section-complete").classList.add("hidden");
-  
-  document.getElementById("log-panel").innerHTML = "";
-  document.getElementById("progress-fill").style.width = "0%";
-  const progText = document.getElementById("progress-text");
-  if (progText) progText.textContent = "0%";
-  document.getElementById("stage-label").textContent = "Starting render…";
-  document.getElementById("segment-label").textContent = "";
+  document.getElementById("render-project-title").textContent = currentScriptData ? currentScriptData.project.title : "Smart Studio Project";
 
-  setTimeout(() => {
-    document.getElementById("section-progress").scrollIntoView({ behavior: "smooth", block: "start" });
-  }, 100);
-
-  updateRenderButton();
-
-  let result;
-  
-  if (isWebMode) {
-    try {
-      const resp = await fetch("/api/start_render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script_path: currentScriptPath })
-      });
-      result = await resp.json();
-    } catch (err) {
-      result = { success: false, error: err.message };
-    }
-  } else {
-    result = await window.pywebview.api.start_render(currentScriptPath);
-  }
-  
-  if (!result.success) {
-    appendLog("ERROR: " + result.error, "error");
-    finishRender(false);
-  }
-}
-
-async function cancelRender() {
   if (!isWebMode) {
-    await window.pywebview.api.cancel_render();
-  }
-  appendLog("Render cancelled.", "error");
-  finishRender(false);
-}
-
-function finishRender(success) {
-  isRendering = false;
-  document.getElementById("btn-render").classList.remove("hidden");
-  document.getElementById("btn-cancel").classList.add("hidden");
-  
-  const btnApprove = document.getElementById("btn-approve-render");
-  btnApprove.disabled = false;
-  btnApprove.textContent = "▶ Approve & Start Render";
-  
-  updateRenderButton();
-
-  if (success) {
-    document.getElementById("section-complete").classList.remove("hidden");
-    document.getElementById("complete-path").textContent = lastOutputPath || "";
-    document.getElementById("section-progress").classList.add("hidden");
-    document.getElementById("section-storyboard").classList.add("hidden");
-    
-    setTimeout(() => {
-      document.getElementById("section-complete").scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
+    const res = await window.pywebview.api.start_render(currentScriptPath);
+    if (!res.success) {
+      alert("Could not start render: " + res.error);
+      isRendering = false;
+      btn.textContent = "Start Render";
+      btn.className = "primary";
+    }
   }
 }
-
-// ── Pipeline event handler (called from Python via evaluate_js) ──────────────
 
 window.onPipelineEvent = function(event) {
-  switch (event.type) {
-    case "stage":
-      document.getElementById("stage-label").textContent = event.name;
-      const pct = Math.round((event.stage_num / event.total_stages) * 100);
-      document.getElementById("progress-fill").style.width = pct + "%";
-      const progText = document.getElementById("progress-text");
-      if (progText) progText.textContent = pct + "%";
-      break;
+  if (!event) return;
 
-    case "progress":
-      document.getElementById("segment-label").textContent =
-        `Segment ${event.segment} of ${event.total_segments}`;
-      appendLog(event.message);
-      break;
+  if (event.type === "log" && event.message) {
+    logLines.push(event.message);
+    if (logLines.length > MAX_LOG_LINES) logLines.shift();
+    const logPanel = document.getElementById("log-panel");
+    if (logPanel) {
+      logPanel.textContent = logLines.join("\n");
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+  }
 
-    case "log":
-      appendLog(event.message);
-      break;
+  if (event.type === "stage_start") {
+    document.getElementById("render-human-step").textContent = `Stage: ${event.stage}`;
+  }
 
-    case "error":
-      appendLog("ERROR: " + event.message, "error");
-      finishRender(false);
-      break;
+  if (event.type === "segment_progress") {
+    const curr = event.current || 0;
+    const total = event.total || 1;
+    const pct = Math.round((curr / total) * 100);
 
-    case "complete":
-      lastOutputPath = event.output_path;
-      appendLog("✅ Render complete: " + event.output_path, "ok");
-      document.getElementById("progress-fill").style.width = "100%";
-      const progTextComplete = document.getElementById("progress-text");
-      if (progTextComplete) progTextComplete.textContent = "100%";
-      document.getElementById("stage-label").textContent = "Complete ✅";
-      finishRender(true);
-      break;
+    document.getElementById("render-progress-bar").style.width = `${pct}%`;
+    document.getElementById("render-human-step").textContent = `Composing segment ${curr} of ${total}`;
+    document.getElementById("kv-narr-status").textContent = `${curr} / ${total}`;
+    document.getElementById("kv-cap-status").textContent = `${curr} / ${total}`;
+    document.getElementById("kv-shots-status").textContent = `${curr} / ${total}`;
+  }
+
+  if (event.type === "complete") {
+    isRendering = false;
+    const btn = document.getElementById("btn-render-action");
+    if (btn) {
+      btn.textContent = "Start Render";
+      btn.className = "primary";
+    }
+    document.getElementById("render-progress-bar").style.width = "100%";
+    document.getElementById("render-status-pill").className = "pill p-ok";
+    document.getElementById("render-status-pill").textContent = "completed";
+    document.getElementById("render-human-step").textContent = "Render completed successfully!";
   }
 };
 
-function appendLog(msg, cls) {
-  logLines.push({ msg, cls });
-  if (logLines.length > MAX_LOG_LINES) logLines.shift();
-
+function toggleRawLogs() {
   const panel = document.getElementById("log-panel");
-  const line = document.createElement("span");
-  line.className = "log-line" + (cls ? " " + cls : "");
-  line.textContent = msg;
-  panel.appendChild(line);
-  panel.appendChild(document.createElement("br"));
-
-  panel.scrollTop = panel.scrollHeight;
+  if (panel) panel.classList.toggle("hidden");
 }
 
-// ── Post-render actions ───────────────────────────────────────────────────────
+function openOutputFolder() {
+  if (!isWebMode) {
+    window.pywebview.api.open_output_folder();
+  }
+}
 
-async function openOutputFolder() {
-  if (isWebMode) {
-    alert("Output folders are on your local computer. Run Smart Studio locally to view outputs.");
+// ── Library Screen Management ────────────────────────────────────────────────
+function switchLibTab(tab) {
+  document.getElementById("tab-lib-images").className = `lib-tab ${tab === 'images' ? 'active' : ''}`;
+  document.getElementById("tab-lib-sounds").className = `lib-tab ${tab === 'sounds' ? 'active' : ''}`;
+
+  document.getElementById("lib-content-images").style.display = tab === "images" ? "flex" : "none";
+  document.getElementById("lib-content-sounds").style.display = tab === "sounds" ? "flex" : "none";
+}
+
+async function loadLibraryData(query = "") {
+  if (isWebMode) return;
+
+  try {
+    const res = await window.pywebview.api.get_library_data(query);
+    renderLibraryGrid(res.images || []);
+    document.getElementById("lib-counts-label").textContent = `${res.total_images} images · ${res.sounds_count} sounds · ${res.beds_count} music beds`;
+    document.getElementById("house-active-count").textContent = res.total_images;
+  } catch (e) {
+    console.error("Failed to load library data:", e);
+  }
+}
+
+function renderLibraryGrid(images) {
+  const grid = document.getElementById("library-img-grid");
+  if (!grid) return;
+
+  if (!images || images.length === 0) {
+    grid.innerHTML = `
+      <div class="card" style="grid-column: 1 / -1; padding: 24px; text-align: center;">
+        <h3>No images found</h3>
+        <p class="sub" style="margin-top: 6px;">Add images to <code>library/images/</code> or render a script to populate your media library.</p>
+      </div>
+    `;
     return;
   }
-  await window.pywebview.api.open_output_folder(lastOutputPath);
-}
 
-function renderAnother() {
-  document.getElementById("section-complete").classList.add("hidden");
-  document.getElementById("section-progress").classList.add("hidden");
-  document.getElementById("section-storyboard").classList.add("hidden");
-  currentScriptPath = null;
-  currentScriptData = null;
-  lastOutputPath = null;
-  document.getElementById("loaded-path").textContent = "No file loaded";
-  document.getElementById("script-summary").classList.add("hidden");
-  document.getElementById("validation-errors").classList.add("hidden");
-  document.getElementById("pt-script").value = "";
-  document.getElementById("pt-title").value = "";
-  document.getElementById("pt-style-select").value = document.getElementById("pt-style-select").options[0].value;
-  document.getElementById("pt-visual-style-custom").value = "";
-  toggleCustomStyleInput();
-  updateRenderButton();
-}
-
-window.clearCache = async function() {
-    if (isWebMode) {
-        alert("Clear Cache is not available in Web mode.");
-        return;
-    }
-    const hint = document.getElementById("render-hint");
-    if (hint) hint.textContent = "Clearing cache...";
-    try {
-        const res = await window.pywebview.api.clear_cache();
-        if (res.success) {
-            if (hint) hint.textContent = "Cache cleared successfully!";
-        } else {
-            if (hint) hint.textContent = "Failed to clear cache: " + res.error;
-        }
-    } catch (e) {
-        if (hint) hint.textContent = "Error clearing cache: " + e;
-    }
-};
-
-// ── Storyboard card sync and utility actions ─────────────────────────────────
-
-window.syncScene = function(idx, field, val) {
-  if (currentScriptData && currentScriptData.segments[idx]) {
-    currentScriptData.segments[idx][field] = val;
-  }
-};
-
-window.syncSceneOverlay = function(idx, val) {
-  if (currentScriptData && currentScriptData.segments[idx]) {
-    if (val.trim()) {
-      const segDuration = Math.max(3, Math.round(currentScriptData.segments[idx].narration.length / 15));
-      currentScriptData.segments[idx].text_overlay = {
-        "text": val.trim(),
-        "position": "bottom_center",
-        "duration_seconds": segDuration
-      };
-    } else {
-      currentScriptData.segments[idx].text_overlay = null;
-    }
-  }
-};
-
-window.deleteStoryboardScene = function(idx) {
-  if (!currentScriptData || currentScriptData.segments.length <= 1) return;
-  currentScriptData.segments.splice(idx, 1);
-  currentScriptData.segments.forEach((seg, i) => {
-    seg.segment_id = i + 1;
-  });
-  drawStoryboard(currentScriptData);
-  
-  // Update summaries
-  const sSegments = document.getElementById("s-segments");
-  if (sSegments) sSegments.textContent = currentScriptData.segments.length + " segments";
-  const sbEstDuration = document.getElementById("sb-est-duration");
-  if (sbEstDuration) sbEstDuration.textContent = `~${Math.round(currentScriptData.segments.length * 4)} seconds`;
-};
-
-// ── Horizontal timeline navigation strip ─────────────────────────────────────
-
-function buildSceneStrip() {
-  const strip = document.getElementById("sceneStrip");
-  if (!strip || !currentScriptData) return;
-  
-  const colors = {
-    hook: "rgba(6,182,212,0.25)",
-    body: "rgba(99,102,241,0.25)",
-    cta: "rgba(139,92,246,0.25)",
-    conclusion: "rgba(16,185,129,0.25)"
-  };
-  
-  strip.innerHTML = currentScriptData.segments.map((s, i) => `
-    <div onclick="previewScene(${i})" style="flex-shrink:0;width:32px;height:24px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:${colors[s.type] || "rgba(255,255,255,0.05)"};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#94a3b8;transition:all 0.15s" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Scene ${s.segment_id}: ${s.type || 'Body'}">${s.segment_id}</div>
+  grid.innerHTML = images.map(img => `
+    <div class="img-card">
+      <img src="${img.path}" alt="${img.filename}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'180\\' height=\\'110\\' fill=\\'%2326313C\\'></svg>'"/>
+      <div class="info">
+        <span class="fname">${img.filename}</span>
+        <button type="button" class="ghost" style="padding: 2px 6px; font-size: 10.5px; border-color: var(--gap); color: var(--gap)" onclick="deleteImage('${img.filename}')">Delete</button>
+      </div>
+    </div>
   `).join("");
 }
 
-window.previewScene = function(idx) {
-  if (!currentScriptData || !currentScriptData.segments[idx]) return;
-  
-  const seg = currentScriptData.segments[idx];
-  const preview = document.getElementById("previewStage");
-  const captionBar = document.getElementById("captionBar");
-  
-  const colors = {
-    hook: "rgba(6,182,212,0.1)",
-    body: "rgba(99,102,241,0.1)",
-    cta: "rgba(139,92,246,0.1)",
-    conclusion: "rgba(16,185,129,0.1)"
-  };
-  
-  if (preview) {
-    preview.style.backgroundColor = colors[seg.type] || "rgba(0,0,0,0.35)";
-    preview.querySelector(".preview-inner").innerHTML = `
-      <div style="font-size:11px;font-weight:600;color:#94a3b8;letter-spacing:0.5px;text-transform:uppercase">${seg.type || 'Body'} — Scene ${seg.segment_id}</div>
-      <div style="font-size:10px;color:#64748b;max-width:180px;text-align:center;line-height:1.5;margin-top:4px">${seg.b_roll_keyword.substring(0,80)}…</div>
-    `;
-  }
-  
-  if (captionBar) {
-    captionBar.style.display = "block";
-    captionBar.textContent = seg.narration;
-  }
-  
-  // Highlight active card border in middle panel
-  document.querySelectorAll(".scene-card").forEach(c => c.style.borderColor = "");
-  const activeCard = document.getElementById(`scene${idx}`);
-  if (activeCard) {
-    activeCard.style.borderColor = "rgba(99,102,241,0.6)";
-    activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-};
+function filterLibraryImages(query) {
+  loadLibraryData(query);
+}
 
-// ── TTS waveform visualizer ───────────────────────────────────────────────
-
-function buildWave() {
-  const wrap = document.getElementById("waveBars");
-  if (!wrap) return;
-  wrap.innerHTML = "";
-  for (let i = 0; i < 35; i++) {
-    const b = document.createElement("div");
-    b.className = "wbar";
-    const h = 4 + Math.random() * 16;
-    b.style.height = h + "px";
-    wrap.appendChild(b);
+async function deleteImage(filename) {
+  if (confirm(`Permanently delete ${filename} from library?`)) {
+    if (!isWebMode) {
+      await window.pywebview.api.delete_library_image(filename);
+      await loadLibraryData();
+    }
   }
 }
 
-let waveAnim = null;
-window.animateWave = function(on) {
-  const bars = document.querySelectorAll(".wbar");
-  if (on) {
-    if (waveAnim) clearInterval(waveAnim);
-    waveAnim = setInterval(() => {
-      bars.forEach((b, i) => {
-        const phase = Date.now() / 120 + i * 0.4;
-        const h = 4 + Math.abs(Math.sin(phase)) * 26;
-        b.style.height = h + "px";
-        b.classList.toggle("active", h > 16);
-      });
-    }, 60);
-  } else {
-    if (waveAnim) clearInterval(waveAnim);
-    bars.forEach(b => {
-      b.classList.remove("active");
-      b.style.height = (4 + Math.random() * 8) + "px";
-    });
+async function clearLibraryCache() {
+  if (!isWebMode) {
+    await window.pywebview.api.clear_cache();
+    alert("Cache cleared.");
   }
-};
-
-window.previewSceneSpeech = function(idx) {
-  if (!currentScriptData || !currentScriptData.segments[idx]) return;
-  
-  window.animateWave(true);
-  const ttsStatus = document.getElementById("ttsStatus");
-  if (ttsStatus) ttsStatus.textContent = `Scene ${idx + 1} TTS synthesis…`;
-  
-  setTimeout(() => {
-    window.animateWave(false);
-    if (ttsStatus) ttsStatus.textContent = "Done · 1.8s";
-    window.previewScene(idx);
-  }, 1800);
-};
-
-// ── Log and Terminal controls ───────────────────────────────────────────────
-
-window.toggleLog = function() {
-  const body = document.getElementById("logBody");
-  const header = document.getElementById("logHeader");
-  const chev = document.getElementById("logChevron");
-  if (!body) return;
-  const open = body.classList.toggle("visible");
-  if (header) header.classList.toggle("open", open);
-  if (chev) chev.style.transform = open ? "rotate(180deg)" : "";
-};
-
-window.openLog = function() {
-  const body = document.getElementById("logBody");
-  const header = document.getElementById("logHeader");
-  const chev = document.getElementById("logChevron");
-  if (body) body.classList.add("visible");
-  if (header) header.classList.add("open");
-  if (chev) chev.style.transform = "rotate(180deg)";
-};
-
-// Init waveform on script boot
-buildWave();
+}

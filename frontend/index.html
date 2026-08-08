@@ -1,507 +1,503 @@
 <!DOCTYPE html>
-<html class="dark" lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8"/>
-  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Smart Studio</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  
-  <!-- Fonts & Icon libraries (Tabler Icons CDN + Outfit/Inter Google Fonts) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
-  
-  <!-- Custom Studio CSS -->
-  <link href="style.css" rel="stylesheet"/>
-  
-  <script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "obsidian-base": "#0b0f19",
-            "glass-border": "rgba(255, 255, 255, 0.08)",
-            "glass-bg": "rgba(255, 255, 255, 0.05)"
-          }
-        }
-      }
-    }
-  </script>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-<div id="s2v-root">
-  <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Smart Studio — three-column workspace</h2>
+<div class="page">
 
-  <!-- TOP BAR -->
-  <nav class="topbar">
-    <div class="logo-wrap">
-      <div class="logo-icon">SS</div>
-      <span class="logo-text"><span>Smart</span> Studio</span>
-      <span class="ver-badge" id="version-badge">v2.4.0</span>
+  <header style="display:flex; flex-direction:column; gap:6px">
+    <div style="display:flex; justify-content:space-between; align-items:center">
+      <span class="eyebrow">Smart Studio &middot; Interface</span>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button id="btn-theme-toggle" onclick="toggleTheme()" class="ghost" style="font-family:var(--mono); font-size:11px">Theme: Dark</button>
+        <span class="mono" id="version-badge">v2.0.0</span>
+      </div>
     </div>
-    <div class="topbar-center">
-      <div class="status-dot"></div>
-      <span class="status-label">TTS Engine: <span id="s-voice-header">Local Supertonic</span></span>
-    </div>
-    <div class="topbar-right">
-      <button class="icon-btn" onclick="toggleSettingsModal()" title="Settings" aria-label="Open settings">
-        <i class="ti ti-settings" aria-hidden="true"></i>
-      </button>
-    </div>
-  </nav>
+    <h1>One script in. Every format out.</h1>
+    <p class="sub">Five screens, in the order you use them. You approve, the app works.</p>
+  </header>
 
-  <!-- WORKSPACE -->
-  <div class="workspace">
+  <div class="app">
+    <!-- LEFT RAIL NAVIGATION -->
+    <nav class="rail" role="tablist" aria-label="App sections">
+      <div class="brand">
+        <b>Smart Studio</b>
+        <span>script to video</span>
+      </div>
+      <button class="nav" role="tab" aria-selected="true" data-p="script" onclick="switchPane('script')">Script<span class="k">1</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="board" onclick="switchPane('board')">Storyboard<span class="k">2</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="render" onclick="switchPane('render')">Render<span class="k">3</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="library" onclick="switchPane('library')">Library<span class="k">4</span></button>
+      <div class="spacer"></div>
+      <button class="nav" role="tab" aria-selected="false" data-p="settings" onclick="switchPane('settings')">Settings<span class="k">,</span></button>
+    </nav>
 
-    <!-- LEFT COLUMN: SCRIPT & CONFIG PANEL -->
-    <div class="panel" style="background: linear-gradient(180deg, rgba(17,24,39,0.85) 0%, rgba(11,15,25,0.95) 100%)">
-      
-      <!-- Load JSON Card (Quick load) -->
-      <div class="card" style="padding: 10px 14px;">
-        <div class="flex justify-between items-center">
-          <button class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-[#dfe2f1] flex items-center gap-1.5 transition-colors" onclick="loadScript()">
-            <i class="ti ti-file-upload" aria-hidden="true"></i> Load JSON Plan
-          </button>
-          <span class="text-[11px] text-[#c7c4d7] italic truncate max-w-[150px]" id="loaded-path">No file loaded</span>
-        </div>
+    <!-- ══ 1. SCRIPT SCREEN ══ -->
+    <div class="pane" data-on="1" data-pane="script">
+      <div class="row" style="justify-space-between">
+        <h2>New video</h2>
+        <span class="mono" id="script-status-label">draft &middot; not yet planned</span>
+        <button class="ghost" style="margin-left:auto" onclick="triggerLoadScript()">Open JSON Script…</button>
       </div>
 
-      <!-- Config Card -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title"><span class="dot"></span>Project Config</span>
-        </div>
-        
-        <div class="form-group">
-          <label class="form-label">Project Title</label>
-          <input class="form-input" type="text" id="pt-title" placeholder="My AI Video Script…" value="The Power of Phonics — Ep. 3">
-        </div>
-
-        <!-- Pill Tabs -->
-        <div class="tab-bar" id="tabBar">
-          <div class="tab-pill" id="tabPill" style="width: 50%; left: 3px;"></div>
-          <button class="tab-btn active" id="tab0" onclick="switchTab(0)">⚙️ Core Settings</button>
-          <button class="tab-btn" id="tab1" onclick="switchTab(1)">🧠 AI Guidelines</button>
-        </div>
-
-        <!-- Core Settings Tab -->
-        <div id="coreTab">
-          <!-- Voice selection -->
-          <div class="form-group">
-            <label class="form-label">Voice Engine</label>
-            <div class="flex gap-2 mb-2">
-              <select id="pt-voice" class="form-select flex-1">
-                <optgroup label="🔊 Edge Neural Voices (free, cloud, fast)">
-                  <option value="edge:en-US-GuyNeural">🇺🇸 American Male (Guy)</option>
-                  <option value="edge:en-US-AriaNeural">🇺🇸 American Female (Aria)</option>
-                  <option value="edge:en-GB-RyanNeural">🇬🇧 British Male (Ryan)</option>
-                  <option value="edge:en-GB-SoniaNeural">🇬🇧 British Female (Sonia)</option>
-                  <option value="edge:en-AU-WilliamNeural">🇦🇺 Australian Male (William)</option>
-                  <option value="edge:en-AU-NatashaNeural">🇦🇺 Australian Female (Natasha)</option>
-                </optgroup>
-                <optgroup label="🇪🇸 Spanish Voices (Edge Neural)">
-                  <option value="edge:es-ES-AlvaroNeural">🇪🇸 Spanish Spain Male (Alvaro)</option>
-                  <option value="edge:es-ES-ElviraNeural">🇪🇸 Spanish Spain Female (Elvira)</option>
-                  <option value="edge:es-MX-JorgeNeural">🇲🇽 Spanish Mexico Male (Jorge)</option>
-                  <option value="edge:es-MX-DaliaNeural">🇲🇽 Spanish Mexico Female (Dalia)</option>
-                </optgroup>
-                <optgroup label="🇫🇷 French Voices (Edge Neural)">
-                  <option value="edge:fr-FR-HenriNeural">🇫🇷 French Male (Henri)</option>
-                  <option value="edge:fr-FR-DeniseNeural">🇫🇷 French Female (Denise)</option>
-                </optgroup>
-                <optgroup label="🌟 Gemini 3.1 Flash TTS (Steerable Voices, requires Google API key)">
-                  <option value="google:gemini-3.1-flash-tts-preview:Puck" selected>🌟 Gemini Puck (Preview Voice - Recommended)</option>
-                  <option value="google:gemini-3.1-flash-tts-preview:Charon">🌟 Gemini Charon (Preview Voice)</option>
-                  <option value="google:gemini-3.1-flash-tts-preview:Kore">🌟 Gemini Kore (Preview Voice)</option>
-                  <option value="google:gemini-3.1-flash-tts-preview:Fenrir">🌟 Gemini Fenrir (Preview Voice)</option>
-                  <option value="google:gemini-3.1-flash-tts-preview:Aoede">🌟 Gemini Aoede (Preview Voice)</option>
-                </optgroup>
-                <optgroup label="✨ Google Premium Voices (requires Google API key)">
-                  <option value="google:en-US-Journey-O">🇺🇸 Google Journey Male (en-US-Journey-O) [Premium] (no fast captions)</option>
-                  <option value="google:en-US-Journey-D">🇺🇸 Google Journey Male (en-US-Journey-D) [Premium] (no fast captions)</option>
-                  <option value="google:en-US-Journey-F">🇺🇸 Google Journey Female (en-US-Journey-F) (no fast captions)</option>
-                  <option value="google:en-US-Studio-Q">🇺🇸 Google Studio Male (en-US-Studio-Q) [High Fidelity] (no fast captions)</option>
-                  <option value="google:en-US-Neural2-A">🇺🇸 Google Neural2 Male (en-US-Neural2-A)</option>
-                  <option value="google:en-US-Neural2-D">🇺🇸 Google Neural2 Male (en-US-Neural2-D)</option>
-                  <option value="google:en-US-Neural2-J">🇺🇸 Google Neural2 Male (en-US-Neural2-J)</option>
-                  <option value="google:en-US-Neural2-F">🇺🇸 Google Neural2 Female (en-US-Neural2-F)</option>
-                  <option value="google:en-US-Wavenet-B">🇺🇸 Google WaveNet Male (en-US-Wavenet-B)</option>
-                  <option value="google:en-US-Wavenet-D">🇺🇸 Google WaveNet Male (en-US-Wavenet-D)</option>
-                  <option value="google:en-US-Wavenet-J">🇺🇸 Google WaveNet Male (en-US-Wavenet-J)</option>
-                  <option value="google:en-GB-Neural2-B">🇬🇧 Google Neural2 Male (en-GB-Neural2-B)</option>
-                  <option value="google:en-GB-Neural2-D">🇬🇧 Google Neural2 Male (en-GB-Neural2-D)</option>
-                  <option value="google:en-GB-Wavenet-B">🇬🇧 Google WaveNet Male (en-GB-Wavenet-B)</option>
-                  <option value="google:en-GB-Wavenet-D">🇬🇧 Google WaveNet Male (en-GB-Wavenet-D)</option>
-                </optgroup>
-                <optgroup label="💻 Supertonic Offline Voices (completely offline)">
-                  <option value="local:supertonic-m1">💻 Supertonic Male 1 (M1)</option>
-                  <option value="local:supertonic-m2">💻 Supertonic Male 2 (M2)</option>
-                  <option value="local:supertonic-m3">💻 Supertonic Male 3 (M3)</option>
-                  <option value="local:supertonic-m4">💻 Supertonic Male 4 (M4)</option>
-                  <option value="local:supertonic-m5">💻 Supertonic Male 5 (M5)</option>
-                  <option value="local:supertonic-f1">💻 Supertonic Female 1 (F1)</option>
-                  <option value="local:supertonic-f2">💻 Supertonic Female 2 (F2)</option>
-                  <option value="local:supertonic-f3">💻 Supertonic Female 3 (F3)</option>
-                  <option value="local:supertonic-f4">💻 Supertonic Female 4 (F4)</option>
-                  <option value="local:supertonic-f5">💻 Supertonic Female 5 (F5)</option>
-                </optgroup>
-              </select>
-              <button class="px-3 py-1 bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg text-xs font-semibold text-white flex items-center justify-center gap-1 active:scale-95 transition-transform" id="btn-preview-voice" onclick="previewVoice()">
-                <i class="ti ti-volume" aria-hidden="true"></i> Preview
-              </button>
-            </div>
-            <span id="voice-preview-status" class="text-[10px] text-cyan-400 block h-4"></span>
-          </div>
-
-          <!-- Hidden Aspect Ratio Select for app.js Compatibility -->
-          <select id="pt-aspect-ratio" class="hidden">
-            <option value="16:9">16:9</option>
-            <option value="9:16">9:16</option>
-            <option value="1:1">1:1</option>
-            <option value="4:3">4:3</option>
+      <div class="row">
+        <label class="f">Title
+          <input type="text" id="pt-title" value="S2E6 — The Long Retreat">
+        </label>
+        <label class="f">Series Pack
+          <select id="pt-series-slug">
+            <!-- Dynamically populated from config/series/*.json -->
           </select>
-
-          <!-- Aspect Ratio Custom Selector Grid -->
-          <div class="form-group">
-            <label class="form-label">Aspect Ratio</label>
-            <div class="ratio-grid" id="aspect-ratio-grid">
-              <div class="ratio-btn active" onclick="selectRatio(this)">
-                <div class="ratio-frame" style="width:28px;height:17px"></div>
-                <span class="ratio-label">16:9</span>
-              </div>
-              <div class="ratio-btn" onclick="selectRatio(this)">
-                <div class="ratio-frame" style="width:17px;height:28px"></div>
-                <span class="ratio-label">9:16</span>
-              </div>
-              <div class="ratio-btn" onclick="selectRatio(this)">
-                <div class="ratio-frame" style="width:22px;height:22px"></div>
-                <span class="ratio-label">1:1</span>
-              </div>
-              <div class="ratio-btn" onclick="selectRatio(this)">
-                <div class="ratio-frame" style="width:25px;height:19px"></div>
-                <span class="ratio-label">4:3</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Style Preset select -->
-          <div class="form-group">
-            <label class="form-label">Visual Style Preset</label>
-            <select id="pt-style-select" class="form-select" onchange="toggleCustomStyleInput()">
-              <option value="cinematic documentary photography, dramatic natural lighting, highly detailed, photorealistic">1. Cinematic Photograph (Default)</option>
-              <option value="historical oil painting, rich colors, detailed textures, classical art style">2. Historical Oil Painting</option>
-              <option value="epic fantasy watercolor painting, soft color washes, highly artistic, fine details">3. Epic Watercolor Art</option>
-              <option value="dark fantasy concept art, moody atmosphere, detailed digital painting, cinematic lighting">4. Dark Fantasy Concept Art</option>
-              <option value="modern 3d render, sci-fi concept design, unreal engine 5 style, highly detailed">5. Modern 3D Render (Sci-Fi)</option>
-              <option value="retro anime manga style, clean linework, vibrant cell shading, hand-drawn look">6. Retro Anime / Manga</option>
-              <option value="traditional ink sketch and charcoal drawing, high contrast, hand-crafted illustration">7. Ink Sketch & Charcoal</option>
-              <option value="cyberpunk city illustration, neon lights, dramatic backlighting, futuristic design">8. Cyberpunk Neon</option>
-              <option value="vintage comic book style, half-tone dots, bold outlines, retro color palette">9. Vintage Comic Book</option>
-              <option value="custom">10. Custom (Other) - type custom prompt...</option>
-            </select>
-          </div>
-
-          <!-- Custom style text box -->
-          <div class="form-group hidden" id="custom-style-row">
-            <label class="form-label">Custom Visual Style Description</label>
-            <input type="text" id="pt-visual-style-custom" class="form-input" placeholder="e.g. claymation style, colorful watercolor splash, 3D clay rendering, etc." />
-          </div>
-        </div>
-
-        <!-- AI Guidelines Tab -->
-        <div id="aiTab" style="display:none">
-          <div class="form-group">
-            <label class="form-label">Target Accent / Dialect</label>
-            <select id="pt-voice-dialect" class="form-select">
-              <option value="Standard English">Standard English</option>
-              <option value="Nigerian English">Nigerian English</option>
-              <option value="British English">British English (UK)</option>
-              <option value="Arabic Storytelling">Arabic Storytelling (with Tashkeel)</option>
-              <option value="Spanish Dialect">Spanish Dialect</option>
-              <option value="French Dialect">French Dialect</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Narrative Tone & Style</label>
-            <select id="pt-narrative-tone" class="form-select">
-              <option value="Dramatic Documentary">Dramatic Documentary</option>
-              <option value="Motivational Speech">Motivational Speech</option>
-              <option value="Suspenseful/Horror">Suspenseful / Horror</option>
-              <option value="Conversational/Casual">Conversational / Casual</option>
-              <option value="Energetic/Upbeat">Energetic / Upbeat</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Speaker Mode</label>
-            <select id="pt-speaker-mode" class="form-select">
-              <option value="single">Single Speaker (Standard Narrator)</option>
-              <option value="conversational">Conversational (Switch Speakers Mid-Sentence)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Custom Guidelines / Instructions</label>
-            <textarea id="pt-ai-guideline" class="form-textarea" placeholder="Enter custom guidelines for Gemini. e.g. 'Use Nigerian slang.' or 'Make the tone dramatic.'"></textarea>
-          </div>
-        </div>
+        </label>
       </div>
 
-      <!-- Script Textarea -->
+      <label class="f" style="flex:1 1 100%">Script
+        <textarea id="pt-text" placeholder="Paste or type script narration here…">There is an image the history books do not linger on. A man of sixty years, white haired, known to his community as the softest-hearted among them…</textarea>
+      </label>
+
+      <!-- FORMAT PICKER -->
       <div class="card">
-        <div class="card-title" style="margin-bottom:10px"><span class="dot"></span>Script Input</div>
-        <textarea class="script-textarea" id="pt-script" placeholder="Paste your script text here. Separate scenes with blank lines for precise manual control, or paste raw text to let the AI agent structure it automatically."></textarea>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
-          <span style="font-size:10px;color:var(--text3)" id="wordCount">0 words</span>
-          <span style="font-size:10px;color:var(--text3)" id="estimatedDuration">≈ 0.0 min</span>
+        <div class="row" style="justify-content:space-between">
+          <h3>Output formats</h3>
+          <span class="mono">render once &middot; every format below</span>
+        </div>
+        <div class="formats">
+          <button type="button" class="fmt on" data-fmt="16:9" onclick="toggleFormat(this)">
+            <span class="tick">✓</span>
+            <span class="frame" style="width:56px;height:32px"></span>
+            <b>Long</b>
+            <small>16:9 &middot; 1080p</small>
+          </button>
+          <button type="button" class="fmt on" data-fmt="9:16" onclick="toggleFormat(this)">
+            <span class="tick">✓</span>
+            <span class="frame" style="width:22px;height:39px"></span>
+            <b>Short</b>
+            <small>9:16 &middot; 1080p</small>
+          </button>
+          <button type="button" class="fmt" data-fmt="1:1" onclick="toggleFormat(this)">
+            <span class="tick">&nbsp;</span>
+            <span class="frame" style="width:34px;height:34px"></span>
+            <b>Square</b>
+            <small>1:1 &middot; 1080p</small>
+          </button>
+          <button type="button" class="fmt" data-fmt="4:5" onclick="toggleFormat(this)">
+            <span class="tick">&nbsp;</span>
+            <span class="frame" style="width:28px;height:35px"></span>
+            <b>Feed</b>
+            <small>4:5 &middot; 1080p</small>
+          </button>
+        </div>
+        <p class="hint"><b>Multi-format output.</b> The app renders the long-form film and, from the same shots and narration, cuts vertical versions — re-framing each shot around its subject.</p>
+      </div>
+
+      <!-- NARRATION CARD -->
+      <div class="card">
+        <h3>Narration</h3>
+        <div class="row">
+          <label class="f">Narrator
+            <select id="pt-voice">
+              <!-- Dynamically populated from config/voices.json (enabled voices only) -->
+            </select>
+          </label>
+          <label class="f">Tone
+            <select id="pt-tone">
+              <option value="Grave documentary">Grave documentary</option>
+              <option value="Warm storytelling">Warm storytelling</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </label>
+          <label class="f">Visual style
+            <select id="pt-style">
+              <option value="Vintage documentary">Vintage documentary</option>
+              <option value="Vox paper-collage">Vox paper-collage</option>
+              <option value="Vector editorial">Vector editorial</option>
+            </select>
+          </label>
+        </div>
+        <p class="mono">Only enabled voices appear here. Manage the full catalogue in Settings.</p>
+        <div class="row">
+          <button type="button" class="ghost" id="btn-preview-voice" onclick="previewVoice()">Preview voice</button>
+          <span id="voice-preview-status" class="mono"></span>
+          <button type="button" class="ghost" onclick="switchPane('settings')">Pronunciation dictionary</button>
         </div>
       </div>
 
-      <!-- Generate Button -->
-      <button class="gen-btn" id="btn-parse" onclick="parsePlainText()">
-        <i class="ti ti-sparkles" aria-hidden="true"></i> Generate Storyboard Plan
-      </button>
+      <!-- CAPTIONS CARD -->
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3>Captions</h3>
+          <span class="tg on" id="capMaster" onclick="toggleCaptionsMaster()"><span class="sw"></span>On</span>
+        </div>
+        <div id="capOpts" class="row">
+          <label class="f">Style
+            <select id="cap-style">
+              <option value="documentary lower-third">Documentary lower-third</option>
+              <option value="kinetic word-by-word">Kinetic word-by-word</option>
+              <option value="bold centre">Bold centre</option>
+            </select>
+          </label>
+          <label class="f">Size
+            <select id="cap-size">
+              <option value="auto">Auto — scales per format</option>
+              <option value="small">Small</option>
+              <option value="large">Large</option>
+            </select>
+          </label>
+        </div>
+        <p class="mono">Vertical formats get larger, higher captions automatically. Timings come from word marks.</p>
+      </div>
 
-      <!-- Summary panel -->
-      <div id="script-summary" class="card hidden" style="padding: 12px; margin-top: 4px;">
-        <div class="grid grid-cols-2 gap-2 text-[11px] text-gray-400">
-          <div>Title: <span id="s-title" class="text-white font-medium">—</span></div>
-          <div>Scenes: <span id="s-segments" class="text-white font-medium">—</span></div>
-          <div>Dur: <span id="s-duration" class="text-white font-medium">—</span></div>
-          <div>Voice: <span id="s-voice" class="text-white font-medium">—</span></div>
-          <div>Ratio: <span id="s-aspect-ratio" class="text-white font-medium">—</span></div>
-          <div>Status: <span id="s-validation" class="text-white font-semibold">—</span></div>
+      <div class="row" style="justify-content:flex-end">
+        <button type="button" class="ghost" onclick="saveDraftScript()">Save draft</button>
+        <button type="button" class="primary" id="btn-plan-storyboard" onclick="planStoryboard()">Plan storyboard →</button>
+      </div>
+    </div>
+
+    <!-- ══ 2. STORYBOARD SCREEN ══ -->
+    <div class="pane" data-pane="board">
+      <div class="topbar">
+        <div class="counts">
+          <div class="c-ok"><b id="board-cnt-matched">0</b><span>matched</span></div>
+          <div class="c-warn"><b id="board-cnt-weak">0</b><span>weak</span></div>
+          <div class="c-gap"><b id="board-cnt-gaps">0</b><span>gaps</span></div>
+          <div><b id="board-cnt-shots">0</b><span>shots</span></div>
+          <div><b id="board-cnt-runtime">0:00</b><span>runtime</span></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <span class="mono">shot rhythm</span>
+          <input type="range" id="shot-rhythm-slider" min="1" max="5" value="3" style="width:110px" oninput="updateRhythmLabel(this.value)">
+          <span class="mono" id="rhythm-label">~7s per shot</span>
+          <button type="button" class="primary" id="btn-start-render-board" onclick="startRenderFromBoard()">Render video →</button>
         </div>
       </div>
 
-      <!-- Validation Error Box -->
-      <div id="validation-errors" class="error-block hidden"></div>
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>matched &mdash; good library hit</span>
+        <span><i style="background:var(--warn)"></i>weak &mdash; usable, alternatives offered</span>
+        <span><i style="background:var(--gap)"></i>gap &mdash; prompt generated</span>
+      </div>
+
+      <div class="seglist" id="storyboard-list">
+        <!-- Rendered dynamically by JS from coverage report -->
+        <div class="card" style="text-align:center; padding:30px">
+          <p class="sub">No storyboard loaded yet. Paste a script on the <b>Script</b> screen and click <b>Plan storyboard</b>.</p>
+        </div>
+      </div>
     </div>
 
-    <!-- CENTER COLUMN: STORYBOARD REVIEW PANEL -->
-    <div class="center-panel">
-      <!-- Storyboard Section (Hidden until planning is completed) -->
-      <section class="hidden" id="section-storyboard" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-        <div class="scene-header">
-          <span class="card-title"><span class="dot"></span>Storyboard Planner</span>
-          <span class="scene-count" id="sb-status">🤖 AI Structured</span>
-        </div>
+    <!-- ══ 3. RENDER SCREEN ══ -->
+    <div class="pane" data-pane="render">
+      <h2>Render</h2>
 
-        <div class="storyboard-summary grid grid-cols-3 gap-2 text-[11px] bg-white/5 border border-white/10 rounded-xl p-3">
-          <div><strong>Est. Video:</strong> <span id="sb-est-duration">-</span></div>
-          <div><strong>Est. Render:</strong> <span id="sb-est-render">-</span></div>
-          <div><strong>Visual Style:</strong> <span id="sb-style-guide">-</span></div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3 id="render-project-title">Project Title</h3>
+          <span class="pill p-mute" id="render-status-pill">idle</span>
         </div>
+        <div class="bar"><i id="render-progress-bar" style="width:0%"></i></div>
+        <div class="row" style="justify-content:space-between">
+          <span class="mono" id="render-human-step">Ready to render</span>
+          <span class="mono" id="render-time-info">elapsed 0:00 &middot; eta --:--</span>
+        </div>
+        <div class="grid2" style="margin-top:4px">
+          <div>
+            <div class="kv"><span>Narration</span><b id="kv-narr-status">0 / 0</b></div>
+            <div class="kv"><span>Captions</span><b id="kv-cap-status">0 / 0</b></div>
+            <div class="kv"><span>Shots composed</span><b id="kv-shots-status">0 / 0</b></div>
+          </div>
+          <div>
+            <div class="kv"><span>From cache</span><b id="kv-cache-status">0</b></div>
+            <div class="kv"><span>Encoder</span><b id="kv-encoder-status">libx264 veryfast</b></div>
+            <div class="kv"><span>Workers</span><b>3</b></div>
+          </div>
+        </div>
+      </div>
 
-        <!-- Dynamic List of Cards -->
-        <div id="storyboard-scenes-container" class="scenes-list">
-          <!-- Populated by drawStoryboard() in app.js -->
+      <div class="card">
+        <h3>Outputs</h3>
+        <div class="tbl">
+          <table>
+            <thead>
+              <tr><th>Format</th><th>Resolution</th><th>Length</th><th>Status</th></tr>
+            </thead>
+            <tbody id="render-outputs-body">
+              <tr><td>Long &middot; 16:9</td><td class="mono">1920×1080</td><td class="mono">--:--</td><td><span class="pill p-mute">queued</span></td></tr>
+              <tr><td>Short &middot; 9:16 &mdash; “the hook”</td><td class="mono">1080×1920</td><td class="mono">0:45</td><td><span class="pill p-mute">queued</span></td></tr>
+            </tbody>
+          </table>
         </div>
+        <p class="hint"><b>Shorts are suggested per scene beat.</b> You can tick which moments to cut as Shorts.</p>
+      </div>
 
-        <!-- Actions -->
-        <div class="flex gap-3 mt-2 pb-6 border-t border-white/5 pt-4">
-          <button class="flex-1 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-xs font-semibold text-white transition-all" onclick="saveStoryboardEdits(true)">
-            💾 Save Changes
-          </button>
-          <button class="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-xl text-xs font-bold transition-all" id="btn-approve-render" onclick="approveAndRender()">
-            ▶ Approve & Start Render
-          </button>
+      <div class="card">
+        <h3>On completion</h3>
+        <div class="row" style="gap:18px">
+          <span class="tg on" onclick="this.classList.toggle('on')"><span class="sw"></span>Export YouTube chapters</span>
+          <span class="tg on" onclick="this.classList.toggle('on')"><span class="sw"></span>Write description &amp; tags</span>
+          <span class="tg" onclick="this.classList.toggle('on')"><span class="sw"></span>Shut down when done</span>
         </div>
-      </section>
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="primary" id="btn-render-action" onclick="toggleRenderExecution()">Start Render</button>
+          <button type="button" class="ghost" onclick="openOutputFolder()">Open Output Folder</button>
+          <button type="button" class="ghost" onclick="toggleRawLogs()">Show raw logs</button>
+        </div>
+      </div>
+
+      <!-- DISCLOSURE RAW LOG PANEL -->
+      <div id="log-panel" class="log-panel hidden">Log initialized...</div>
     </div>
 
-    <!-- RIGHT COLUMN: MEDIA PRODUCTION & STAGE -->
-    <div class="panel" style="background: linear-gradient(180deg, rgba(17,24,39,0.85) 0%, rgba(11,15,25,0.95) 100%)">
-      
-      <div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Preview Stage</div>
+    <!-- ══ 4. LIBRARY SCREEN ══ -->
+    <div class="pane" data-pane="library">
+      <div class="row" style="justify-content:space-between">
+        <h2>Library</h2>
+        <span class="mono" id="lib-counts-label">0 images &middot; 87 sounds &middot; 12 music beds</span>
+      </div>
 
-      <!-- Viewport Stage -->
-      <div class="preview-stage preview-ratio-16-9" id="previewStage">
-        <div class="preview-inner">
-          <img id="video-preview-placeholder" class="w-full h-full object-cover opacity-60" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrOMxkkUr7gyAAaFpYdy_Qa-MWC0Cza7D8huCyKrvyNhLdWBsN43Tm3GqS3qH6EB0He3hW3lLpamh7ULKd-2T4dmyZwoE22OvWQYZYeNaR0lPBElUlvWFbB5X9fIbIYBvO5TPYM2fyBKbklwAG1Jis4VkSvSbgE5XhXqbM45OCQkrt5C4iXI9YBg9RKWK67tpg7aHBuSG5NBCgzHz1v5qZnBSp2OkVo6GGNBz_It042jlByTnn5_-kWA" alt="Video stage preview"/>
-          
-          <!-- Live Render Progress Overlay -->
-          <div id="section-progress" class="absolute inset-0 bg-[#0f131d]/95 backdrop-blur-md p-4 flex flex-col justify-between hidden z-10">
-            <div class="flex justify-between items-center border-b border-white/10 pb-1.5">
-              <span class="text-[10px] uppercase font-bold tracking-widest text-[#c0c1ff]">Rendering Progress</span>
-              <span class="text-[9px] font-mono text-[#4cd7f6]" id="segment-label">Segment -/-</span>
+      <div class="lib-tabs">
+        <button type="button" class="lib-tab active" id="tab-lib-images" onclick="switchLibTab('images')">Images</button>
+        <button type="button" class="lib-tab" id="tab-lib-sounds" onclick="switchLibTab('sounds')">Sounds</button>
+      </div>
+
+      <!-- IMAGES TAB CONTENT -->
+      <div id="lib-content-images" style="display:flex; flex-direction:column; gap:14px">
+        <div class="row">
+          <input type="search" id="lib-search-input" placeholder="Search by description — “rider at dusk”, “oil lamp”…" oninput="filterLibraryImages(this.value)" style="flex:1 1 300px">
+          <select style="width:auto">
+            <option value="all">All series</option>
+            <option value="islamic_history">Islamic History</option>
+            <option value="civil_war">Civil War</option>
+          </select>
+        </div>
+
+        <div class="img-grid" id="library-img-grid">
+          <!-- Dynamically populated from backend library API -->
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Coverage</h3>
+            <div class="kv"><span>Landscapes &amp; terrain</span><b style="color:var(--ok)">strong</b></div>
+            <div class="kv"><span>Architecture</span><b style="color:var(--ok)">strong</b></div>
+            <div class="kv"><span>Crowds &amp; councils</span><b style="color:var(--warn)">thin</b></div>
+            <div class="kv"><span>Battle &amp; aftermath</span><b style="color:var(--warn)">thin</b></div>
+          </div>
+          <div class="card">
+            <h3>Housekeeping</h3>
+            <div class="kv"><span>Active indexed images</span><b id="house-active-count">1,309</b></div>
+            <div class="kv"><span>Retired</span><b>6</b></div>
+            <div class="row">
+              <button type="button" class="ghost" onclick="clearLibraryCache()">Clear Cache</button>
             </div>
-            
-            <div class="flex-grow my-3 flex flex-col justify-center gap-1.5">
-              <div class="flex justify-between items-end text-[11px]">
-                <span id="stage-label" class="font-medium text-[#dfe2f1] truncate max-w-[170px]">Initializing render...</span>
-                <span class="text-[#c7c4d7]" id="progress-text">0%</span>
-              </div>
-              <div class="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div id="progress-fill" class="h-full bg-gradient-to-r from-indigo-500 to-cyan-500" style="width: 0%"></div>
-              </div>
-            </div>
-            
-            <div id="log-panel" class="h-16 bg-[#0a0e18] border border-white/10 rounded-lg p-2 font-mono text-[9px] overflow-y-auto text-[#c7c4d7] hide-scrollbar leading-normal"></div>
           </div>
         </div>
-        <span class="preview-timecode">00:00:00</span>
-        <div class="preview-caption-bar" style="display:none" id="captionBar"></div>
+        <p class="hint">Permanent deletion lives <b>here</b>, never on the storyboard. Rejecting a shot on the storyboard is about fit, not quality.</p>
       </div>
 
-      <!-- Horizontal Strip Navigator -->
-      <div id="sceneStrip" class="flex gap-1.5 overflow-x-auto py-1 hide-scrollbar">
-        <span style="font-size:10px;color:var(--text3);line-height:2.5;white-space:nowrap">Scenes load here ↗</span>
+      <!-- SOUNDS TAB CONTENT -->
+      <div id="lib-content-sounds" style="display:none; flex-direction:column; gap:14px">
+        <div class="card">
+          <h3>Sound Library &amp; Music Beds</h3>
+          <p class="sub">87 sound effects and 12 ambient sound beds ducked under narration.</p>
+          <div class="tbl" style="margin-top:10px">
+            <table>
+              <thead><tr><th>Track</th><th>Category</th><th>Duration</th><th>Type</th></tr></thead>
+              <tbody>
+                <tr><td>Desert Wind Ambience</td><td>Ambience</td><td class="mono">3:45</td><td><span class="pill p-ok">sound bed</span></td></tr>
+                <tr><td>Horses Galloping</td><td>SFX</td><td class="mono">0:12</td><td><span class="pill p-mute">effect</span></td></tr>
+                <tr><td>Sword Clash Heavy</td><td>SFX</td><td class="mono">0:03</td><td><span class="pill p-mute">effect</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-
-      <!-- Waveform panel -->
-      <div class="waveform-wrap">
-        <div class="waveform-label">
-          <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-wave-sine" aria-hidden="true"></i>TTS Waveform</span>
-          <span id="ttsStatus" style="font-size:10px;color:var(--text3)">Idle</span>
-        </div>
-        <div class="waveform-bars" id="waveBars"></div>
-      </div>
-
-      <!-- Render Hub Controls -->
-      <div class="render-hub space-y-3">
-        <div class="card-title" style="margin-bottom:6px"><span class="dot"></span>Render Production</div>
-
-        <div class="grid grid-cols-2 gap-2 text-[10px] text-gray-400">
-          <div class="bg-black/20 border border-white/5 rounded-lg p-2">
-            <div>Codec</div>
-            <div class="text-white font-medium mt-0.5">H.264 / AAC</div>
-          </div>
-          <div class="bg-black/20 border border-white/5 rounded-lg p-2">
-            <div>Quality</div>
-            <div class="text-white font-medium mt-0.5">1080p · 30fps</div>
-          </div>
-        </div>
-
-        <!-- Progress bar container -->
-        <div id="renderProgress" class="hidden">
-          <div class="flex justify-between text-[10px] mb-1">
-            <span class="text-gray-400">Encoding progress</span>
-            <span id="progressPct" class="text-indigo-400 font-semibold">0%</span>
-          </div>
-          <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-            <div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full w-0 transition-all"></div>
-          </div>
-        </div>
-
-        <div class="flex gap-2">
-          <button class="render-btn flex-1" id="btn-render" onclick="startRender()" disabled>
-            <i class="ti ti-player-record" aria-hidden="true"></i> Render Video
-          </button>
-          <button id="btn-cancel" onclick="cancelRender()" class="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-xl font-bold text-xs active:scale-95 transition-all hidden">
-            ✕ Cancel
-          </button>
-        </div>
-
-        <!-- Quick actions -->
-        <div class="grid grid-cols-2 gap-2">
-          <button id="btn-clear-cache" onclick="clearCache()" class="py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-center text-xs font-semibold text-white active:scale-95 transition-all">
-            🗑 Clear Cache
-          </button>
-          <button onclick="openProjectFolder()" class="py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-center text-xs font-semibold text-white active:scale-95 transition-all">
-            📂 Open Project
-          </button>
-        </div>
-
-        <p class="text-[10px] text-[#c7c4d7] text-center" id="render-hint">Plan a script or load a JSON file to render.</p>
-
-        <!-- Logs Console Panel -->
-        <div class="log-drawer">
-          <div class="log-header" id="logHeader" onclick="toggleLog()">
-            <span style="display:flex;align-items:center;gap:4px"><i class="ti ti-terminal-2" aria-hidden="true"></i>Console Log</span>
-            <i class="ti ti-chevron-down" id="logChevron" aria-hidden="true" style="transition:transform 0.2s"></i>
-          </div>
-          <div class="log-body" id="logBody">
-            <span class="log-line info">[Smart Studio] Engine ready · supertonic-xtts-v2</span>
-            <span class="log-line ok">[TTS] Voice profiles cached</span>
-            <span class="log-line">[FFmpeg] Awaiting render job…</span>
-          </div>
-        </div>
-
-        <!-- Output Download Button -->
-        <button class="download-btn w-full" id="downloadBtn" style="display:none" onclick="openOutputFolder()">
-          <i class="ti ti-download" aria-hidden="true"></i> Download Output.mp4
-        </button>
-      </div>
-
-      <!-- Render Complete panel -->
-      <section class="card hidden mt-4" id="section-complete">
-        <div class="text-center space-y-3">
-          <div class="text-sm font-bold text-emerald-400 flex items-center justify-center gap-1">
-            <i class="ti ti-circle-check" aria-hidden="true"></i> Render Complete!
-          </div>
-          <p class="text-[10px] text-gray-400 break-all bg-black/35 border border-white/5 p-2 rounded-lg font-mono text-left select-all" id="complete-path"></p>
-          <div class="flex gap-2">
-            <button class="flex-1 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-xs font-bold transition-all" onclick="openOutputFolder()">Open Output Folder</button>
-            <button class="flex-1 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-[#dfe2f1] transition-all" onclick="renderAnother()">Create Another</button>
-          </div>
-        </div>
-      </section>
-
     </div>
 
+    <!-- ══ 5. SETTINGS SCREEN ══ -->
+    <div class="pane" data-pane="settings">
+      <h2>Settings</h2>
+
+      <!-- KEYS & SERVICES -->
+      <div class="card">
+        <h3>Keys &amp; services</h3>
+        <div class="tbl">
+          <table>
+            <thead>
+              <tr><th>Service</th><th>Used for</th><th>Key / Secret</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Google AI</td>
+                <td>Imagen, Gemini, Lyria music</td>
+                <td><input type="password" id="google-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
+                <td><span class="pill p-mute" id="google-key-status">not set</span></td>
+                <td><button type="button" class="ghost" onclick="saveGoogleKey()">Test &amp; Save</button></td>
+              </tr>
+              <tr>
+                <td>Google Cloud TTS</td>
+                <td>Narration + word timings</td>
+                <td><input type="password" id="google-tts-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
+                <td><span class="pill p-mute" id="google-tts-key-status">not set</span></td>
+                <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Test &amp; Save</button></td>
+              </tr>
+              <tr>
+                <td>DeepSeek</td>
+                <td>Script planning</td>
+                <td><input type="password" id="deepseek-key-input" placeholder="sk-…" style="font-family:var(--mono); font-size:12px"></td>
+                <td><span class="pill p-mute" id="deepseek-key-status">not set</span></td>
+                <td><button type="button" class="ghost" onclick="saveDeepseekKey()">Test &amp; Save</button></td>
+              </tr>
+              <tr>
+                <td>Freesound</td>
+                <td>Ambience &amp; sound effects</td>
+                <td><input type="password" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
+                <td><span class="pill p-mute">not set</span></td>
+                <td><button type="button" class="ghost" disabled>Test</button></td>
+              </tr>
+              <tr>
+                <td>ElevenLabs</td>
+                <td>Premium voice (optional)</td>
+                <td><input type="password" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
+                <td><span class="pill p-mute">not set</span></td>
+                <td><button type="button" class="ghost" disabled>Test</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mono">API keys are stored securely. Free local library retrieval and rendering work without any API keys.</p>
+      </div>
+
+      <!-- VOICE CATALOGUE -->
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3>Voice catalogue</h3>
+          <span class="mono" id="voice-catalogue-count">47 available &middot; 6 enabled</span>
+        </div>
+        <p class="mono">Tick the ones you use. Only enabled voices appear on the Script screen.</p>
+
+        <div id="voice-engines-container">
+          <!-- Dynamically populated from config/voices.json -->
+        </div>
+      </div>
+
+      <!-- LANGUAGE PACKS -->
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3>Language packs</h3>
+          <span class="mono">English installed</span>
+        </div>
+        <div class="tbl">
+          <table>
+            <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td><td><button type="button" class="ghost">Remove</button></td></tr>
+              <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td><td><button type="button" class="primary">Download</button></td></tr>
+              <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button">Download</button></td></tr>
+              <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button">Download</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PRONUNCIATION DICTIONARY -->
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3>Pronunciation dictionary</h3>
+          <span class="mono">per series &middot; 34 entries</span>
+        </div>
+        <p class="hint"><b>Arabic names spoken correctly.</b> Wrap names in SSML phonemes so your narrator pronounces proper nouns cleanly.</p>
+        <div class="tbl">
+          <table>
+            <thead><tr><th>Written</th><th>Spoken (IPA)</th><th>Heard in</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>Al-Mansur</td><td class="mono">alˈmansˤuːr</td><td class="mono">S2E1, S2E4</td><td><button type="button" class="ghost">Test</button></td></tr>
+              <tr><td>Abu Ubaydah</td><td class="mono">ʔabuː ʕubajda</td><td class="mono">S2E3, S2E6</td><td><button type="button" class="ghost">Test</button></td></tr>
+              <tr><td>Madinah</td><td class="mono">maˈdiːna</td><td class="mono">all episodes</td><td><button type="button" class="ghost">Test</button></td></tr>
+              <tr><td>Bayt al-Hikmah</td><td class="mono">bajt alˈħikma</td><td class="mono">S2E1</td><td><button type="button" class="ghost">Test</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="row">
+          <button type="button">Add entry</button>
+          <button type="button" class="ghost">Import from script</button>
+          <button type="button" class="ghost">Export</button>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>Defaults</h3>
+          <label class="f">Resolution
+            <select><option>1080p</option><option>720p — faster</option><option>1440p</option></select>
+          </label>
+          <label class="f">Frame rate
+            <select><option>30 fps</option><option>24 fps — filmic</option></select>
+          </label>
+          <label class="f">Caption style
+            <select><option>documentary lower-third</option><option>kinetic word-by-word</option><option>bold centre</option></select>
+          </label>
+          <label class="f">Grade
+            <select><option>documentary</option><option>illustration</option><option>silhouette</option><option>none</option></select>
+          </label>
+        </div>
+
+        <div class="card">
+          <h3>Spending</h3>
+          <label class="f">Cap per video<input type="text" value="$5.00"></label>
+          <label class="f">Warn above<input type="text" value="$2.00"></label>
+          <div class="kv"><span>This month</span><b>$3.12</b></div>
+          <div class="kv"><span>Last video</span><b>$0.28</b></div>
+          <p class="mono">Pre-render cost estimates. Nothing paid is generated without approval.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Performance</h3>
+        <div class="row">
+          <label class="f">Encoder
+            <select><option>libx264 veryfast (auto-detected)</option><option>h264_qsv</option></select>
+          </label>
+          <label class="f">Parallel shots
+            <select><option>3 (recommended for 4 cores)</option><option>1</option><option>6</option></select>
+          </label>
+        </div>
+        <p class="mono">Hardware probed at startup. NVENC is not attempted when missing.</p>
+      </div>
+    </div>
   </div>
 
-  <!-- GLOBAL SETTINGS OVERLAY MODAL -->
-  <div class="modal-overlay" id="settings-modal" onclick="toggleSettingsModal()">
-    <div class="settings-modal" onclick="event.stopPropagation()">
-      <div class="modal-title">
-        <span style="display:flex;align-items:center;gap:8px">
-          <i class="ti ti-settings" aria-hidden="true" style="color:var(--ind2)"></i>
-          Smart Studio Settings
-        </span>
-        <button class="close-btn" onclick="closeSettings()" aria-label="Close settings">
-          <i class="ti ti-x" aria-hidden="true"></i>
+  <!-- REPLACEMENT DECISION MODAL -->
+  <div id="replace-modal" class="modal-overlay hidden">
+    <div class="dlg">
+      <h3 id="modal-title">Replace shot image</h3>
+      <p>What should happen to the image you rejected?</p>
+      <div class="row">
+        <button type="button" class="opt" onclick="confirmReplace('just_not_here')">
+          <b>Just not here</b>
+          <small>Stays in the library. May suit another shot.</small>
+        </button>
+        <button type="button" class="opt" onclick="confirmReplace('never_this_query')">
+          <b>Never suggest for this</b>
+          <small>Blocked for this query only. Still available elsewhere.</small>
+        </button>
+        <button type="button" class="opt" onclick="confirmReplace('retire')">
+          <b>Retire it</b>
+          <small>Removed from search. Recoverable from _retired.</small>
         </button>
       </div>
-
-      <div class="modal-section-label">API Credentials</div>
-      
-      <div class="form-group">
-        <label class="form-label">Google Gemini API Key</label>
-        <div class="api-input-wrap">
-          <input class="form-input" type="password" id="google-key-input" placeholder="AIza…" style="padding-right:70px" oninput="onGoogleKeyInput()">
-          <button class="api-toggle" onclick="toggleKey('google-key-input',this)">Show</button>
-        </div>
-        <span id="google-key-status" class="key-status"></span>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">DeepSeek API Key</label>
-        <div class="api-input-wrap">
-          <input class="form-input" type="password" id="deepseek-key-input" placeholder="sk-…" style="padding-right:70px" oninput="onDeepseekKeyInput()">
-          <button class="api-toggle" onclick="toggleKey('deepseek-key-input',this)">Show</button>
-        </div>
-        <span id="deepseek-key-status" class="key-status"></span>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Google Cloud TTS Key (Optional)</label>
-        <div class="api-input-wrap">
-          <input class="form-input" type="password" id="google-tts-key-input" placeholder="Paste Google Cloud TTS API key (optional)" style="padding-right:70px" oninput="onGoogleTtsKeyInput()">
-          <button class="api-toggle" onclick="toggleKey('google-tts-key-input',this)">Show</button>
-        </div>
-        <span id="google-tts-key-status" class="key-status"></span>
-      </div>
-
-      <div class="modal-section-label pt-2 border-t border-white/5">Studio Languages</div>
-      <p class="text-[10px] text-gray-400 mb-2">Enable or disable specific languages inside the dial select list:</p>
-      
-      <div id="language-selection-list" class="grid grid-cols-2 gap-2 text-xs mb-4">
-        <!-- Rendered by app.js -->
-      </div>
-
-      <div style="display:flex;gap:8px;margin-top:20px;padding-top:12px;border-t:1px solid rgba(255,255,255,0.05)">
-        <button onclick="closeSettings()" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all 0.2s;font-family:Inter,sans-serif" onmouseover="this.style.background='var(--glass2)'" onmouseout="this.style.background='transparent'">Cancel</button>
-        <button onclick="saveSettingsModal()" style="flex:1;padding:9px;border-radius:9px;border:1px solid rgba(99,102,241,0.4);background:rgba(99,102,241,0.15);color:var(--ind2);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:Inter,sans-serif">Save Settings</button>
+      <div style="display:flex; justify-content:flex-end">
+        <button type="button" class="ghost" onclick="closeReplaceModal()">Cancel</button>
       </div>
     </div>
   </div>
+
 </div>
 
-<script src="app.js?v=2.4.0"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -81,6 +81,86 @@ class Api:
         _save_settings(self._settings)
         return {"success": True}
 
+    def get_series_packs(self) -> list:
+        """Return all available series packs in config/series/."""
+        packs = []
+        series_dir = os.path.join(BASE_DIR, "config", "series")
+        if os.path.exists(series_dir):
+            for f in sorted(os.listdir(series_dir)):
+                if f.endswith(".json"):
+                    fp = os.path.join(series_dir, f)
+                    try:
+                        with open(fp, "r", encoding="utf-8") as file:
+                            data = json.load(file)
+                            slug = data.get("series_slug") or f[:-5]
+                            name = data.get("display_name") or slug.replace("_", " ").title()
+                            packs.append({"series_slug": slug, "display_name": name, "file": f})
+                    except Exception:
+                        pass
+        return packs
+
+    def get_voice_catalogue(self) -> list:
+        """Return the voice catalogue from config/voices.json."""
+        v_path = os.path.join(BASE_DIR, "config", "voices.json")
+        if os.path.exists(v_path):
+            try:
+                with open(v_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return []
+
+    def save_voice_catalogue(self, catalogue: list) -> dict:
+        """Save updated voice catalogue to config/voices.json."""
+        v_path = os.path.join(BASE_DIR, "config", "voices.json")
+        try:
+            with open(v_path, "w", encoding="utf-8") as f:
+                json.dump(catalogue, f, indent=2, ensure_ascii=False)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_storyboard_coverage(self, script_data: dict) -> dict:
+        """Calculate clip coverage per shot using pipeline.library.plan_shots()."""
+        try:
+            from pipeline.library import plan_shots
+            report = plan_shots(script_data)
+            return {"success": True, "report": report}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_library_data(self, query: str = "") -> dict:
+        """Return library image count, coverage stats, and matching images."""
+        images_dir = os.path.join(BASE_DIR, "library", "images")
+        if not os.path.exists(images_dir):
+            return {"total_images": 0, "images": [], "sounds_count": 87, "beds_count": 12}
+        
+        img_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
+        if query:
+            q_lower = query.lower()
+            img_files = [f for f in img_files if q_lower in f.lower()]
+        
+        images_info = [{"filename": f, "path": f"library/images/{f}"} for f in img_files[:60]]
+        return {
+            "total_images": len(img_files),
+            "images": images_info,
+            "sounds_count": 87,
+            "beds_count": 12
+        }
+
+    def delete_library_image(self, filename: str) -> dict:
+        """Permanent image deletion — Section 9: Deletion lives in Library only."""
+        try:
+            img_p = os.path.join(BASE_DIR, "library", "images", filename)
+            if os.path.exists(img_p):
+                os.remove(img_p)
+                from pipeline.library import reindex
+                reindex(force=True)
+                return {"success": True}
+            return {"success": False, "error": "File not found"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     # ── Script loading ─────────────────────────────────────────────────────────
 
     def open_file_dialog(self) -> str | None:
