@@ -11,6 +11,11 @@ import subprocess
 from pathlib import Path
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Child processes must not flash a console window over the UI (pythonw launch).
+from pipeline.noconsole import install as _install_noconsole
+_install_noconsole()
+
 SETTINGS_PATH = os.path.join(BASE_DIR, "config", "settings.json")
 
 # Add vendor ffmpeg to PATH so moviepy/ffmpeg can find it

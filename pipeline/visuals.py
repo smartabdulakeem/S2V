@@ -822,6 +822,8 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     Initialize the project folder, write/update image_prompts.txt, and create placeholder images.
     This is called during the planning and save phases to support offline manual visuals generation.
     """
+    from pipeline import library  # only imported inside fetch_visual before, so this raised NameError
+
     proj = script_dict.get("project", {})
     title = proj.get("title", "My Video")
     aspect_ratio = proj.get("aspect_ratio", "16:9")
@@ -840,7 +842,15 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     
     for seg in script_dict.get("segments", []):
         segment_id = seg["segment_id"]
-        keyword = seg.get("b_roll_keyword", "")
+        # v2 scripts carry the subject on shots[0].query; only v1 has b_roll_keyword.
+        # Reading one field alone produced prompts with no subject at all —
+        # "Segment 1: , 7th century Arabian Peninsula, ..." — which cannot generate anything.
+        shots = seg.get("shots") or []
+        keyword = (
+            seg.get("b_roll_keyword")
+            or (shots[0].get("query") if shots else "")
+            or ""
+        ).strip()
         narration = seg.get("narration", "")
         magick_filter = seg.get("magick_filter", "vignette")
         

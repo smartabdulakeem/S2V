@@ -133,3 +133,63 @@ def test_user_output_filename_is_not_overwritten_by_title():
         llm_provider=_FailingProvider(),
     )
     assert script["project"]["output_filename"] == "THE_NAME_I_CHOSE.mp4"
+
+
+class _PaymentRequiredProvider(BaseLLMProvider):
+    """An API key with no credit left."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def complete(self, system, user, json_schema=None, **kwargs):
+        self.calls += 1
+        raise RuntimeError("HTTP Error 402: Payment Required")
+
+
+def test_permanent_provider_errors_are_not_retried():
+    """
+    402/401/403/404 will never succeed on retry. Retrying them made an exhausted
+    API key look like a hang: three backoffs per batch before the fallback ran.
+    """
+    provider = _PaymentRequiredProvider()
+    script = build_script_with_ai(
+        text="One paragraph here.\n\nTwo paragraph here.",
+        title="Billing Test",
+        llm_provider=provider,
+    )
+    assert provider.calls == 1, f"permanent error retried {provider.calls} times"
+    assert len(script["segments"]) == 2, "must still fall back to keyword planning"
+    assert all(s["shots"][0]["query"].strip() for s in script["segments"])
+
+
+def test_image_prompts_file_names_a_subject(tmp_path, monkeypatch):
+    """
+    initialize_project_sourcing writes the prompts you take outside the app to make
+    missing images. It read only b_roll_keyword, which v2 scripts do not have, so
+    every line came out subject-less: "Segment 1: , 7th century Arabian Peninsula...".
+    """
+    import os
+    from pipeline import visuals
+
+    script = {
+        "project": {"title": "ZZ Prompt Subject Probe", "series_slug": "islamic_history",
+                    "aspect_ratio": "16:9"},
+        "segments": [{
+            "segment_id": 1,
+            "narration": "The caravan crossed at dusk.",
+            "shots": [{"shot_id": "1a", "query": "desert caravan at dusk"}],
+        }],
+    }
+
+    project_dir = os.path.join(os.path.abspath("."), "projects",
+                               visuals.slugify_title(script["project"]["title"]))
+    import shutil
+    shutil.rmtree(project_dir, ignore_errors=True)
+    try:
+        visuals.initialize_project_sourcing(script)
+        text = open(os.path.join(project_dir, "image_prompts.txt"), encoding="utf-8").read()
+    finally:
+        shutil.rmtree(project_dir, ignore_errors=True)
+
+    assert "desert caravan at dusk" in text, "the shot query must appear in the prompt"
+    assert "Segment 1: ," not in text, "prompt line has no subject"

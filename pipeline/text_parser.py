@@ -560,7 +560,21 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
                 if batch_data and "batch_results" in batch_data:
                     break
             except Exception as e:
-                sys.stderr.write(f"LLM batch planning error on segments {start_idx+1}-{end_idx} (attempt {attempt}/3): {e}\n")
+                # Auth, billing and not-found are permanent — retrying them just makes
+                # the user wait through three backoffs before the same failure. An
+                # exhausted API key showed up as three rounds of "402 Payment Required"
+                # and looked like the app had hung.
+                permanent = any(code in str(e) for code in ("401", "402", "403", "404"))
+                sys.stderr.write(
+                    f"LLM batch planning error on segments {start_idx+1}-{end_idx} "
+                    f"(attempt {attempt}/3): {e}\n"
+                )
+                if permanent:
+                    sys.stderr.write(
+                        "  Permanent provider error — not retrying. "
+                        "Falling back to keyword-based planning; check your API key and credit.\n"
+                    )
+                    break
                 time.sleep(1.0 * attempt)
 
         # Parse batch results or fall back to rule-based defaults for this batch

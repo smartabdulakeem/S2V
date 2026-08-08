@@ -2,76 +2,476 @@
   {
     "engine": "Google Cloud",
     "voices": [
-      { "id": "google:en-GB-Neural2-D", "label": "Neural2-D (male)", "gender": "male", "lang": "en-GB", "captions": "fast", "timings": true, "enabled": true },
-      { "id": "google:en-US-Neural2-F", "label": "Neural2-F (female)", "gender": "female", "lang": "en-US", "captions": "fast", "timings": true, "enabled": true },
-      { "id": "google:en-US-Wavenet-D", "label": "Wavenet-D (male)", "gender": "male", "lang": "en-US", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-US-Journey-F", "label": "Journey-F (female)", "gender": "female", "lang": "en-US", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "google:en-US-Studio-Q", "label": "Studio-Q (male)", "gender": "male", "lang": "en-US", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "google:ar-XA-Wavenet-B", "label": "Wavenet-B (male)", "gender": "male", "lang": "ar-XA", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-US-Neural2-A", "label": "Neural2-A (male)", "gender": "male", "lang": "en-US", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-US-Neural2-J", "label": "Neural2-J (male)", "gender": "male", "lang": "en-US", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-US-Wavenet-B", "label": "Wavenet-B (male)", "gender": "male", "lang": "en-US", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-US-Wavenet-J", "label": "Wavenet-J (male)", "gender": "male", "lang": "en-US", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-GB-Neural2-B", "label": "Neural2-B (male)", "gender": "male", "lang": "en-GB", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-GB-Wavenet-B", "label": "Wavenet-B (male)", "gender": "male", "lang": "en-GB", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-GB-Wavenet-D", "label": "Wavenet-D (male)", "gender": "male", "lang": "en-GB", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:es-ES-Neural2-F", "label": "Neural2-F (female)", "gender": "female", "lang": "es-ES", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:es-ES-Standard-A", "label": "Standard-A (female)", "gender": "female", "lang": "es-ES", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:fr-FR-Neural2-C", "label": "Neural2-C (male)", "gender": "male", "lang": "fr-FR", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:fr-FR-Wavenet-A", "label": "Wavenet-A (female)", "gender": "female", "lang": "fr-FR", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-AU-Neural2-B", "label": "Neural2-B (male)", "gender": "male", "lang": "en-AU", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-AU-Wavenet-A", "label": "Wavenet-A (female)", "gender": "female", "lang": "en-AU", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:en-IN-Neural2-D", "label": "Neural2-D (male)", "gender": "male", "lang": "en-IN", "captions": "fast", "timings": true, "enabled": false }
+      {
+        "id": "google:en-GB-Neural2-D",
+        "label": "Neural2-D (male)",
+        "gender": "male",
+        "lang": "en-GB",
+        "captions": "fast",
+        "timings": true,
+        "enabled": true
+      },
+      {
+        "id": "google:en-US-Neural2-F",
+        "label": "Neural2-F (female)",
+        "gender": "female",
+        "lang": "en-US",
+        "captions": "fast",
+        "timings": true,
+        "enabled": true
+      },
+      {
+        "id": "google:en-US-Wavenet-D",
+        "label": "Wavenet-D (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-US-Journey-F",
+        "label": "Journey-F (female)",
+        "gender": "female",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "google:en-US-Studio-Q",
+        "label": "Studio-Q (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "google:ar-XA-Wavenet-B",
+        "label": "Wavenet-B (male)",
+        "gender": "male",
+        "lang": "ar-XA",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-US-Neural2-A",
+        "label": "Neural2-A (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-US-Neural2-J",
+        "label": "Neural2-J (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-US-Wavenet-B",
+        "label": "Wavenet-B (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-US-Wavenet-J",
+        "label": "Wavenet-J (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-GB-Neural2-B",
+        "label": "Neural2-B (male)",
+        "gender": "male",
+        "lang": "en-GB",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-GB-Wavenet-B",
+        "label": "Wavenet-B (male)",
+        "gender": "male",
+        "lang": "en-GB",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-GB-Wavenet-D",
+        "label": "Wavenet-D (male)",
+        "gender": "male",
+        "lang": "en-GB",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:es-ES-Neural2-F",
+        "label": "Neural2-F (female)",
+        "gender": "female",
+        "lang": "es-ES",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:es-ES-Standard-A",
+        "label": "Standard-A (female)",
+        "gender": "female",
+        "lang": "es-ES",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:fr-FR-Neural2-C",
+        "label": "Neural2-C (male)",
+        "gender": "male",
+        "lang": "fr-FR",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:fr-FR-Wavenet-A",
+        "label": "Wavenet-A (female)",
+        "gender": "female",
+        "lang": "fr-FR",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-AU-Neural2-B",
+        "label": "Neural2-B (male)",
+        "gender": "male",
+        "lang": "en-AU",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-AU-Wavenet-A",
+        "label": "Wavenet-A (female)",
+        "gender": "female",
+        "lang": "en-AU",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:en-IN-Neural2-D",
+        "label": "Neural2-D (male)",
+        "gender": "male",
+        "lang": "en-IN",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      }
     ]
   },
   {
     "engine": "Gemini Flash TTS",
     "voices": [
-      { "id": "google:gemini-3.1-flash-tts-preview:Charon", "label": "Charon (male)", "gender": "male", "lang": "multi", "captions": "fast", "timings": true, "enabled": true },
-      { "id": "google:gemini-3.1-flash-tts-preview:Puck", "label": "Puck (male)", "gender": "male", "lang": "multi", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:gemini-3.1-flash-tts-preview:Kore", "label": "Kore (female)", "gender": "female", "lang": "multi", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:gemini-3.1-flash-tts-preview:Fenrir", "label": "Fenrir (male)", "gender": "male", "lang": "multi", "captions": "fast", "timings": true, "enabled": false },
-      { "id": "google:gemini-3.1-flash-tts-preview:Aoede", "label": "Aoede (female)", "gender": "female", "lang": "multi", "captions": "fast", "timings": true, "enabled": false }
+      {
+        "id": "google:gemini-3.1-flash-tts-preview:Charon",
+        "label": "Charon (male)",
+        "gender": "male",
+        "lang": "multi",
+        "captions": "fast",
+        "timings": true,
+        "enabled": true
+      },
+      {
+        "id": "google:gemini-3.1-flash-tts-preview:Puck",
+        "label": "Puck (male)",
+        "gender": "male",
+        "lang": "multi",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:gemini-3.1-flash-tts-preview:Kore",
+        "label": "Kore (female)",
+        "gender": "female",
+        "lang": "multi",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:gemini-3.1-flash-tts-preview:Fenrir",
+        "label": "Fenrir (male)",
+        "gender": "male",
+        "lang": "multi",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      },
+      {
+        "id": "google:gemini-3.1-flash-tts-preview:Aoede",
+        "label": "Aoede (female)",
+        "gender": "female",
+        "lang": "multi",
+        "captions": "fast",
+        "timings": true,
+        "enabled": false
+      }
     ]
   },
   {
     "engine": "Kokoro",
     "voices": [
-      { "id": "local:kokoro-af_heart", "label": "af_heart (female)", "gender": "female", "lang": "en-US", "captions": "slow", "timings": false, "enabled": true },
-      { "id": "local:kokoro-am_michael", "label": "am_michael (male)", "gender": "male", "lang": "en-US", "captions": "slow", "timings": false, "enabled": true },
-      { "id": "local:kokoro-bf_emma", "label": "bf_emma (female)", "gender": "female", "lang": "en-GB", "captions": "slow", "timings": false, "enabled": false }
+      {
+        "id": "local:kokoro-af_heart",
+        "label": "af_heart (female)",
+        "gender": "female",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "local:kokoro-am_michael",
+        "label": "am_michael (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "local:kokoro-bf_emma",
+        "label": "bf_emma (female)",
+        "gender": "female",
+        "lang": "en-GB",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      }
     ]
   },
   {
     "engine": "Supertonic",
     "voices": [
-      { "id": "local:supertonic-m1", "label": "M1 (male)", "gender": "male", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": true },
-      { "id": "local:supertonic-f3", "label": "F3 (female)", "gender": "female", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-m2", "label": "M2 (male)", "gender": "male", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-m3", "label": "M3 (male)", "gender": "male", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-m4", "label": "M4 (male)", "gender": "male", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-m5", "label": "M5 (male)", "gender": "male", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-f1", "label": "F1 (female)", "gender": "female", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-f2", "label": "F2 (female)", "gender": "female", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-f4", "label": "F4 (female)", "gender": "female", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "local:supertonic-f5", "label": "F5 (female)", "gender": "female", "lang": "en + ar", "captions": "slow", "timings": false, "enabled": false }
+      {
+        "id": "local:supertonic-m1",
+        "label": "M1 (male)",
+        "gender": "male",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "local:supertonic-f3",
+        "label": "F3 (female)",
+        "gender": "female",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "local:supertonic-m2",
+        "label": "M2 (male)",
+        "gender": "male",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:supertonic-m3",
+        "label": "M3 (male)",
+        "gender": "male",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:supertonic-m4",
+        "label": "M4 (male)",
+        "gender": "male",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:supertonic-m5",
+        "label": "M5 (male)",
+        "gender": "male",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:supertonic-f1",
+        "label": "F1 (female)",
+        "gender": "female",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:supertonic-f2",
+        "label": "F2 (female)",
+        "gender": "female",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:supertonic-f4",
+        "label": "F4 (female)",
+        "gender": "female",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:supertonic-f5",
+        "label": "F5 (female)",
+        "gender": "female",
+        "lang": "en + ar",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      }
     ]
   },
   {
     "engine": "Edge Neural",
     "voices": [
-      { "id": "edge:en-US-GuyNeural", "label": "Guy (male)", "gender": "male", "lang": "en-US", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:en-US-AriaNeural", "label": "Aria (female)", "gender": "female", "lang": "en-US", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:en-GB-RyanNeural", "label": "Ryan (male)", "gender": "male", "lang": "en-GB", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:en-GB-SoniaNeural", "label": "Sonia (female)", "gender": "female", "lang": "en-GB", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:en-AU-WilliamNeural", "label": "William (male)", "gender": "male", "lang": "en-AU", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:en-AU-NatashaNeural", "label": "Natasha (female)", "gender": "female", "lang": "en-AU", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:es-ES-AlvaroNeural", "label": "Alvaro (male)", "gender": "male", "lang": "es-ES", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:es-ES-ElviraNeural", "label": "Elvira (female)", "gender": "female", "lang": "es-ES", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:es-MX-JorgeNeural", "label": "Jorge (male)", "gender": "male", "lang": "es-MX", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:es-MX-DaliaNeural", "label": "Dalia (female)", "gender": "female", "lang": "es-MX", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:fr-FR-HenriNeural", "label": "Henri (male)", "gender": "male", "lang": "fr-FR", "captions": "slow", "timings": false, "enabled": false },
-      { "id": "edge:fr-FR-DeniseNeural", "label": "Denise (female)", "gender": "female", "lang": "fr-FR", "captions": "slow", "timings": false, "enabled": false }
+      {
+        "id": "edge:en-US-GuyNeural",
+        "label": "Guy (male)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:en-US-AriaNeural",
+        "label": "Aria (female)",
+        "gender": "female",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:en-GB-RyanNeural",
+        "label": "Ryan (male)",
+        "gender": "male",
+        "lang": "en-GB",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:en-GB-SoniaNeural",
+        "label": "Sonia (female)",
+        "gender": "female",
+        "lang": "en-GB",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:en-AU-WilliamNeural",
+        "label": "William (male)",
+        "gender": "male",
+        "lang": "en-AU",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:en-AU-NatashaNeural",
+        "label": "Natasha (female)",
+        "gender": "female",
+        "lang": "en-AU",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:es-ES-AlvaroNeural",
+        "label": "Alvaro (male)",
+        "gender": "male",
+        "lang": "es-ES",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:es-ES-ElviraNeural",
+        "label": "Elvira (female)",
+        "gender": "female",
+        "lang": "es-ES",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:es-MX-JorgeNeural",
+        "label": "Jorge (male)",
+        "gender": "male",
+        "lang": "es-MX",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:es-MX-DaliaNeural",
+        "label": "Dalia (female)",
+        "gender": "female",
+        "lang": "es-MX",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:fr-FR-HenriNeural",
+        "label": "Henri (male)",
+        "gender": "male",
+        "lang": "fr-FR",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "edge:fr-FR-DeniseNeural",
+        "label": "Denise (female)",
+        "gender": "female",
+        "lang": "fr-FR",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      }
     ]
   }
 ]

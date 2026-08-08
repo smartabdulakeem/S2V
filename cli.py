@@ -14,6 +14,11 @@ if os.path.exists(_vendor_ffmpeg):
 from pipeline.orchestrator import RenderOrchestrator
 from app import _load_settings
 
+# Child processes must not flash a console window over the UI (pythonw launch).
+from pipeline.noconsole import install as _install_noconsole
+_install_noconsole()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Smart Studio command line renderer.")
     parser.add_argument("script_path", help="Path to the JSON script file to render.")
