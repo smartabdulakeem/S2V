@@ -13,8 +13,10 @@ rule-based `build_script()` if Gemini fails or no key is available.
 import json
 import os
 import re
+import sys
 import urllib.error
 import urllib.request
+from typing import Optional, Dict, Any, List
 
 # Common English words that make poor image search terms
 STOPWORDS = {
@@ -540,77 +542,235 @@ def _save_cached_plan(cache_key: str, plan_data: dict):
     except Exception:
         pass
 
-    cache_key = _get_planning_cache_key(text, title, voice, visual_style, ai_guideline, voice_dialect, narrative_tone, speaker_mode)
-    cached = _get_cached_plan(cache_key)
-    if cached:
-        return cached
+from pipeline.llm.factory import get_llm_provider
+from pipeline.llm.interface import BaseLLMProvider
+from pipeline.library import get_series_config, validate_series_pack
 
-    prompt = _SPLIT_PROMPT.format(
-        title=title.strip() or "My Video",
-        visual_style=visual_style.strip(),
-        script=text.strip(),
-        ai_guideline=ai_guideline or "None",
-        voice_dialect=voice_dialect or "Standard English",
-        narrative_tone=narrative_tone or "Dramatic Documentary",
-        speaker_mode=speaker_mode or "single"
-    )
+BATCH_PLANNING_SYSTEM_PROMPT = """You are S2V's visual director and shot planner.
+You receive a batch of narration segments from a video script.
+Your job is to propose B-roll shot queries, shot counts, and voice steering per segment.
 
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.2,
-            "responseMimeType": "application/json",
-            "maxOutputTokens": 8192,
-            "thinkingConfig": {
-                "thinkingBudget": 0
+STRICT CONSTRAINTS:
+1. Do NOT rewrite, alter, or regenerate narration text. Narration is handled externally.
+2. For each segment, output 1-3 shot queries describing specific, historically/visually accurate B-roll visuals.
+3. Keep shot queries concise and visually descriptive (5-12 words).
+"""
+
+BATCH_PLANNING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "batch_results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "segment_id": {"type": "integer"},
+                    "voice_steering": {"type": "string"},
+                    "shots": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"},
+                                "source": {"type": "string", "enum": ["library", "generate", "pin"]}
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                },
+                "required": ["segment_id", "shots"]
             }
-        },
-    }).encode("utf-8")
+        }
+    },
+    "required": ["batch_results"]
+}
 
-    try:
-        req = urllib.request.Request(
-            _GEMINI_URL.format(key=google_api_key),
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        resp_bytes = _http_request_with_backoff(req, timeout=90, max_retries=3)
-        data = json.loads(resp_bytes.decode("utf-8"))
 
-        raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+def build_script_with_ai(
+    text: str,
+    title: str = "My Video",
+    voice: str = "google:en-US-Neural2-D",
+    visual_style: str = "vintage_documentary",
+    series_slug: str = "islamic_history",
+    ai_guideline: str = "",
+    voice_dialect: str = "",
+    narrative_tone: str = "",
+    speaker_mode: str = "single",
+    llm_provider: Optional[BaseLLMProvider] = None,
+    batch_size: int = 6
+) -> dict:
+    """
+    Builds an S2V v2 script JSON using chunked LLM planning.
 
-        # Strip markdown fences if Gemini wrapped the JSON anyway
-        if raw_text.startswith("```"):
-            raw_text = re.sub(r"^```[a-z]*\n?", "", raw_text)
-            raw_text = re.sub(r"\n?```$", "", raw_text.strip())
+    Strategy:
+    1. Splits input text into narration segments in Python (zero LLM calls).
+    2. Narration strings are COPIED VERBATIM into the JSON.
+    3. Calls LLM provider per batch of 5-8 segments to plan shot queries.
+    4. Failed batch retries that batch alone.
+    """
+    text_clean = text.strip()
+    if not text_clean:
+        return build_script("", title, voice, visual_style)
 
-        try:
-            parsed = json.loads(raw_text)
-        except json.JSONDecodeError as jde:
+    # 1. Split script in Python — zero LLM calls
+    segments_narration = split_into_segments(text_clean)
+    if not segments_narration:
+        return build_script(text_clean, title, voice, visual_style)
+
+    # 2. Resolve series pack config defaults
+    series_cfg = get_series_config(series_slug=series_slug, project_title=title)
+    pack_voice = series_cfg.get("voice", {})
+    resolved_voice = voice or pack_voice.get("id", "google:en-US-Neural2-D")
+
+    # 3. Check planning cache
+    cache_key = _get_planning_cache_key(text_clean, title, resolved_voice, visual_style, ai_guideline, voice_dialect, narrative_tone, speaker_mode)
+    cached_plan = _get_cached_plan(cache_key)
+    if cached_plan:
+        return cached_plan
+
+    # 4. Resolve LLM provider
+    provider = llm_provider or get_llm_provider()
+
+    # Stable system prompt prefix for prompt caching
+    system_prefix = f"""{BATCH_PLANNING_SYSTEM_PROMPT}
+
+SERIES PACK CONSTRAINTS ({series_slug}):
+World Anchor: {series_cfg.get('world_anchor', '')}
+Style Instructions: {series_cfg.get('style_block', '')}
+Negative Constraints: {series_cfg.get('negative_block', '')}
+"""
+
+    total_segments = len(segments_narration)
+    planned_segments = []
+    
+    # 5. Process in batches of 5-8 segments
+    for start_idx in range(0, total_segments, batch_size):
+        end_idx = min(start_idx + batch_size, total_segments)
+        batch_narrations = segments_narration[start_idx:end_idx]
+        
+        batch_input = [
+            {
+                "segment_id": start_idx + i + 1,
+                "narration": seg_text
+            }
+            for i, seg_text in enumerate(batch_narrations)
+        ]
+
+        user_payload = json.dumps({"segments": batch_input}, ensure_ascii=False)
+
+        # Batch execution with isolated retry
+        batch_data = None
+        for attempt in range(1, 4):
             try:
-                os.makedirs("logs", exist_ok=True)
-                with open("logs/failed_gemini_resp.json", "w", encoding="utf-8") as lf:
-                    lf.write(raw_text)
-                with open("logs/failed_gemini_api_full.json", "w", encoding="utf-8") as af:
-                    json.dump(data, af, indent=2, ensure_ascii=False)
-                print("Saved failed Gemini response to logs/failed_gemini_resp.json and full API response to logs/failed_gemini_api_full.json")
-            except Exception:
-                pass
-            raise RuntimeError(f"JSONDecodeError: {jde}. Raw response saved to logs/failed_gemini_resp.json")
-        res = _assemble_script_dict(parsed, title, voice, output_filename, visual_style, ai_guideline)
-        _save_cached_plan(cache_key, res)
-        return res
+                batch_data = provider.complete(
+                    system=system_prefix,
+                    user=user_payload,
+                    json_schema=BATCH_PLANNING_SCHEMA,
+                    max_tokens=2048
+                )
+                if batch_data and "batch_results" in batch_data:
+                    break
+            except Exception as e:
+                sys.stderr.write(f"LLM batch planning error on segments {start_idx+1}-{end_idx} (attempt {attempt}/3): {e}\n")
+                time.sleep(1.0 * attempt)
 
-    except Exception as e:
-        # Raise detailed exception so the orchestrator/agent knows planning failed and reports it
-        raise RuntimeError(f"Gemini script planning failed: {type(e).__name__}: {e}")
+        # Parse batch results or fall back to rule-based defaults for this batch
+        results_map = {}
+        if batch_data and isinstance(batch_data.get("batch_results"), list):
+            for res in batch_data["batch_results"]:
+                results_map[res.get("segment_id")] = res
+
+        for i, seg_text in enumerate(batch_narrations):
+            seg_id = start_idx + i + 1
+            res = results_map.get(seg_id, {})
+            
+            shots_list = []
+            res_shots = res.get("shots", [])
+            if res_shots and isinstance(res_shots, list):
+                for s_idx, s_obj in enumerate(res_shots):
+                    query_str = s_obj.get("query", "").strip() or extract_keywords(seg_text)
+                    shots_list.append({
+                        "shot_id": f"{seg_id}{chr(97 + s_idx)}",
+                        "duration": None,
+                        "source": s_obj.get("source", "library"),
+                        "query": query_str,
+                        "min_score": 0.26,
+                        "motion": {
+                            "kind": "ken_burns",
+                            "effect": KEN_BURNS_CYCLE[(seg_id + s_idx) % len(KEN_BURNS_CYCLE)]
+                        },
+                        "treatment": {
+                            "filter": series_cfg.get("grade", "vignette"),
+                            "grade": None
+                        }
+                    })
+            
+            if not shots_list:
+                shots_list.append({
+                    "shot_id": f"{seg_id}a",
+                    "duration": None,
+                    "source": "library",
+                    "query": extract_keywords(seg_text),
+                    "min_score": 0.26,
+                    "motion": {
+                        "kind": "ken_burns",
+                        "effect": KEN_BURNS_CYCLE[seg_id % len(KEN_BURNS_CYCLE)]
+                    },
+                    "treatment": {
+                        "filter": series_cfg.get("grade", "vignette"),
+                        "grade": None
+                    }
+                })
+
+            planned_segments.append({
+                "segment_id": seg_id,
+                "type": "hook" if seg_id == 1 else ("conclusion" if seg_id == total_segments else "body"),
+                "narration": seg_text,  # VERBATIM COPY FROM INPUT SPLIT
+                "voice": None,
+                "voice_steering": res.get("voice_steering", ""),
+                "shots": shots_list,
+                "text_overlay": None,
+                "transition_in": "fade" if seg_id == 1 else "cut",
+                "transition_out": "fade" if seg_id == total_segments else "cut",
+                "sfx": []
+            })
+
+    # Assemble full script
+    final_script = {
+        "schema_version": 2,
+        "project": {
+            "title": title.strip() or "My Video",
+            "series_slug": series_slug,
+            "output_filename": sanitize_output_filename(title),
+            "aspect_ratio": "16:9",
+            "resolution": "1280x720",
+            "fps": 30,
+            "voice": resolved_voice,
+            "voice_rate": "+0%",
+            "voice_pitch": "+0Hz",
+            "voice_dialect": voice_dialect,
+            "narrative_tone": narrative_tone or series_cfg.get("voice", {}).get("tone", "Dramatic Documentary"),
+            "speaker_mode": speaker_mode,
+            "captions": {"enabled": True, "source": "tts_timings"},
+            "background_music": None,
+            "music_volume_db": -20,
+            "visual_style": visual_style,
+            "world_anchor": series_cfg.get("world_anchor", ""),
+            "character_bible": {},
+            "budget": {"max_generated_clips": 0, "max_spend_usd": 0.0}
+        },
+        "segments": planned_segments
+    }
+
+    _save_cached_plan(cache_key, final_script)
+    return final_script
 
 
 def build_script_with_deepseek_and_gemini(
     text: str,
-    title: str,
-    voice: str,
-    output_filename: str,
+    title: str = "My Video",
+    voice: str = "google:en-US-Neural2-D",
+    output_filename: str = "video.mp4",
     visual_style: str = "",
     google_api_key: str = "",
     deepseek_api_key: str = "",
@@ -619,220 +779,23 @@ def build_script_with_deepseek_and_gemini(
     voice_dialect: str = "",
     narrative_tone: str = "",
     speaker_mode: str = "single",
+    series_slug: str = "islamic_history"
 ) -> dict:
     """
-    Use DeepSeek to split the script and generate rich B-roll prompts,
-    and Gemini as an Oversight Agent to verify text verbatim compliance
-    and write custom voice-steering prompts.
+    Legacy wrapper routing directly to chunked LLM provider seam.
     """
-    cache_key = _get_planning_cache_key(text, title, voice, visual_style, ai_guideline, voice_dialect, narrative_tone, speaker_mode)
-    cached = _get_cached_plan(cache_key)
-    if cached:
-        return cached
-
-    if not deepseek_api_key:
-        return build_script_with_ai(
-            text=text,
-            title=title,
-            voice=voice,
-            output_filename=output_filename,
-            visual_style=visual_style,
-            google_api_key=google_api_key,
-            ai_guideline=ai_guideline,
-            voice_dialect=voice_dialect,
-            narrative_tone=narrative_tone,
-            speaker_mode=speaker_mode
-        )
-
-    # Automatically chunk long scripts to prevent token limit/JSON errors
-    word_count = len(text.split())
-    if word_count > 800:
-        print(f"Script is long ({word_count} words). Planning in chunks via DeepSeek/Gemini to prevent token limits.")
-        chunks = split_script_into_chunks(text, max_chunk_words=500)
-        
-        all_segments = []
-        suggested_style = visual_style
-        
-        for idx, chunk in enumerate(chunks, 1):
-            print(f"Planning script chunk {idx}/{len(chunks)}...")
-            chunk_script = build_script_with_deepseek_and_gemini(
-                text=chunk,
-                title=title,
-                voice=voice,
-                output_filename=output_filename,
-                visual_style=suggested_style,
-                google_api_key=google_api_key,
-                deepseek_api_key=deepseek_api_key,
-                ai_guideline=ai_guideline,
-                deepseek_model=deepseek_model,
-                voice_dialect=voice_dialect,
-                narrative_tone=narrative_tone,
-                speaker_mode=speaker_mode
-            )
-            all_segments.extend(chunk_script["segments"])
-            if not suggested_style and chunk_script["project"].get("visual_style"):
-                suggested_style = chunk_script["project"]["visual_style"]
-                
-        # Re-index the segments sequentially
-        for i, seg in enumerate(all_segments):
-            seg["segment_id"] = i + 1
-            if i == 0:
-                seg["type"] = "hook"
-            elif i == len(all_segments) - 1:
-                seg["type"] = "conclusion"
-            else:
-                seg["type"] = "body"
-                
-        res = {
-            "project": {
-                "title": title.strip() or "My Video",
-                "output_filename": sanitize_output_filename(output_filename),
-                "voice": voice,
-                "voice_rate": "+0%",
-                "voice_pitch": "+0Hz",
-                "background_music": None,
-                "visual_style": suggested_style or visual_style,
-                "voice_tone_guideline": ai_guideline,
-                "voice_dialect": voice_dialect,
-                "narrative_tone": narrative_tone,
-                "speaker_mode": speaker_mode
-            },
-            "segments": all_segments,
-        }
-        _save_cached_plan(cache_key, res)
-        return res
-
-    # 1. DeepSeek Storyboard Planning
-    prompt_ds = _SPLIT_PROMPT.format(
-        title=title.strip() or "My Video",
-        visual_style=visual_style.strip(),
-        script=text.strip(),
-        ai_guideline=ai_guideline or "None",
-        voice_dialect=voice_dialect or "Standard English",
-        narrative_tone=narrative_tone or "Dramatic Documentary",
-        speaker_mode=speaker_mode or "single"
+    return build_script_with_ai(
+        text=text,
+        title=title,
+        voice=voice,
+        visual_style=visual_style,
+        series_slug=series_slug,
+        ai_guideline=ai_guideline,
+        voice_dialect=voice_dialect,
+        narrative_tone=narrative_tone,
+        speaker_mode=speaker_mode
     )
 
-    body_ds = json.dumps({
-        "model": deepseek_model,
-        "messages": [
-            {"role": "system", "content": "You are a professional video storyboard planner. Splitting scripts verbatim is critical."},
-            {"role": "user", "content": prompt_ds}
-        ],
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"}
-    }).encode("utf-8")
-
-    try:
-        req_ds = urllib.request.Request(
-            "https://api.deepseek.com/chat/completions",
-            data=body_ds,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {deepseek_api_key}"
-            },
-            method="POST",
-        )
-        ds_bytes = _http_request_with_backoff(req_ds, timeout=90, max_retries=3)
-        ds_data = json.loads(ds_bytes.decode("utf-8"))
-        
-        raw_text_ds = ds_data["choices"][0]["message"]["content"].strip()
-        if raw_text_ds.startswith("```"):
-            raw_text_ds = re.sub(r"^```[a-z]*\n?", "", raw_text_ds)
-            raw_text_ds = re.sub(r"\n?```$", "", raw_text_ds.strip())
-
-        parsed_ds = json.loads(raw_text_ds)
-    except Exception as e:
-        print(f"DeepSeek storyboard planning failed: {e}. Trying Gemini planning fallback.")
-        if google_api_key:
-            try:
-                return build_script_with_ai(
-                    text=text,
-                    title=title,
-                    voice=voice,
-                    output_filename=output_filename,
-                    visual_style=visual_style,
-                    google_api_key=google_api_key,
-                    ai_guideline=ai_guideline,
-                    voice_dialect=voice_dialect,
-                    narrative_tone=narrative_tone,
-                    speaker_mode=speaker_mode
-                )
-            except Exception as gem_err:
-                raise RuntimeError(f"DeepSeek failed ({e}) and Gemini planning fallback failed: {gem_err}")
-        else:
-            raise RuntimeError(f"DeepSeek storyboard planning failed: {type(e).__name__}: {e}")
-
-    # 2. Gemini Oversight Verification & Voice-steering
-    if not google_api_key:
-        res = _assemble_script_dict(
-            parsed_ds, title, voice, output_filename, visual_style, ai_guideline,
-            voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
-        )
-        _save_cached_plan(cache_key, res)
-        return res
-
-    prompt_gemini = _OVERSIGHT_PROMPT.format(
-        original_script=text.strip(),
-        storyboard_json=json.dumps(parsed_ds, indent=2),
-        ai_guideline=ai_guideline or "None",
-        voice_dialect=voice_dialect or "Standard English",
-        narrative_tone=narrative_tone or "Dramatic Documentary",
-        speaker_mode=speaker_mode or "single"
-    )
-
-    body_gemini = json.dumps({
-        "contents": [{"parts": [{"text": prompt_gemini}]}],
-        "generationConfig": {
-            "temperature": 0.1,
-            "responseMimeType": "application/json",
-            "maxOutputTokens": 8192,
-            "thinkingConfig": {
-                "thinkingBudget": 0
-            }
-        },
-    }).encode("utf-8")
-
-    try:
-        req_gemini = urllib.request.Request(
-            _GEMINI_URL.format(key=google_api_key),
-            data=body_gemini,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        gemini_bytes = _http_request_with_backoff(req_gemini, timeout=90, max_retries=3)
-        gemini_data = json.loads(gemini_bytes.decode("utf-8"))
-        
-        raw_text_gemini = gemini_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        if raw_text_gemini.startswith("```"):
-            raw_text_gemini = re.sub(r"^```[a-z]*\n?", "", raw_text_gemini)
-            raw_text_gemini = re.sub(r"\n?```$", "", raw_text_gemini.strip())
-
-        try:
-            parsed_gemini = json.loads(raw_text_gemini)
-        except json.JSONDecodeError as jde:
-            try:
-                os.makedirs("logs", exist_ok=True)
-                with open("logs/failed_gemini_oversight_resp.json", "w", encoding="utf-8") as lf:
-                    lf.write(raw_text_gemini)
-                print("Saved failed Gemini Oversight response to logs/failed_gemini_oversight_resp.json")
-            except Exception:
-                pass
-            raise RuntimeError(f"JSONDecodeError: {jde}. Raw response saved to logs/failed_gemini_oversight_resp.json")
-        res = _assemble_script_dict(
-            parsed_gemini, title, voice, output_filename, visual_style, ai_guideline,
-            voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
-        )
-        _save_cached_plan(cache_key, res)
-        return res
-    except Exception as e:
-        sys.stderr.write(f"WARNING: Gemini oversight step rate-limited/throttled or failed ({e}). Degrading gracefully to primary LLM (DeepSeek) script output.\n")
-        res = _assemble_script_dict(
-            parsed_ds, title, voice, output_filename, visual_style, ai_guideline,
-            voice_dialect=voice_dialect, narrative_tone=narrative_tone, speaker_mode=speaker_mode
-        )
-        _save_cached_plan(cache_key, res)
-        return res
 
 
 def _assemble_script_dict(

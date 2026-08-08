@@ -1,0 +1,56 @@
+{
+  "series_slug": "mythology_folklore",
+  "display_name": "Mythology & Ancient Folklore",
+  "voice": {
+    "id": "en-US-ChristopherNeural",
+    "steering": "Speak in an evocative, storytelling, legendary folklore narrator voice.",
+    "tone": "Evocative Legend & Folklore"
+  },
+  "grade": "illustration",
+  "caption_style": "bottom_center",
+  "shot_rhythm_seconds": 4.5,
+  "world_anchor": "Ancient world mythology, legendary folklore and oral tradition",
+  "style_block": "Cinematic painterly fantasy documentary style, volumetric misty light shafts, rich elemental color palette, subtle golden glow, fine painterly texture.",
+  "negative_block": "No modern technology, no plastic surfaces, no sci-fi neon lasers, no text, no watermark, no signature, no logo.",
+  "style_presets": {
+    "vintage_documentary": "Muted earth and gold palette, antique oil painting texture, dramatic atmospheric lighting.",
+    "documentary": "High cinematic detail, volumetric atmospheric mist, realistic historical legend art.",
+    "illustration": "Classical myth illustration, fine line work with rich watercolor wash.",
+    "silhouette": "Mythic silhouette against glowing sunrise or mystical moonlight."
+  },
+  "calibration": {
+    "min_score": null,
+    "weak_band": null,
+    "real_queries": [
+      "ancient stone temple ruins covered in green ivy moss",
+      "mystical glowing sword embedded in mossy forest rock",
+      "elderly storyteller seated by roaring hearth fire",
+      "carved wooden totem statue standing in misty forest",
+      "winged pegasus horse standing on mountain peak at dawn",
+      "stone monolith circle standing under starry night aurora",
+      "sea monster serpent emerging from stormy ocean waves",
+      "ancient leatherbound grimoire book open on wooden altar",
+      "golden goblet filled with nectar on ornate stone table",
+      "hero holding glowing torch inside dark cavernous tomb"
+    ],
+    "fake_queries": [
+      "modern diesel locomotive train crossing steel trestle bridge",
+      "astronaut in space suit repairing satellite in orbit",
+      "stock trader looking at multiple financial charts on monitor",
+      "formula 1 pit stop crew changing tires on race car",
+      "modern high rise glass skyscraper office building exterior",
+      "traffic intersection with red green lights and yellow cabs",
+      "subway passenger holding smartphone on electric train",
+      "robot assembly arm building cars on factory conveyor belt",
+      "modern airliner jet engine mounted under aircraft wing",
+      "microwave oven heating up paper plate inside kitchen"
+    ]
+  },
+  "seed_queries": [
+    "ancient stone temple ruins covered in green ivy moss",
+    "mystical glowing sword embedded in mossy forest rock",
+    "elderly storyteller seated by roaring hearth fire",
+    "winged pegasus horse standing on mountain peak at dawn",
+    "stone monolith circle standing under starry night aurora"
+  ]
+}

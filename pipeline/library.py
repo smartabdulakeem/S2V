@@ -73,13 +73,95 @@ def save_calibration_config(min_score: float, weak_band: float):
         json.dump(cfg, f, indent=2)
 
 
+def validate_series_pack(pack_data: dict) -> list[str]:
+    """
+    Validates a series pack dictionary according to SCHEMA.md v2 rules.
+    Returns a list of path-naming error strings.
+    """
+    errors = []
+    if not isinstance(pack_data, dict):
+        return ["series_pack: expected dictionary object"]
+
+    if not isinstance(pack_data.get("series_slug"), str) or not pack_data.get("series_slug", "").strip():
+        errors.append("series_pack.series_slug: required non-empty string missing")
+
+    if not isinstance(pack_data.get("display_name"), str) or not pack_data.get("display_name", "").strip():
+        errors.append("series_pack.display_name: required non-empty string missing")
+
+    if not isinstance(pack_data.get("world_anchor"), str):
+        errors.append("series_pack.world_anchor: string required")
+
+    if not isinstance(pack_data.get("style_block"), str):
+        errors.append("series_pack.style_block: string required")
+
+    if not isinstance(pack_data.get("negative_block"), str):
+        errors.append("series_pack.negative_block: string required")
+
+    voice = pack_data.get("voice")
+    if not isinstance(voice, dict) or not isinstance(voice.get("id"), str) or not voice.get("id", "").strip():
+        errors.append("series_pack.voice.id: required non-empty string missing")
+
+    calib = pack_data.get("calibration")
+    if not isinstance(calib, dict):
+        errors.append("series_pack.calibration: expected dictionary object")
+    else:
+        real_q = calib.get("real_queries")
+        if not isinstance(real_q, list) or len(real_q) < 10:
+            errors.append("series_pack.calibration.real_queries: expected array of at least 10 query strings")
+        fake_q = calib.get("fake_queries")
+        if not isinstance(fake_q, list) or len(fake_q) < 10:
+            errors.append("series_pack.calibration.fake_queries: expected array of at least 10 query strings")
+
+    return errors
+
+
+def save_calibration_config(min_score: float, weak_band: float):
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    cfg = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception:
+            cfg = {}
+    cfg["min_score"] = round(float(min_score), 4)
+    cfg["weak_band"] = round(float(weak_band), 4)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
+
+
+def get_calibration_config(series_slug: str = None) -> dict:
+    """
+    Returns per-pack calibration configuration.
+    If a pack has no calibration data or under 200 matching indexed images,
+    reports 'not calibrated — generation-first' status.
+    """
+    embeddings, paths = load_index()
+    n_images = len(paths)
+
+    pack = get_series_config(series_slug=series_slug)
+    calib = pack.get("calibration", {})
+    min_score = calib.get("min_score")
+    weak_band = calib.get("weak_band")
+
+    if min_score is None or n_images < 200:
+        return {
+            "min_score": None,
+            "weak_band": None,
+            "status": "not calibrated — generation-first"
+        }
+
+    return {
+        "min_score": min_score,
+        "weak_band": weak_band,
+        "status": "calibrated"
+    }
+
+
 def get_series_config(series_slug: str = None, project_title: str = None) -> dict:
     """
-    Resolves per-series prompt configuration (world_anchor, style_block, negative_block).
-    - Resolves strictly from series_slug.
-    - An unknown slug raises ValueError listing available series packs.
-    - A missing slug emits a UserWarning with the project title and falls back to default.json.
-    - No keyword substring guessing.
+    Resolves per-series prompt configuration and pack defaults strictly from series_slug.
+    Validates loaded pack using validate_series_pack().
     """
     available_packs = {}
     if os.path.exists(SERIES_CONFIG_DIR):
@@ -92,8 +174,14 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
         if os.path.exists(slug_path):
             try:
                 with open(slug_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                errors = validate_series_pack(data)
+                if errors:
+                    raise ValueError(f"Invalid series pack '{slug_clean}.json': {'; '.join(errors)}")
+                return data
             except Exception as e:
+                if isinstance(e, ValueError):
+                    raise e
                 raise ValueError(f"Failed to read series pack '{slug_clean}.json': {e}")
         
         sorted_packs = sorted(list(available_packs.keys()))
@@ -111,15 +199,27 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
     if os.path.exists(default_path):
         try:
             with open(default_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            return data
         except Exception:
             pass
 
     return {
         "series_slug": "default",
+        "display_name": "General Documentary",
+        "voice": {"id": "en-US-GuyNeural", "steering": "", "tone": ""},
+        "grade": "vignette",
+        "caption_style": "bottom_center",
+        "shot_rhythm_seconds": 4.0,
         "world_anchor": "",
         "style_block": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted color palette, fine film grain.",
-        "negative_block": "No text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin, no blur, no distortion."
+        "negative_block": "No text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin, no blur, no distortion.",
+        "calibration": {
+            "min_score": None,
+            "weak_band": None,
+            "real_queries": [],
+            "fake_queries": []
+        }
     }
 
 
@@ -609,37 +709,20 @@ def print_coverage_report(script_path: str):
 
 # ── 6. Calibration Command ─────────────────────────────────────────────────────
 
-def calibrate():
+def calibrate(series_slug: str = "islamic_history"):
     """
-    Runs ~10 known-good queries and ~10 known-impossible queries against the real index.
+    Runs per-pack real queries and fake queries against the real index.
     Prints both distributions, recommends min_score and weak_band.
-    Saves results into config/library_config.json.
+    Saves min_score, weak_band, and calibrated_at back into the series pack JSON file.
     """
-    real_queries = [
-        "desert caravan at dusk",
-        "mud brick city walls",
-        "open manuscript with calligraphy",
-        "horse cavalry charging in sandstorm",
-        "oil lamp burning by firelight",
-        "camel riders on sand dunes",
-        "scribe writing on parchment",
-        "war banners on desert ridge",
-        "palm oasis water well",
-        "robed elders in council"
-    ]
+    pack = get_series_config(series_slug=series_slug)
+    calib = pack.get("calibration", {})
+    real_queries = calib.get("real_queries", [])
+    fake_queries = calib.get("fake_queries", [])
 
-    fake_queries = [
-        "astronaut floating in outer space",
-        "a Formula 1 racing car",
-        "penguins on an antarctic ice shelf",
-        "a laptop computer on an office desk",
-        "cyberpunk neon robot in futuristic city",
-        "steampunk locomotive train on tracks",
-        "skyscrapers in modern new york city",
-        "underwater coral reef with tropical fish",
-        "traffic lights at a city intersection",
-        "jet airliner flying above clouds"
-    ]
+    if not real_queries or not fake_queries:
+        print(f"Error: Series pack '{series_slug}' does not contain valid real_queries/fake_queries in calibration block.")
+        return 0.0, 0.0
 
     embeddings, paths = load_index()
     if len(paths) == 0:
@@ -647,7 +730,7 @@ def calibrate():
         return 0.0, 0.0
 
     real_scores = []
-    print("\n--- Real Queries (Known Good) ---")
+    print(f"\n--- Real Queries (Known Good for '{series_slug}') ---")
     for q in real_queries:
         q_emb = encode_text_query(q)
         scores = np.dot(embeddings, q_emb)
@@ -656,7 +739,7 @@ def calibrate():
         print(f"  {best:.4f}  {q}")
 
     fake_scores = []
-    print("\n--- Fake Queries (Known Impossible) ---")
+    print(f"\n--- Fake Queries (Known Impossible for '{series_slug}') ---")
     for q in fake_queries:
         q_emb = encode_text_query(q)
         scores = np.dot(embeddings, q_emb)
@@ -670,7 +753,7 @@ def calibrate():
     fake_min, fake_max = min(fake_scores), max(fake_scores)
     fake_mean, fake_med = float(np.mean(fake_scores)), float(np.median(fake_scores))
 
-    print("\n=== DISTRIBUTION SUMMARY ===")
+    print(f"\n=== DISTRIBUTION SUMMARY ('{series_slug}') ===")
     print(f"REAL QUERIES : min={real_min:.4f}, max={real_max:.4f}, mean={real_mean:.4f}, median={real_med:.4f}")
     print(f"FAKE QUERIES : min={fake_min:.4f}, max={fake_max:.4f}, mean={fake_mean:.4f}, median={fake_med:.4f}")
 
@@ -687,9 +770,21 @@ def calibrate():
         print(f"\nOVERLAP WARNING: Highest fake ({fake_max:.4f}) >= lowest real ({real_min:.4f}).")
         print(f"RECOMMENDED MIN_SCORE: {rec_min_score:.4f}, WEAK_BAND: {rec_weak_band:.4f}")
 
-    save_calibration_config(rec_min_score, rec_weak_band)
-    print(f"Saved min_score={rec_min_score:.4f}, weak_band={rec_weak_band:.4f} to {CONFIG_PATH}\n")
-    return rec_min_score, rec_weak_band
+    # Write calibration parameters back to the series pack file directly
+    pack_path = os.path.join(SERIES_CONFIG_DIR, f"{series_slug}.json")
+    if os.path.exists(pack_path):
+        with open(pack_path, "r", encoding="utf-8") as f:
+            pack_data = json.load(f)
+        if "calibration" not in pack_data or not isinstance(pack_data["calibration"], dict):
+            pack_data["calibration"] = {}
+        pack_data["calibration"]["min_score"] = round(float(rec_min_score), 4)
+        pack_data["calibration"]["weak_band"] = round(float(rec_weak_band), 4)
+        pack_data["calibration"]["calibrated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with open(pack_path, "w", encoding="utf-8") as f:
+            json.dump(pack_data, f, indent=2)
+        print(f"Saved min_score={rec_min_score:.4f}, weak_band={rec_weak_band:.4f} directly into {pack_path}\n")
+
+    return round(float(rec_min_score), 4), round(float(rec_weak_band), 4)
 
 
 # ── 7. CLI Entry Point ─────────────────────────────────────────────────────────
@@ -699,7 +794,8 @@ if __name__ == "__main__":
         count, elapsed = reindex(force=True)
         print(f"Reindexed {count} images in {elapsed:.2f}s -> {INDEX_PATH}")
     elif len(sys.argv) > 1 and sys.argv[1] == "calibrate":
-        calibrate()
+        target_slug = sys.argv[2] if len(sys.argv) > 2 else "islamic_history"
+        calibrate(series_slug=target_slug)
     elif len(sys.argv) > 1 and sys.argv[1] == "search":
         if len(sys.argv) < 3:
             print("Usage: python -m pipeline.library search \"<query>\" [k]")
@@ -719,6 +815,7 @@ if __name__ == "__main__":
     else:
         print("Usage:")
         print("  python -m pipeline.library reindex")
-        print("  python -m pipeline.library calibrate")
+        print("  python -m pipeline.library calibrate [series_slug]")
         print("  python -m pipeline.library search \"<query>\" [k]")
         print("  python -m pipeline.library coverage <script.json>")
+

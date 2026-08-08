@@ -1,6 +1,57 @@
 {
   "series_slug": "islamic_history",
+  "display_name": "Islamic History & Golden Age",
+  "voice": {
+    "id": "en-US-GuyNeural",
+    "steering": "Speak in a solemn, respectful documentary narration voice.",
+    "tone": "Dramatic Historical Documentary"
+  },
+  "grade": "vignette",
+  "caption_style": "bottom_center",
+  "shot_rhythm_seconds": 4.0,
   "world_anchor": "7th century Arabian Peninsula, early Islamic era",
   "style_block": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted earth palette of ochre sand, dust grey and deep indigo shadow, fine film grain, historically accurate 7th century Arabian Peninsula, early Islamic era.",
-  "negative_block": "No modern objects, no firearms, no curved scimitars, no Ottoman or Persian costume, no plate armour, no European castles, no text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin."
+  "negative_block": "No modern objects, no firearms, no curved scimitars, no Ottoman or Persian costume, no plate armour, no European castles, no text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin.",
+  "style_presets": {
+    "vintage_documentary": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted earth palette of ochre sand, dust grey and deep indigo shadow, fine film grain.",
+    "documentary": "Cinematic documentary photography, natural lighting, high dynamic range, crisp details, historical accuracy.",
+    "illustration": "Detailed historical book illustration, fine pen line art, watercolor wash, warm parchment background.",
+    "silhouette": "High contrast dramatic silhouette, golden hour backlighting, rim lighting, atmospheric dust haze."
+  },
+  "calibration": {
+    "min_score": 0.2796,
+    "weak_band": 0.0045,
+    "calibrated_at": "2026-08-08T00:00:00Z",
+    "real_queries": [
+      "desert caravan at dusk",
+      "mud brick city walls",
+      "open manuscript with calligraphy",
+      "horse cavalry charging in sandstorm",
+      "oil lamp burning by firelight",
+      "camel riders on sand dunes",
+      "scribe writing on parchment",
+      "war banners on desert ridge",
+      "palm oasis water well",
+      "robed elders in council"
+    ],
+    "fake_queries": [
+      "astronaut floating in outer space",
+      "a Formula 1 racing car",
+      "penguins on an antarctic ice shelf",
+      "a laptop computer on an office desk",
+      "cyberpunk neon robot in futuristic city",
+      "steampunk locomotive train on tracks",
+      "skyscrapers in modern new york city",
+      "underwater coral reef with tropical fish",
+      "traffic lights at a city intersection",
+      "jet airliner flying above clouds"
+    ]
+  },
+  "seed_queries": [
+    "desert caravan at dusk",
+    "mud brick city walls",
+    "open manuscript with calligraphy",
+    "palm oasis water well",
+    "stone courtyard with fountain"
+  ]
 }

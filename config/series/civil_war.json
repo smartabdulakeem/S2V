@@ -1,6 +1,54 @@
 {
   "series_slug": "civil_war",
-  "world_anchor": "1861-1865 American Civil War era, United States",
-  "style_block": "Shot on 35mm film, vintage historical documentary photography, 19th century tintype archive aesthetic, natural light, muted earth tones, fine film grain, historically accurate American Civil War era.",
-  "negative_block": "No modern objects, no modern clothing, no digital artifacts, no text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin."
+  "display_name": "American Civil War (1861-1865)",
+  "voice": {
+    "id": "en-US-GuyNeural",
+    "steering": "Speak in a solemn 19th-century documentary voice.",
+    "tone": "Grave Civil War History"
+  },
+  "grade": "vignette",
+  "caption_style": "bottom_center",
+  "shot_rhythm_seconds": 4.0,
+  "world_anchor": "1860s American Civil War, Matthew Brady tintype archival photograph",
+  "style_block": "Authentic 1860s tintype wet plate photograph, sepia monochrome tone, subtle silver halide grain, historically accurate Union and Confederate uniforms, period rifles.",
+  "negative_block": "No modern objects, no plastic, no 20th century firearms, no text, no watermark, no signature, no logo.",
+  "style_presets": {
+    "vintage_documentary": "1860s wet plate tintype photograph, sepia monochrome, authentic historical film grain.",
+    "documentary": "Historical Civil War archive photography, crisp vintage clarity.",
+    "illustration": "1860s Harper's Weekly woodcut engraving illustration.",
+    "silhouette": "Silhouette of soldiers and cannon on ridge at dawn."
+  },
+  "calibration": {
+    "min_score": null,
+    "weak_band": null,
+    "real_queries": [
+      "civil war soldiers in uniform outside canvas tents",
+      "matthew brady tintype portrait of union officer",
+      "iron cannon mounted on wooden wheels on battlefield",
+      "wooden watchtower and wooden palisade fort",
+      "cavalry riders holding unit war flag",
+      "civil war medical encampment tent field hospital",
+      "ironclad warship floating on river",
+      "soldiers gathered around campfire in forest",
+      "commander holding brass spyglass looking across valley",
+      "muddy road through battlefield with supply wagons"
+    ],
+    "fake_queries": [
+      "astronaut floating in outer space zero gravity",
+      "formula 1 race car driving around asphalt racetrack",
+      "cyberpunk city street with bright neon lights",
+      "modern high speed bullet train",
+      "jet airliner flying through blue sky clouds",
+      "underwater coral reef with tropical fish",
+      "skyscrapers in modern city downtown",
+      "laptop computer sitting on office desk",
+      "robotic assembly arm in car factory",
+      "traffic lights at busy city intersection"
+    ]
+  },
+  "seed_queries": [
+    "civil war soldiers in uniform outside canvas tents",
+    "iron cannon mounted on wooden wheels on battlefield",
+    "matthew brady tintype portrait of union officer"
+  ]
 }

@@ -1,0 +1,56 @@
+{
+  "series_slug": "nature_wildlife",
+  "display_name": "Nature & Wildlife Exploration",
+  "voice": {
+    "id": "en-GB-RyanNeural",
+    "steering": "Speak in a calm, curious, immersive natural history documentary narrator tone.",
+    "tone": "Immersive Wildlife Documentary"
+  },
+  "grade": "documentary",
+  "caption_style": "bottom_center",
+  "shot_rhythm_seconds": 4.0,
+  "world_anchor": "BBC National Geographic style natural history wildlife documentary",
+  "style_block": "Shot on telephoto 600mm lens, National Geographic natural history photography, vibrant natural light, crystal clear depth of field, rich natural colors.",
+  "negative_block": "No artificial cages, no human buildings, no domestic pets, no text, no watermark, no signature, no logo, no plastic skin.",
+  "style_presets": {
+    "vintage_documentary": "Natural history film stock, warm golden sunlight, subtle organic grain.",
+    "documentary": "High resolution telephoto wildlife photography, vibrant crisp detail, natural habitat environment.",
+    "illustration": "Detailed botanical and zoological field book illustration.",
+    "silhouette": "Dramatic silhouette of wild animal against golden savannah sunset."
+  },
+  "calibration": {
+    "min_score": null,
+    "weak_band": null,
+    "real_queries": [
+      "male lion resting on grassy savannah rocky outcrop at sunset",
+      "humpback whale breaching out of blue ocean water surface",
+      "grizzly bear catching salmon in roaring river rapids",
+      "bald eagle soaring with open wings above pine mountain forest",
+      "lush green amazon rainforest canopy with morning mist",
+      "emperor penguin family standing on arctic ice sheet snow",
+      "cheetah sprinting across open grass plain in afternoon light",
+      "monarch butterfly resting on colorful wildflower bloom",
+      "deep jungle waterfall cascading into emerald rainforest pool",
+      "herd of African elephants walking near waterhole at dusk"
+    ],
+    "fake_queries": [
+      "futuristic neon cyberpunk city with flying hovercrafts",
+      "medieval knight in full plate armor holding iron longsword",
+      "modern skyscraper elevator lobby with marble floors",
+      "vintage steam locomotive chugging down mountain railroad track",
+      "astronaut walking on lunar surface next to moon lander",
+      "courtroom trial with judge presiding on wooden bench",
+      "factory assembly line robot welding car body frame",
+      "stock exchange trading floor with shouting floor traders",
+      "formula 1 race car crossing checkered finish line",
+      "victorian parlor room with velvet sofa and grandfather clock"
+    ]
+  },
+  "seed_queries": [
+    "male lion resting on grassy savannah rocky outcrop at sunset",
+    "humpback whale breaching out of blue ocean water surface",
+    "grizzly bear catching salmon in roaring river rapids",
+    "bald eagle soaring with open wings above pine mountain forest",
+    "lush green amazon rainforest canopy with morning mist"
+  ]
+}

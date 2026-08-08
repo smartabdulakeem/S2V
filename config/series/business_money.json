@@ -1,0 +1,56 @@
+{
+  "series_slug": "business_money",
+  "display_name": "Business, Money & Economics",
+  "voice": {
+    "id": "en-US-SteffanNeural",
+    "steering": "Speak in a sharp, energetic, analytical business documentary voice.",
+    "tone": "Analytical Business & Economics"
+  },
+  "grade": "documentary",
+  "caption_style": "bottom_center",
+  "shot_rhythm_seconds": 3.5,
+  "world_anchor": "Global economics, financial markets and corporate history",
+  "style_block": "Cinematic editorial photography, crisp modern lighting, sleek architectural lines, rich navy and emerald color palette, subtle polished texture.",
+  "negative_block": "No cartoon elements, no sci-fi fantasy, no cluttered garbage, no text, no watermark, no signature, no logo, no plastic skin.",
+  "style_presets": {
+    "vintage_documentary": "35mm financial archive photo, editorial lighting, classic newspaper print aesthetic.",
+    "documentary": "Modern executive photography, sharp glass reflection, high dynamic range.",
+    "illustration": "Financial newspaper editorial illustration, woodcut or engraving style.",
+    "silhouette": "Sleek skyscraper skyline silhouette against sunrise financial district."
+  },
+  "calibration": {
+    "min_score": null,
+    "weak_band": null,
+    "real_queries": [
+      "traders looking at stock market financial charts on monitors",
+      "exterior glass facade of modern financial district skyscraper",
+      "executive board meeting inside sunlit conference room",
+      "gold bullion bars stacked neatly inside secure vault bank",
+      "cargo container ship docked at busy industrial harbor port",
+      "vintage paper currency bank notes spread out on wooden table",
+      "wall street bull sculpture in financial district morning light",
+      "robotic arm assembling electronics in modern high-tech factory",
+      "hand holding fountain pen signing corporate legal contract",
+      "currency exchange counter with international bank notes"
+    ],
+    "fake_queries": [
+      "medieval knight fighting dragon with sword on mountain",
+      "astronaut floating outside space shuttle in zero gravity",
+      "viking longship sailing through icy fjord with shields",
+      "grizzly bear catching salmon fish in wild river rapids",
+      "ancient egyptian pharaoh tomb inside stone pyramid",
+      "samurai standing in bamboo forest holding katana blade",
+      "underwater coral reef with sea turtle and tropical fish",
+      "cowboy riding horse across rocky wild west canyon floor",
+      "gothic cathedral stained glass window in sunlight",
+      "prehistoric dinosaur roaming through fern forest swamp"
+    ]
+  },
+  "seed_queries": [
+    "traders looking at stock market financial charts on monitors",
+    "exterior glass facade of modern financial district skyscraper",
+    "executive board meeting inside sunlit conference room",
+    "gold bullion bars stacked neatly inside secure vault bank",
+    "cargo container ship docked at busy industrial harbor port"
+  ]
+}

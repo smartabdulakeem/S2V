@@ -1,0 +1,56 @@
+{
+  "series_slug": "biography",
+  "display_name": "Historical Biography & Profiles",
+  "voice": {
+    "id": "en-US-RogerNeural",
+    "steering": "Speak in an intimate, reflective, biographical portrait narration tone.",
+    "tone": "Reflective Biographical Portrait"
+  },
+  "grade": "vignette",
+  "caption_style": "bottom_center",
+  "shot_rhythm_seconds": 4.5,
+  "world_anchor": "Historical biography, archival human portraits and memoirs",
+  "style_block": "Shot on medium format camera, portrait photography with shallow depth of field, directional window light, rich tonal contrast, refined classic grain.",
+  "negative_block": "No cartoon elements, no exaggerated plastic face smoothing, no sci-fi neon, no text, no watermark, no signature, no logo.",
+  "style_presets": {
+    "vintage_documentary": "Medium format portrait archive photo, warm window lighting, classic silver halide film grain.",
+    "documentary": "Refined portrait photograph, soft Rembrandt lighting, expressive human detail.",
+    "illustration": "Classical oil portrait or engraved charcoal biography portrait.",
+    "silhouette": "Thoughtful silhouette of figure by tall window looking outside."
+  },
+  "calibration": {
+    "min_score": null,
+    "weak_band": null,
+    "real_queries": [
+      "distinguished elderly statesman sitting in study library chair",
+      "pioneer woman standing outside vintage wooden farmhouse",
+      "inventor working at cluttered workbench surrounded by blueprints",
+      "candid portrait of young scholar writing in notebook by window",
+      "artist standing in sunlit studio among oil canvas paintings",
+      "historical figure addressing attentive crowd from wooden podium",
+      "old family photograph album lying open on mahogany desk",
+      "scientist adjusting brass optical microscope in laboratory",
+      "writer sitting at mechanical typewriter under warm lamp light",
+      "elderly mentor talking with young apprentice in workshop"
+    ],
+    "fake_queries": [
+      "space shuttle launching into orbit with huge flame plumes",
+      "underwater coral reef with neon sea anemones and sharks",
+      "futuristic cybernetic android walking through rain neon city",
+      "formula 1 race car making sharp turn on track asphalt",
+      "wild grizzly bear hunting salmon fish in river rapids",
+      "medieval siege catapult launching burning rock at castle wall",
+      "steam locomotive train blowing white smoke in mountain tunnel",
+      "deep ocean trench with glowing bioluminescent jellyfish",
+      "alien landscape with two moons hovering over purple crystals",
+      "skydiver tumbling through blue sky clouds with parachute"
+    ]
+  },
+  "seed_queries": [
+    "distinguished elderly statesman sitting in study library chair",
+    "inventor working at cluttered workbench surrounded by blueprints",
+    "candid portrait of young scholar writing in notebook by window",
+    "artist standing in sunlit studio among oil canvas paintings",
+    "scientist adjusting brass optical microscope in laboratory"
+  ]
+}

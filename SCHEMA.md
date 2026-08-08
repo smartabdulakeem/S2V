@@ -241,3 +241,38 @@ sha1(query|pin + resolved_duration + motion + treatment + resolution + fps)
 Changing narration in segment 4 re-renders segment 4 only. This is what makes iteration
 affordable — and mandatory before generative motion, where a full re-render of the real
 52-segment film would cost $156–$655.
+
+---
+
+## Series Pack Schema (v2)
+
+Series packs live in `config/series/<series_slug>.json`. A series pack supplies **defaults only** — any property explicitly defined in a script object overrides the corresponding pack default.
+
+### Fields
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `series_slug` | string | required | Identifier matching filename (`config/series/<series_slug>.json`) |
+| `display_name` | string | required | Human-readable title for the series pack |
+| `voice.id` | string | required | Default voice ID (e.g. `edge:en-US-GuyNeural`, `google:en-US-Neural2-D`) |
+| `voice.steering` | string | `""` | Default voice steering prompt for Gemini TTS |
+| `voice.tone` | string | `""` | Default narrative tone descriptor |
+| `grade` | string | `"vignette"` | Default treatment filter (`none`, `vignette`, `vox_collage`, `documentary`, `illustration`, `silhouette`) |
+| `caption_style` | string\|object | `"bottom_center"` | Default caption positioning or formatting |
+| `shot_rhythm_seconds` | number | `4.0` | Target duration per shot during automatic planning |
+| `world_anchor` | string | required | Historical, geographic, or visual anchor prepended to prompts |
+| `style_block` | string | required | Photographic, lighting, and medium style instructions |
+| `negative_block` | string | required | Era and quality negative prompt constraints |
+| `style_presets` | object | `{}` | Named visual style mapping (e.g. `vintage_documentary`, `documentary`) |
+| `calibration.min_score` | number\|null | `null` | Per-pack CLIP floor written back by `calibrate(series_slug)` |
+| `calibration.weak_band` | number\|null | `null` | Per-pack CLIP ambiguity band written back by `calibrate(series_slug)` |
+| `calibration.real_queries` | array | required | Array of 10 known-good niche queries |
+| `calibration.fake_queries` | array | required | Array of 10 known-impossible niche queries |
+| `seed_queries` | array | `[]` | Curated prompts for populating a new library |
+
+### Pack Validation Rules
+1. `series_slug` must match file basename.
+2. `display_name`, `world_anchor`, `style_block`, and `negative_block` must be non-empty strings.
+3. `voice` must be an object containing non-empty `id`.
+4. `calibration.real_queries` and `calibration.fake_queries` must each contain at least 10 non-empty query strings.
+

@@ -35,26 +35,7 @@ ASPECT_RATIOS = {
     "4:3": (1440, 1080)
 }
 
-STYLE_PRESETS = {
-    "vox_paper_collage": (
-        "modern editorial paper collage style, torn paper cut-outs, ripped magazine edges, "
-        "halftone dot texture, bold flat color blocking, newsprint background overlay, high contrast graphic poster illustration"
-    ),
-    "vox_collage": (
-        "modern editorial paper collage style, torn paper cut-outs, ripped magazine edges, "
-        "halftone dot texture, bold flat color blocking, newsprint background overlay, high contrast graphic poster illustration"
-    ),
-    "vox": (
-        "modern editorial paper collage style, torn paper cut-outs, ripped magazine edges, "
-        "halftone dot texture, bold flat color blocking, newsprint background overlay, high contrast graphic poster illustration"
-    ),
-    "vintage_documentary": (
-        "cinematic documentary photography, dramatic natural lighting, highly detailed, sharp focus, historical realism"
-    ),
-    "vector_editorial": (
-        "clean flat vector illustration, corporate editorial graphic style, vibrant colors, sharp geometric shapes"
-    )
-}
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

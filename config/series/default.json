@@ -1,6 +1,54 @@
 {
   "series_slug": "default",
-  "world_anchor": "",
-  "style_block": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted color palette, fine film grain.",
-  "negative_block": "No text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin, no blur, no distortion."
+  "display_name": "General Documentary",
+  "voice": {
+    "id": "en-US-GuyNeural",
+    "steering": "Speak in a clear, neutral documentary narration voice.",
+    "tone": "Neutral Documentary"
+  },
+  "grade": "vignette",
+  "caption_style": "bottom_center",
+  "shot_rhythm_seconds": 4.0,
+  "world_anchor": "General documentary photography",
+  "style_block": "Shot on 35mm film, neutral documentary photography, balanced natural lighting, fine film grain.",
+  "negative_block": "No text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin.",
+  "style_presets": {
+    "vintage_documentary": "Shot on 35mm film, documentary photography, muted tones, fine film grain.",
+    "documentary": "Cinematic documentary photography, natural lighting, crisp details.",
+    "illustration": "Detailed book illustration, fine line art, warm background.",
+    "silhouette": "High contrast silhouette, dramatic backlighting."
+  },
+  "calibration": {
+    "min_score": null,
+    "weak_band": null,
+    "real_queries": [
+      "landscape scenic view",
+      "city street in morning light",
+      "historical building exterior",
+      "nature mountain range",
+      "person reading book in library",
+      "coastal ocean waves hitting rocks",
+      "forest trees in autumn daylight",
+      "museum exhibit display case",
+      "craftsman working with hands",
+      "road stretching into horizon"
+    ],
+    "fake_queries": [
+      "abstract colorful noise pattern",
+      "pure black blank dark image",
+      "scrambled digital television static signal",
+      "corrupted file artifact glitch screen",
+      "solid bright yellow background color",
+      "blurry out of focus lens smear",
+      "checkerboard test pattern grid",
+      "overexposed white glare flash",
+      "distorted pixel noise corruption",
+      "inverted negative color static blur"
+    ]
+  },
+  "seed_queries": [
+    "landscape scenic view",
+    "city street in morning light",
+    "historical building exterior"
+  ]
 }
