@@ -1,0 +1,6 @@
+=== Contact Sheet #002 (4 sounds) ===
+
+  [01] cce1bf98b289.mp3 | beds     | 34.9s | CC0   | query: 'water trickle'
+  [02] ea644a830e0b.mp3 | beds     | 19.8s | CC0   | query: 'desert wind strong'
+  [03] f3beae61090a.mp3 | beds     | 16.7s | CC0   | query: 'riverbank'
+  [04] f424a0b8c3ae.mp3 | beds     | 33.4s | CC0   | query: 'water trickle'

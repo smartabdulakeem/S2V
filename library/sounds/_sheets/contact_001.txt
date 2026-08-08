@@ -1,0 +1,12 @@
+=== Contact Sheet #001 (10 sounds) ===
+
+  [01] 0dd39b4424ea.mp3 | beds     | 105.5s | CC0   | query: 'desert wind'
+  [02] 1b509ac78142.mp3 | beds     | 35.5s | CC0   | query: 'crickets night'
+  [03] 542536edfe4b.mp3 | beds     | 18.8s | CC0   | query: 'crickets night'
+  [04] 5f7895b3277e.mp3 | beds     | 37.3s | CC0   | query: 'desert wind strong'
+  [05] 5f84f0440ec8.mp3 | beds     | 80.3s | CC0   | query: 'riverbank'
+  [06] a88afd8de3a7.mp3 | beds     | 93.2s | CC0   | query: 'desert wind'
+  [07] ad8c6f20f191.mp3 | beds     | 34.7s | CC-BY | query: 'wind trees'
+  [08] adf5d296a719.mp3 | beds     | 58.2s | CC-BY | query: 'wind trees'
+  [09] bf94e4451d82.mp3 | beds     | 31.6s | CC0   | query: 'sandstorm'
+  [10] cad21636b4f3.mp3 | beds     | 30.9s | CC0   | query: 'sandstorm'

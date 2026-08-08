@@ -1,0 +1,551 @@
+<title>S2V — App Design</title>
+<style>
+:root{
+  --ground:#EFF1F4; --surface:#FFFFFF; --surface-2:#E4E8ED; --surface-3:#D9DFE6;
+  --line:#CDD4DC; --ink:#111820; --ink-2:#4B5763; --ink-3:#76828E;
+  --brass:#9A6E2A; --brass-soft:rgba(154,110,42,.12);
+  --ok:#1C7A5E; --ok-soft:rgba(28,122,94,.12);
+  --warn:#B4600F; --warn-soft:rgba(180,96,15,.13);
+  --gap:#A83A32;  --gap-soft:rgba(168,58,50,.11);
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --ground:#0E1319; --surface:#161D25; --surface-2:#1E2731; --surface-3:#26313C;
+  --line:#2B3641; --ink:#E6ECF2; --ink-2:#A3AFBB; --ink-3:#78848F;
+  --brass:#D6A455; --brass-soft:rgba(214,164,85,.15);
+  --ok:#43B491; --ok-soft:rgba(67,180,145,.15);
+  --warn:#E0964C; --warn-soft:rgba(224,150,76,.15);
+  --gap:#DF7168; --gap-soft:rgba(223,113,104,.14);
+}}
+:root[data-theme="light"]{--ground:#EFF1F4;--surface:#FFFFFF;--surface-2:#E4E8ED;--surface-3:#D9DFE6;
+ --line:#CDD4DC;--ink:#111820;--ink-2:#4B5763;--ink-3:#76828E;--brass:#9A6E2A;--brass-soft:rgba(154,110,42,.12);
+ --ok:#1C7A5E;--ok-soft:rgba(28,122,94,.12);--warn:#B4600F;--warn-soft:rgba(180,96,15,.13);
+ --gap:#A83A32;--gap-soft:rgba(168,58,50,.11);}
+:root[data-theme="dark"]{--ground:#0E1319;--surface:#161D25;--surface-2:#1E2731;--surface-3:#26313C;
+ --line:#2B3641;--ink:#E6ECF2;--ink-2:#A3AFBB;--ink-3:#78848F;--brass:#D6A455;--brass-soft:rgba(214,164,85,.15);
+ --ok:#43B491;--ok-soft:rgba(67,180,145,.15);--warn:#E0964C;--warn-soft:rgba(224,150,76,.15);
+ --gap:#DF7168;--gap-soft:rgba(223,113,104,.14);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55}
+.page{max-width:1180px;margin:0 auto;padding:clamp(16px,3vw,34px);display:flex;flex-direction:column;gap:26px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--brass)}
+h1{margin:0;font-size:clamp(23px,3.8vw,32px);letter-spacing:-.024em;line-height:1.08}
+.sub{margin:0;color:var(--ink-2);max-width:70ch}
+h2{margin:0;font-size:19px;letter-spacing:-.015em}
+h3{margin:0;font-size:14.5px;letter-spacing:-.008em}
+p{margin:0}
+
+/* app chrome */
+.app{display:grid;grid-template-columns:186px 1fr;border:1px solid var(--line);background:var(--surface);min-height:600px}
+.rail{background:var(--surface-2);border-right:1px solid var(--line);padding:14px 0;display:flex;flex-direction:column;gap:2px}
+.brand{padding:0 16px 14px;display:flex;flex-direction:column;gap:1px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.brand b{font-size:16px;letter-spacing:-.02em}
+.brand span{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.nav{appearance:none;border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:13.5px;
+     text-align:left;padding:9px 16px;cursor:pointer;display:flex;gap:9px;align-items:center;border-left:3px solid transparent}
+.nav:hover{color:var(--ink);background:var(--surface-3)}
+.nav[aria-selected="true"]{color:var(--brass);border-left-color:var(--brass);background:var(--surface);font-weight:600}
+.nav .k{font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-left:auto}
+.rail .spacer{flex:1}
+.pane{padding:clamp(14px,2.4vw,24px);display:none;flex-direction:column;gap:18px;min-width:0}
+.pane[data-on="1"]{display:flex}
+
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.card{background:var(--surface-2);border:1px solid var(--line);padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+label.f{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);flex:1 1 190px}
+input,select,textarea{font:inherit;font-size:14px;padding:8px 10px;background:var(--surface);color:var(--ink);
+  border:1px solid var(--line);border-radius:3px;width:100%}
+textarea{min-height:104px;resize:vertical;font-size:13.5px;line-height:1.6}
+button{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);background:var(--surface-3);
+  color:var(--ink);padding:8px 13px;border-radius:3px}
+button:hover{border-color:var(--brass);color:var(--brass)}
+button.primary{background:var(--brass);border-color:var(--brass);color:#fff;font-weight:600}
+button.ghost{background:transparent}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.nav:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+/* format picker — aspect shown as real frame shapes */
+.formats{display:flex;gap:10px;flex-wrap:wrap}
+.fmt{background:var(--surface);border:1px solid var(--line);padding:11px 12px;cursor:pointer;
+  display:flex;flex-direction:column;gap:7px;align-items:center;min-width:104px;border-radius:3px}
+.fmt:hover{border-color:var(--brass)}
+.fmt.on{border-color:var(--brass);background:var(--brass-soft)}
+.fmt .frame{background:var(--surface-3);border:1px solid var(--line);display:block}
+.fmt.on .frame{background:var(--brass);border-color:var(--brass);opacity:.85}
+.fmt b{font-size:12.5px;font-weight:640}
+.fmt small{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);letter-spacing:.06em}
+.fmt .tick{font-family:var(--mono);font-size:9.5px;color:var(--brass);font-weight:700;height:12px}
+
+.hint{font-size:13px;color:var(--ink-2);background:var(--brass-soft);border-left:3px solid var(--brass);padding:9px 12px}
+.hint b{color:var(--ink)}
+
+/* generic bits */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--ink-3)}
+.kv b{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+.pill{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;padding:2px 7px;font-weight:650;border-radius:2px}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-gap{background:var(--gap-soft);color:var(--gap)} .p-mute{background:var(--surface-3);color:var(--ink-3)}
+.bar{height:9px;background:var(--surface-3);overflow:hidden;border-radius:2px}
+.bar i{display:block;height:100%;background:var(--brass)}
+.mono{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+
+/* toggle */
+.tg{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:14px}
+.tg .sw{width:38px;height:21px;background:var(--surface-3);border:1px solid var(--line);border-radius:999px;position:relative;flex:none;transition:.15s}
+.tg .sw::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;background:var(--ink-3);border-radius:50%;transition:.15s}
+.tg.on .sw{background:var(--brass);border-color:var(--brass)}
+.tg.on .sw::after{left:19px;background:#fff}
+
+.seglist{display:flex;flex-direction:column;gap:8px}
+.seg{display:grid;grid-template-columns:120px 1fr auto;gap:12px;align-items:center;
+  background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--ok);padding:9px 12px}
+.seg.warn{border-left-color:var(--warn)} .seg.gap{border-left-color:var(--gap)}
+.seg .th{height:56px;background:var(--surface-3);border:1px solid var(--line);overflow:hidden}
+.seg .th img{width:100%;height:100%;object-fit:cover;display:block}
+.seg .th.none{border-style:dashed;border-color:var(--gap);display:flex;align-items:center;justify-content:center;color:var(--gap);font-family:var(--mono);font-size:10px}
+.seg p{font-size:13.5px;color:var(--ink-2)}
+
+table{border-collapse:collapse;width:100%;background:var(--surface)}
+th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);font-size:13.5px}
+thead th{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+.tbl{border:1px solid var(--line);overflow-x:auto}
+
+/* voice catalogue */
+.eng{border:1px solid var(--line);background:var(--surface);margin-top:2px}
+.eng-h{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.eng-h b{font-size:13.5px}
+.eng .tbl{border:0}
+.cb{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;
+  border:1px solid var(--line);background:var(--surface);border-radius:3px;cursor:pointer;
+  font-size:11px;color:transparent;font-weight:700;line-height:1}
+.cb.on{background:var(--brass);border-color:var(--brass);color:#fff}
+.cb:hover{border-color:var(--brass)}
+#capOpts.off{display:none}
+
+.ideas{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:12px}
+.idea{background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--brass);padding:14px 16px;display:flex;flex-direction:column;gap:7px}
+.idea .n{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--brass);text-transform:uppercase}
+.idea p{font-size:13.5px;color:var(--ink-2)}
+footer{border-top:1px solid var(--line);padding-top:15px;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+@media(max-width:720px){.app{grid-template-columns:1fr}.rail{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
+ .brand{display:none}.nav{border-left:0;border-bottom:3px solid transparent;white-space:nowrap}
+ .nav[aria-selected="true"]{border-left:0;border-bottom-color:var(--brass)}.nav .k{display:none}
+ .seg{grid-template-columns:90px 1fr}}
+</style>
+
+<div class="page">
+
+<header style="display:flex;flex-direction:column;gap:9px">
+  <span class="eyebrow">S2V &middot; interface design &middot; click the left rail</span>
+  <h1>One script in. Every format out.</h1>
+  <p class="sub">Five screens, in the order you actually use them. The interface is built around
+  a single idea: <b>you approve, the app works.</b> Nothing asks for input it can decide itself.</p>
+</header>
+
+<div class="app">
+  <nav class="rail" role="tablist" aria-label="App sections">
+    <div class="brand"><b>S2V</b><span>script to video</span></div>
+    <button class="nav" role="tab" aria-selected="true" data-p="script">Script<span class="k">1</span></button>
+    <button class="nav" role="tab" aria-selected="false" data-p="board">Storyboard<span class="k">2</span></button>
+    <button class="nav" role="tab" aria-selected="false" data-p="render">Render<span class="k">3</span></button>
+    <button class="nav" role="tab" aria-selected="false" data-p="library">Library<span class="k">4</span></button>
+    <div class="spacer"></div>
+    <button class="nav" role="tab" aria-selected="false" data-p="settings">Settings<span class="k">,</span></button>
+  </nav>
+
+  <!-- ══ SCRIPT ══ -->
+  <div class="pane" data-on="1" data-pane="script">
+    <div class="row" style="justify-content:space-between">
+      <h2>New video</h2><span class="mono">draft &middot; not yet planned</span>
+    </div>
+
+    <div class="row">
+      <label class="f">Title<input value="S2E6 — The Long Retreat"></label>
+      <label class="f">Series<select><option>Islamic History (S2)</option><option>American Civil War</option><option>+ New series…</option></select></label>
+    </div>
+
+    <label class="f" style="flex:1 1 100%">Script
+      <textarea>There is an image the history books do not linger on. A man of sixty years, white haired, known to his community as the softest-hearted among them…</textarea>
+    </label>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3>Output formats</h3>
+        <span class="mono">render once &middot; every format below</span>
+      </div>
+      <div class="formats">
+        <button class="fmt on"><span class="tick">✓</span><span class="frame" style="width:56px;height:32px"></span><b>Long</b><small>16:9 · 1080p</small></button>
+        <button class="fmt on"><span class="tick">✓</span><span class="frame" style="width:22px;height:39px"></span><b>Short</b><small>9:16 · 1080p</small></button>
+        <button class="fmt"><span class="tick">&nbsp;</span><span class="frame" style="width:34px;height:34px"></span><b>Square</b><small>1:1 · 1080p</small></button>
+        <button class="fmt"><span class="tick">&nbsp;</span><span class="frame" style="width:28px;height:35px"></span><b>Feed</b><small>4:5 · 1080p</small></button>
+      </div>
+      <p class="hint"><b>This is the feature that saves you a day a week.</b> The app renders the
+      long-form film and, from the same shots and narration, cuts vertical versions —
+      re-framing each shot around its subject rather than blind-cropping the sides.</p>
+    </div>
+
+    <div class="card">
+      <h3>Narration</h3>
+      <div class="row">
+        <label class="f">Narrator
+          <select><option>Google Neural2-D · en-GB · fast captions</option>
+                  <option>Gemini Flash TTS Charon · en-US · fast captions</option>
+                  <option>Kokoro af_heart · en-US · offline</option>
+                  <option>Supertonic M1 · en/ar · offline</option>
+                  <option>— manage voices in Settings —</option></select></label>
+        <label class="f">Tone<select><option>Grave documentary</option><option>Warm storytelling</option><option>Urgent</option></select></label>
+        <label class="f">Visual style<select><option>Vintage documentary</option><option>Vox paper-collage</option><option>Vector editorial</option></select></label>
+      </div>
+      <p class="mono">Only your <b>enabled</b> voices appear here — 6 of 47. The full catalogue
+      lives in Settings so this list stays short.</p>
+      <div class="row"><button class="ghost">Preview voice</button><button class="ghost">Pronunciation dictionary · 34 entries</button></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3>Captions</h3>
+        <span class="tg on" id="capMaster"><span class="sw"></span>On</span>
+      </div>
+      <div id="capOpts" class="row">
+        <label class="f">Style<select><option>Documentary lower-third</option><option>Kinetic word-by-word</option><option>Bold centre</option></select></label>
+        <label class="f">Size<select><option>Auto — scales per format</option><option>Small</option><option>Large</option></select></label>
+      </div>
+      <p class="mono">Vertical formats always get larger, higher captions — no setting needed.
+      Timings come from the voice engine's own word marks, so there is no transcription pass.</p>
+    </div>
+
+    <div class="row" style="justify-content:flex-end">
+      <button class="ghost">Save draft</button>
+      <button class="primary">Plan storyboard →</button>
+    </div>
+  </div>
+
+  <!-- ══ STORYBOARD ══ -->
+  <div class="pane" data-pane="board">
+    <div class="row" style="justify-content:space-between">
+      <h2>Storyboard</h2><span class="mono">38 shots &middot; 24:31</span>
+    </div>
+    <div class="row" style="gap:18px">
+      <span><b style="color:var(--ok);font-family:var(--mono);font-size:17px">31</b> <span class="mono">matched</span></span>
+      <span><b style="color:var(--warn);font-family:var(--mono);font-size:17px">4</b> <span class="mono">weak</span></span>
+      <span><b style="color:var(--gap);font-family:var(--mono);font-size:17px">3</b> <span class="mono">gaps</span></span>
+      <span style="margin-left:auto" class="mono">shot rhythm</span>
+      <input type="range" min="1" max="5" value="3" style="width:120px">
+      <span class="mono">~7s per shot</span>
+    </div>
+
+    <div class="seglist">
+      <div class="seg">
+        <div class="th"><img alt="" src="data:image/svg+xml;utf8,%3Csvg xmlns=&apos;http://www.w3.org/2000/svg&apos; width=&apos;240&apos; height=&apos;112&apos;%3E%3Cdefs%3E%3ClinearGradient id=&apos;g&apos; x1=&apos;0&apos; y1=&apos;0&apos; x2=&apos;0&apos; y2=&apos;1&apos;%3E%3Cstop offset=&apos;0&apos; stop-color=&apos;%232d3a52&apos;/%3E%3Cstop offset=&apos;1&apos; stop-color=&apos;%23d9a05b&apos;/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=&apos;240&apos; height=&apos;112&apos; fill=&apos;url(%23g)&apos;/%3E%3Cpath d=&apos;M0 76 Q60 62 120 76 T240 72 V112 H0Z&apos; fill=&apos;%238e5f36&apos;/%3E%3C/svg%3E"></div>
+        <div><p><b>1a</b> · lone rider on a ridge at dusk</p><p class="mono">match 0.34 · library</p></div>
+        <div class="row"><span class="pill p-ok">matched</span><button class="ghost">⋯</button></div>
+      </div>
+      <div class="seg warn">
+        <div class="th"><img alt="" src="data:image/svg+xml;utf8,%3Csvg xmlns=&apos;http://www.w3.org/2000/svg&apos; width=&apos;240&apos; height=&apos;112&apos;%3E%3Crect width=&apos;240&apos; height=&apos;112&apos; fill=&apos;%235d4a38&apos;/%3E%3Cg fill=&apos;%23241c15&apos;%3E%3Ccircle cx=&apos;44&apos; cy=&apos;78&apos; r=&apos;12&apos;/%3E%3Ccircle cx=&apos;84&apos; cy=&apos;82&apos; r=&apos;10&apos;/%3E%3Ccircle cx=&apos;126&apos; cy=&apos;77&apos; r=&apos;13&apos;/%3E%3C/g%3E%3C/svg%3E"></div>
+        <div><p><b>7b</b> · a large crowd listening in silence</p><p class="mono">match 0.24 · 3 alternatives available</p></div>
+        <div class="row"><span class="pill p-warn">weak</span><button class="ghost">⋯</button></div>
+      </div>
+      <div class="seg gap">
+        <div class="th none">no match</div>
+        <div><p><b>12b</b> · commander surveying the field from horseback</p><p class="mono">best 0.19 · prompt ready · also needed by 19, 27</p></div>
+        <div class="row"><span class="pill p-gap">gap</span><button class="ghost">⋯</button></div>
+      </div>
+    </div>
+    <p class="hint">Full interaction — alternatives, prompt generation, replace-and-retire — is in the
+    separate <b>Storyboard Review</b> mockup.</p>
+  </div>
+
+  <!-- ══ RENDER ══ -->
+  <div class="pane" data-pane="render">
+    <h2>Render</h2>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3>S2E6 — The Long Retreat</h3><span class="pill p-ok">rendering</span></div>
+      <div class="bar"><i style="width:62%"></i></div>
+      <div class="row" style="justify-content:space-between">
+        <span class="mono">composing shots · 24 of 38</span><span class="mono">elapsed 1:14 · eta 0:48</span>
+      </div>
+      <div class="grid2" style="margin-top:4px">
+        <div><div class="kv"><span>Narration</span><b>38 / 38 ✓</b></div>
+             <div class="kv"><span>Captions</span><b>38 / 38 ✓</b></div>
+             <div class="kv"><span>Shots composed</span><b>24 / 38</b></div></div>
+        <div><div class="kv"><span>From cache</span><b>19</b></div>
+             <div class="kv"><span>Encoder</span><b>libx264 veryfast</b></div>
+             <div class="kv"><span>Workers</span><b>3</b></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Outputs</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Format</th><th>Resolution</th><th>Length</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Long &middot; 16:9</td><td class="mono">1920×1080</td><td class="mono">24:31</td><td><span class="pill p-warn">rendering</span></td></tr>
+          <tr><td>Short &middot; 9:16 &mdash; “the hook”</td><td class="mono">1080×1920</td><td class="mono">0:48</td><td><span class="pill p-mute">queued</span></td></tr>
+          <tr><td>Short &middot; 9:16 &mdash; “the retreat”</td><td class="mono">1080×1920</td><td class="mono">0:57</td><td><span class="pill p-mute">queued</span></td></tr>
+        </tbody>
+      </table></div>
+      <p class="hint"><b>Shorts are suggested, not guessed.</b> The app knows where each beat
+      starts and ends, so it proposes the self-contained moments and you tick the ones you want.</p>
+    </div>
+    <div class="card">
+      <h3>On completion</h3>
+      <div class="row" style="gap:22px">
+        <span class="tg on"><span class="sw"></span>Export YouTube chapters</span>
+        <span class="tg on"><span class="sw"></span>Write description &amp; tags</span>
+        <span class="tg"><span class="sw"></span>Burn intro &amp; outro</span>
+        <span class="tg"><span class="sw"></span>Shut down when done</span>
+      </div>
+      <p class="mono">Chapter timestamps come free — the app already knows every segment boundary.</p>
+    </div>
+  </div>
+
+  <!-- ══ LIBRARY ══ -->
+  <div class="pane" data-pane="library">
+    <div class="row" style="justify-content:space-between"><h2>Library</h2><span class="mono">1,309 images · 87 sounds · 12 music beds</span></div>
+    <div class="row">
+      <input type="search" placeholder="Search by what's in the picture — “rider at dusk”, “oil lamp”…" style="flex:1 1 300px">
+      <select style="width:auto"><option>All series</option><option>Islamic History</option></select>
+      <button>Import folder</button>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Coverage</h3>
+        <div class="kv"><span>Landscapes &amp; terrain</span><b>strong</b></div>
+        <div class="kv"><span>Architecture</span><b>strong</b></div>
+        <div class="kv"><span>Crowds &amp; councils</span><b>thin</b></div>
+        <div class="kv"><span>Battle &amp; aftermath</span><b>thin</b></div>
+        <p class="mono">Coverage is measured against the scripts you have actually written.</p>
+      </div>
+      <div class="card"><h3>Housekeeping</h3>
+        <div class="kv"><span>Awaiting review</span><b>661</b></div>
+        <div class="kv"><span>Flagged: possible watermark</span><b>25</b></div>
+        <div class="kv"><span>Retired</span><b>6</b></div>
+        <div class="row"><button>Review inbox</button><button class="ghost">Open retired</button></div>
+      </div>
+    </div>
+    <p class="hint">Permanent deletion lives <b>here</b>, never on the storyboard. Rejecting a shot
+    is about fit, not quality — the image usually belongs to a different scene.</p>
+  </div>
+
+  <!-- ══ SETTINGS ══ -->
+  <div class="pane" data-pane="settings">
+    <h2>Settings</h2>
+
+    <div class="card">
+      <h3>Keys &amp; services</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Service</th><th>Used for</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Google AI</td><td>Imagen, Gemini, Lyria music</td><td><span class="pill p-ok">connected</span></td><td><button class="ghost">Test</button></td></tr>
+          <tr><td>Google Cloud TTS</td><td>Narration + word timings</td><td><span class="pill p-ok">connected</span></td><td><button class="ghost">Test</button></td></tr>
+          <tr><td>DeepSeek</td><td>Script planning</td><td><span class="pill p-ok">connected</span></td><td><button class="ghost">Test</button></td></tr>
+          <tr><td>Freesound</td><td>Ambience &amp; effects</td><td><span class="pill p-ok">connected</span></td><td><button class="ghost">Test</button></td></tr>
+          <tr><td>ElevenLabs</td><td>Premium voice (optional)</td><td><span class="pill p-mute">not set</span></td><td><button class="ghost">Add</button></td></tr>
+        </tbody>
+      </table></div>
+      <p class="mono">Keys are stored in the Windows credential store, not in a plain-text file.</p>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3>Voice catalogue</h3>
+        <span class="mono">47 available &middot; 6 enabled</span>
+      </div>
+      <p class="mono">Tick the ones you use. Only enabled voices appear on the Script screen,
+      so the narrator list stays short instead of showing all 47.</p>
+
+      <div class="eng">
+        <div class="eng-h"><b>Google Cloud</b><span class="pill p-mute">cloud &middot; 20 voices</span>
+          <span class="mono" style="margin-left:auto">2 enabled</span></div>
+        <div class="tbl"><table>
+          <thead><tr><th style="width:34px"></th><th>Voice</th><th>Lang</th><th>Captions</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="cb on">✓</span></td><td>Neural2-D <span class="mono">male</span></td><td class="mono">en-GB</td><td><span class="pill p-ok">fast</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb on">✓</span></td><td>Neural2-F <span class="mono">female</span></td><td class="mono">en-US</td><td><span class="pill p-ok">fast</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb"></span></td><td>Wavenet-D <span class="mono">male</span></td><td class="mono">en-US</td><td><span class="pill p-ok">fast</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb"></span></td><td>Journey-F <span class="mono">female</span></td><td class="mono">en-US</td><td><span class="pill p-warn">slow</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb"></span></td><td>Studio-Q <span class="mono">male</span></td><td class="mono">en-US</td><td><span class="pill p-warn">slow</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb"></span></td><td>Wavenet-B <span class="mono">male</span></td><td class="mono">ar-XA</td><td><span class="pill p-ok">fast</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td colspan="5" class="mono" style="color:var(--ink-3)">+ 14 more &mdash; es-ES, fr-FR, en-AU&hellip; <button class="ghost" style="padding:3px 8px;font-size:11.5px">Show all</button></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="eng">
+        <div class="eng-h"><b>Gemini Flash TTS</b><span class="pill p-mute">cloud &middot; 5 voices</span>
+          <span class="mono" style="margin-left:auto">1 enabled</span></div>
+        <div class="tbl"><table>
+          <thead><tr><th style="width:34px"></th><th>Voice</th><th>Lang</th><th>Captions</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="cb on">✓</span></td><td>Charon <span class="mono">male</span></td><td class="mono">multi</td><td><span class="pill p-ok">fast</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb"></span></td><td>Kore <span class="mono">female</span></td><td class="mono">multi</td><td><span class="pill p-ok">fast</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td colspan="5" class="mono" style="color:var(--ink-3)">Puck, Fenrir, Aoede &mdash; steerable by tone prompt</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="eng">
+        <div class="eng-h"><b>Kokoro</b><span class="pill p-ok">offline &middot; recommended</span>
+          <span class="mono" style="margin-left:auto">2 enabled</span></div>
+        <div class="tbl"><table>
+          <thead><tr><th style="width:34px"></th><th>Voice</th><th>Lang</th><th>Captions</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="cb on">✓</span></td><td>af_heart <span class="mono">female</span></td><td class="mono">en-US</td><td><span class="pill p-warn">slow</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb on">✓</span></td><td>am_michael <span class="mono">male</span></td><td class="mono">en-US</td><td><span class="pill p-warn">slow</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb"></span></td><td>bf_emma <span class="mono">female</span></td><td class="mono">en-GB</td><td><span class="pill p-warn">slow</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td colspan="5" class="mono" style="color:var(--ink-3)">82M params, Apache-2.0 &mdash; best offline quality for the size. <b>No Arabic support.</b></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="eng">
+        <div class="eng-h"><b>Supertonic</b><span class="pill p-mute">offline &middot; 10 voices</span>
+          <span class="mono" style="margin-left:auto">1 enabled</span></div>
+        <div class="tbl"><table>
+          <thead><tr><th style="width:34px"></th><th>Voice</th><th>Lang</th><th>Captions</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="cb on">✓</span></td><td>M1 <span class="mono">male</span></td><td class="mono">en + ar</td><td><span class="pill p-warn">slow</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td><span class="cb"></span></td><td>F3 <span class="mono">female</span></td><td class="mono">en + ar</td><td><span class="pill p-warn">slow</span></td><td><button class="ghost">Preview</button></td></tr>
+            <tr><td colspan="5" class="mono" style="color:var(--ink-3)">M1&ndash;M5, F1&ndash;F5 &mdash; the only offline engine here with Arabic.</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="eng">
+        <div class="eng-h"><b>Edge Neural</b><span class="pill p-mute">cloud &middot; free &middot; 12 voices</span>
+          <span class="mono" style="margin-left:auto">0 enabled</span></div>
+        <p class="mono" style="padding:8px 2px 0">en-US, en-GB, en-AU, es, fr &mdash; free and reliable,
+        but no word timings, so captions need a transcription pass. Good fallback.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3>Language packs</h3><span class="mono">English installed</span>
+      </div>
+      <div class="tbl"><table>
+        <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td><td><button class="ghost">Remove</button></td></tr>
+          <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td><td><button class="primary">Download</button></td></tr>
+          <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button>Download</button></td></tr>
+          <tr><td>Spanish</td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button>Download</button></td></tr>
+        </tbody>
+      </table></div>
+      <p class="mono">Cloud engines need no download &mdash; only offline voices do. Packs install
+      the model weights for every offline engine that supports that language.</p>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3>Pronunciation dictionary</h3><span class="mono">per series &middot; 34 entries</span>
+      </div>
+      <p class="hint"><b>This is how Arabic names get said correctly.</b> Switching to an Arabic
+      voice would fix the name and wreck the English sentence around it. Instead the app wraps
+      each entry in an SSML phoneme tag, so your English narrator keeps its voice and cadence
+      and still pronounces the name properly. Add a name once; every future episode says it right.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Written</th><th>Spoken (IPA)</th><th>Heard in</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Al-Mansur</td><td class="mono">alˈmansˤuːr</td><td class="mono">S2E1, S2E4</td><td><button class="ghost">Test</button></td></tr>
+          <tr><td>Abu Ubaydah</td><td class="mono">ʔabuː ʕubajda</td><td class="mono">S2E3, S2E6</td><td><button class="ghost">Test</button></td></tr>
+          <tr><td>Madinah</td><td class="mono">maˈdiːna</td><td class="mono">all episodes</td><td><button class="ghost">Test</button></td></tr>
+          <tr><td>Bayt al-Hikmah</td><td class="mono">bajt alˈħikma</td><td class="mono">S2E1</td><td><button class="ghost">Test</button></td></tr>
+        </tbody>
+      </table></div>
+      <div class="row"><button>Add entry</button><button class="ghost">Import from script</button><button class="ghost">Export</button></div>
+      <p class="mono">“Import from script” scans a new script for unfamiliar proper nouns and asks
+      you to confirm each one &mdash; so the dictionary grows as the series does.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Defaults</h3>
+        <label class="f">Resolution<select><option>1080p</option><option>720p — faster</option><option>1440p</option></select></label>
+        <label class="f">Frame rate<select><option>30 fps</option><option>24 fps — filmic</option></select></label>
+        <label class="f">Caption style<select><option>Documentary lower-third</option><option>Kinetic word-by-word</option><option>None</option></select></label>
+        <label class="f">Grade<select><option>Documentary</option><option>Illustration</option><option>Silhouette</option><option>None</option></select></label>
+      </div>
+      <div class="card">
+        <h3>Spending</h3>
+        <label class="f">Cap per video<input value="$5.00"></label>
+        <label class="f">Warn above<input value="$2.00"></label>
+        <div class="kv"><span>This month</span><b>$3.12</b></div>
+        <div class="kv"><span>Last video</span><b>$0.28</b></div>
+        <p class="mono">Estimated before every render. Nothing paid is generated without approval.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Performance</h3>
+      <div class="row">
+        <label class="f">Encoder<select><option>libx264 veryfast (auto-detected)</option><option>h264_qsv</option></select></label>
+        <label class="f">Parallel shots<select><option>3 (recommended for 4 cores)</option><option>1</option><option>6</option></select></label>
+      </div>
+      <p class="mono">Hardware probed once at startup. NVENC is unavailable on this machine and is
+      not attempted.</p>
+    </div>
+  </div>
+</div>
+
+<section style="display:flex;flex-direction:column;gap:15px">
+  <h2>Nine things that would make this feel professional</h2>
+  <p class="sub">Ranked by what they save you, against what they cost to build.</p>
+  <div class="ideas">
+    <div class="idea"><span class="n">01 · biggest win</span><h3>Render every format at once</h3>
+      <p>One script, one approval, four aspect ratios. Vertical cuts re-frame around the subject instead of blind-cropping. This alone replaces a whole editing session.</p></div>
+    <div class="idea"><span class="n">02</span><h3>Shorts the app proposes</h3>
+      <p>It knows where each beat begins and ends, so it suggests the self-contained 45–60s moments. You tick the ones you like.</p></div>
+    <div class="idea"><span class="n">03</span><h3>Series memory</h3>
+      <p>Character bible, voice, style and grade persist across episodes. Episode 7 starts where episode 6 finished — you are making a series, not files.</p></div>
+    <div class="idea"><span class="n">04</span><h3>Shot rhythm as one slider</h3>
+      <p>Your segments run 25 seconds. Broadcast cuts every 4–6. One slider splits them into more shots and pulls from the library. The single biggest retention lever.</p></div>
+    <div class="idea"><span class="n">05</span><h3>Draft render</h3>
+      <p>Grey placeholders, real narration, sixty seconds. Check pacing before generating a single image.</p></div>
+    <div class="idea"><span class="n">06</span><h3>Chapters &amp; description, free</h3>
+      <p>Segment boundaries are already timestamps. Export YouTube chapters, a description and tags with the video.</p></div>
+    <div class="idea"><span class="n">07</span><h3>Cost shown before you commit</h3>
+      <p>“This render will generate 3 images · about $0.12.” No paid call happens without that sentence appearing first.</p></div>
+    <div class="idea"><span class="n">08</span><h3>Overnight queue</h3>
+      <p>Line up three episodes, walk away. Optional shutdown when the last one lands.</p></div>
+    <div class="idea"><span class="n">09</span><h3>Brand kit</h3>
+      <p>Intro, outro, logo bug, lower-third style, music bed — saved once per series and applied on every render.</p></div>
+  </div>
+</section>
+
+<footer>
+  Mockup only &mdash; no working logic behind the controls.<br>
+  Same visual system as the Image Studio and Phase Status pages: one product, one language.
+</footer>
+</div>
+
+<script>
+document.querySelectorAll('.nav').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.nav').forEach(x=>x.setAttribute('aria-selected','false'));
+    b.setAttribute('aria-selected','true');
+    document.querySelectorAll('.pane').forEach(p=>p.removeAttribute('data-on'));
+    document.querySelector(`[data-pane="${b.dataset.p}"]`).setAttribute('data-on','1');
+  });
+});
+document.querySelectorAll('.fmt').forEach(f=>f.addEventListener('click',()=>{
+  f.classList.toggle('on');
+  f.querySelector('.tick').textContent = f.classList.contains('on') ? '✓' : ' ';
+}));
+document.querySelectorAll('.tg').forEach(t=>t.addEventListener('click',()=>t.classList.toggle('on')));
+// captions master toggle reveals/hides its own options — nested, not sibling
+const capM=document.getElementById('capMaster'), capO=document.getElementById('capOpts');
+if(capM&&capO) capM.addEventListener('click',()=>{
+  const on=capM.classList.contains('on');
+  capO.classList.toggle('off',!on);
+  capM.lastChild.textContent = on ? 'On' : 'Off';
+});
+// voice enable checkboxes
+document.querySelectorAll('.cb').forEach(c=>c.addEventListener('click',()=>{
+  c.classList.toggle('on');
+  c.textContent = c.classList.contains('on') ? '✓' : '';
+}));
+</script>

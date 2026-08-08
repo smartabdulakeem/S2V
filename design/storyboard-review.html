@@ -1,0 +1,216 @@
+<title>S2V — Storyboard Review (mockup)</title>
+<style>
+:root{
+  --ground:#EFF1F4; --surface:#FFFFFF; --surface-2:#E4E8ED; --line:#CDD4DC;
+  --ink:#111820; --ink-2:#4B5763; --ink-3:#76828E;
+  --brass:#9A6E2A; --brass-soft:rgba(154,110,42,.12);
+  --ok:#1C7A5E; --ok-soft:rgba(28,122,94,.12);
+  --warn:#B4600F; --warn-soft:rgba(180,96,15,.13);
+  --gap:#A83A32; --gap-soft:rgba(168,58,50,.11);
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --ground:#0E1319; --surface:#161D25; --surface-2:#1E2731; --line:#2B3641;
+  --ink:#E6ECF2; --ink-2:#A3AFBB; --ink-3:#78848F;
+  --brass:#D6A455; --brass-soft:rgba(214,164,85,.15);
+  --ok:#43B491; --ok-soft:rgba(67,180,145,.15);
+  --warn:#E0964C; --warn-soft:rgba(224,150,76,.15);
+  --gap:#DF7168; --gap-soft:rgba(223,113,104,.14);
+}}
+:root[data-theme="light"]{--ground:#EFF1F4;--surface:#FFFFFF;--surface-2:#E4E8ED;--line:#CDD4DC;
+  --ink:#111820;--ink-2:#4B5763;--ink-3:#76828E;--brass:#9A6E2A;--brass-soft:rgba(154,110,42,.12);
+  --ok:#1C7A5E;--ok-soft:rgba(28,122,94,.12);--warn:#B4600F;--warn-soft:rgba(180,96,15,.13);
+  --gap:#A83A32;--gap-soft:rgba(168,58,50,.11);}
+:root[data-theme="dark"]{--ground:#0E1319;--surface:#161D25;--surface-2:#1E2731;--line:#2B3641;
+  --ink:#E6ECF2;--ink-2:#A3AFBB;--ink-3:#78848F;--brass:#D6A455;--brass-soft:rgba(214,164,85,.15);
+  --ok:#43B491;--ok-soft:rgba(67,180,145,.15);--warn:#E0964C;--warn-soft:rgba(224,150,76,.15);
+  --gap:#DF7168;--gap-soft:rgba(223,113,104,.14);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+.wrap{max-width:1120px;margin:0 auto;padding:clamp(16px,3vw,36px);display:flex;flex-direction:column;gap:26px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--brass)}
+h1{margin:0;font-size:clamp(22px,3.6vw,30px);letter-spacing:-.022em;line-height:1.1}
+.sub{margin:0;color:var(--ink-2);max-width:68ch}
+.note{background:var(--brass-soft);border:1px solid var(--brass);padding:12px 15px;font-size:14px}
+.note b{color:var(--ink)}
+
+.topbar{background:var(--surface);border:1px solid var(--line);padding:12px 15px;
+  display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.counts{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:12px}
+.counts b{font-size:17px;display:block;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.c-ok b{color:var(--ok)} .c-warn b{color:var(--warn)} .c-gap b{color:var(--gap)}
+.counts span{color:var(--ink-3);text-transform:uppercase;letter-spacing:.1em;font-size:10px}
+button{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);
+  background:var(--surface-2);color:var(--ink);padding:7px 12px;border-radius:3px}
+button:hover{border-color:var(--brass);color:var(--brass)}
+button.primary{background:var(--brass);border-color:var(--brass);color:#fff;font-weight:600}
+button.primary:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+.seg{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--ok);
+  display:grid;grid-template-columns:200px 1fr;gap:0}
+.seg.weak{border-left-color:var(--warn)} .seg.gap{border-left-color:var(--gap)}
+.thumb{position:relative;background:var(--surface-2);min-height:118px;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .score{position:absolute;left:6px;bottom:6px;font-family:var(--mono);font-size:10.5px;
+  padding:2px 6px;background:rgba(0,0,0,.7);color:#fff;border-radius:2px}
+.thumb.empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;
+  border-right:1px dashed var(--gap);color:var(--gap);font-family:var(--mono);font-size:11px;text-align:center;padding:10px}
+.body{padding:12px 15px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.sid{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.08em}
+.pill{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+  padding:2px 7px;font-weight:650;border-radius:2px}
+.p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)}
+.p-gap{background:var(--gap-soft);color:var(--gap)}
+.narr{margin:0;font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+.q{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+.acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
+.alts{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding-top:8px;border-top:1px dashed var(--line)}
+.alts .lbl{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.08em;text-transform:uppercase}
+.alt{width:88px;height:50px;object-fit:cover;border:2px solid transparent;cursor:pointer;display:block}
+.alt:hover{border-color:var(--brass)}
+.altwrap{position:relative}
+.altwrap i{position:absolute;right:2px;bottom:2px;font-family:var(--mono);font-size:9px;
+  background:rgba(0,0,0,.72);color:#fff;padding:1px 4px;font-style:normal}
+
+.promptbox{background:var(--surface-2);border:1px solid var(--line);padding:11px 13px;
+  display:flex;flex-direction:column;gap:8px}
+.promptbox .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
+.promptbox code{font-family:var(--mono);font-size:11.5px;line-height:1.55;color:var(--ink);display:block;overflow-wrap:anywhere}
+.drop{border:1px dashed var(--brass);color:var(--brass);font-family:var(--mono);font-size:11px;
+  padding:9px;text-align:center;border-radius:3px}
+
+.dlg{background:var(--surface);border:2px solid var(--brass);padding:16px 18px;
+  display:flex;flex-direction:column;gap:11px;max-width:520px}
+.dlg h3{margin:0;font-size:16px}
+.dlg p{margin:0;font-size:14px;color:var(--ink-2)}
+.dlg .row{display:flex;gap:8px;flex-wrap:wrap}
+.opt{flex:1 1 150px;text-align:left;padding:9px 11px;line-height:1.35}
+.opt b{display:block;font-size:13px}
+.opt small{color:var(--ink-3);font-size:11.5px}
+
+h2{margin:0;font-size:19px;letter-spacing:-.015em;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.legend{font-family:var(--mono);font-size:11px;color:var(--ink-3);display:flex;gap:18px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:5px;font-style:normal;vertical-align:-1px}
+@media(max-width:680px){.seg{grid-template-columns:1fr}.thumb{min-height:150px}}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:8px">
+  <span class="eyebrow">S2V &middot; mockup, not a working screen</span>
+  <h1>Storyboard review</h1>
+  <p class="sub">What the app shows after you paste a script. Every shot already has a
+  picture; you only intervene where you want to.</p>
+</header>
+
+<div class="note">
+  <b>The design principle:</b> the app never asks you for anything it can decide itself.
+  A prompt only appears when there is genuinely nothing usable, or when you ask for one.
+</div>
+
+<div class="topbar">
+  <div class="counts">
+    <div class="c-ok"><b>31</b><span>matched</span></div>
+    <div class="c-warn"><b>4</b><span>weak</span></div>
+    <div class="c-gap"><b>3</b><span>gaps</span></div>
+    <div><b>38</b><span>shots</span></div>
+    <div><b>24:31</b><span>runtime</span></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button>Draft render (placeholders)</button>
+    <button class="primary" disabled>Render &mdash; 3 gaps to fill</button>
+  </div>
+</div>
+
+<div class="legend">
+  <span><i style="background:var(--ok)"></i>matched &mdash; good library hit</span>
+  <span><i style="background:var(--warn)"></i>weak &mdash; usable, alternatives offered</span>
+  <span><i style="background:var(--gap)"></i>gap &mdash; nothing suitable, prompt generated</span>
+</div>
+
+<section style="display:flex;flex-direction:column;gap:11px">
+
+  <!-- MATCHED -->
+  <div class="seg">
+    <div class="thumb">
+      <img alt="Desert dunes at dawn" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%232d3a52'/%3E%3Cstop offset='.5' stop-color='%23b0763f'/%3E%3Cstop offset='1' stop-color='%23d9a05b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='225' fill='url(%23a)'/%3E%3Cpath d='M0 150 Q100 120 200 148 T400 140 V225 H0Z' fill='%23a06c3c'/%3E%3Cpath d='M0 180 Q120 158 260 182 T400 176 V225 H0Z' fill='%237d5230'/%3E%3Ccircle cx='310' cy='58' r='16' fill='%23f2d9a8' opacity='.85'/%3E%3C/svg%3E">
+      <span class="score">0.34</span>
+    </div>
+    <div class="body">
+      <div class="head"><span class="sid">SEGMENT 1 &middot; SHOT 1a</span><span class="pill p-ok">matched</span></div>
+      <p class="narr">&ldquo;There is an image the history books do not linger on&hellip;&rdquo;</p>
+      <p class="q">query: lone rider on a ridge at dusk, empty desert behind</p>
+      <div class="acts">
+        <button>Replace</button><button>Alternatives</button><button>Get prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEAK, alternatives shown -->
+  <div class="seg weak">
+    <div class="thumb">
+      <img alt="Crowd in courtyard" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='225'%3E%3Crect width='400' height='225' fill='%235d4a38'/%3E%3Crect y='150' width='400' height='75' fill='%233d3025'/%3E%3Cg fill='%23241c15'%3E%3Ccircle cx='70' cy='150' r='17'/%3E%3Ccircle cx='120' cy='156' r='15'/%3E%3Ccircle cx='176' cy='150' r='18'/%3E%3Ccircle cx='232' cy='158' r='14'/%3E%3Ccircle cx='288' cy='152' r='16'/%3E%3C/g%3E%3Crect x='0' y='0' width='400' height='90' fill='%236f5942' opacity='.6'/%3E%3C/svg%3E">
+      <span class="score">0.24</span>
+    </div>
+    <div class="body">
+      <div class="head"><span class="sid">SEGMENT 7 &middot; SHOT 7b</span><span class="pill p-warn">weak match</span></div>
+      <p class="narr">&ldquo;The crowd fell silent as he rose to speak&hellip;&rdquo;</p>
+      <p class="q">query: a large crowd listening in absolute silence</p>
+      <div class="alts">
+        <span class="lbl">Better options in your library</span>
+        <span class="altwrap"><img class="alt" alt="alt 1" src="data:image/svg+xml;utf8,%3Csvg xmlns=&apos;http://www.w3.org/2000/svg&apos; width=&apos;176&apos; height=&apos;100&apos;%3E%3Crect width=&apos;176&apos; height=&apos;100&apos; fill=&apos;%236b563f&apos;/%3E%3Cg fill=&apos;%23231b14&apos;%3E%3Ccircle cx=&apos;30&apos; cy=&apos;72&apos; r=&apos;10&apos;/%3E%3Ccircle cx=&apos;62&apos; cy=&apos;76&apos; r=&apos;9&apos;/%3E%3Ccircle cx=&apos;96&apos; cy=&apos;71&apos; r=&apos;11&apos;/%3E%3Ccircle cx=&apos;132&apos; cy=&apos;77&apos; r=&apos;9&apos;/%3E%3C/g%3E%3C/svg%3E"><i>0.31</i></span>
+        <span class="altwrap"><img class="alt" alt="alt 2" src="data:image/svg+xml;utf8,%3Csvg xmlns=&apos;http://www.w3.org/2000/svg&apos; width=&apos;176&apos; height=&apos;100&apos;%3E%3Crect width=&apos;176&apos; height=&apos;100&apos; fill=&apos;%23433527&apos;/%3E%3Crect y=&apos;62&apos; width=&apos;176&apos; height=&apos;38&apos; fill=&apos;%23261e16&apos;/%3E%3Cg fill=&apos;%23110d09&apos;%3E%3Crect x=&apos;22&apos; y=&apos;48&apos; width=&apos;13&apos; height=&apos;30&apos;/%3E%3Crect x=&apos;50&apos; y=&apos;52&apos; width=&apos;12&apos; height=&apos;26&apos;/%3E%3Crect x=&apos;78&apos; y=&apos;46&apos; width=&apos;14&apos; height=&apos;32&apos;/%3E%3Crect x=&apos;110&apos; y=&apos;54&apos; width=&apos;12&apos; height=&apos;24&apos;/%3E%3C/g%3E%3C/svg%3E"><i>0.29</i></span>
+        <span class="altwrap"><img class="alt" alt="alt 3" src="data:image/svg+xml;utf8,%3Csvg xmlns=&apos;http://www.w3.org/2000/svg&apos; width=&apos;176&apos; height=&apos;100&apos;%3E%3Crect width=&apos;176&apos; height=&apos;100&apos; fill=&apos;%238a6740&apos;/%3E%3Cpath d=&apos;M0 70 Q44 58 88 70 T176 66 V100 H0Z&apos; fill=&apos;%235c4229&apos;/%3E%3Ccircle cx=&apos;140&apos; cy=&apos;26&apos; r=&apos;12&apos; fill=&apos;%23f0d6a4&apos;/%3E%3C/svg%3E"><i>0.27</i></span>
+      </div>
+      <div class="acts">
+        <button>Replace</button><button>Get prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAP -->
+  <div class="seg gap">
+    <div class="thumb empty">
+      <span style="font-size:22px">&#9633;</span>
+      <span>no match<br>best 0.19</span>
+    </div>
+    <div class="body">
+      <div class="head"><span class="sid">SEGMENT 12 &middot; SHOT 12b</span><span class="pill p-gap">gap</span>
+        <span class="q" style="margin-left:auto">also needed by segments 19, 27</span></div>
+      <p class="narr">&ldquo;He surveyed the field one last time before the order came&hellip;&rdquo;</p>
+      <div class="promptbox">
+        <span class="lbl">Generate this &mdash; prompt ready</span>
+        <code>A commander on horseback seen from behind on a low rise, surveying an unseen
+        field, cloak moving in wind, army out of focus in the distance below, dusk,
+        7th century Arabian Peninsula, early Islamic era &middot; shot on 35mm film,
+        cinematic documentary photography, muted ochre and indigo palette, fine grain
+        &middot; no modern objects, no curved scimitars, no plate armour, no text</code>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button>Copy prompt</button><button>Open Google Flow</button><button>Generate with Imagen &middot; ~$0.04</button>
+        </div>
+        <div class="drop">Drop the generated image here &mdash; it joins the library automatically</div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<section style="display:flex;flex-direction:column;gap:13px">
+  <h2>What happens when you replace an image</h2>
+  <div class="dlg">
+    <h3>Replaced the shot for segment 7</h3>
+    <p>What should happen to the image you rejected?</p>
+    <div class="row">
+      <button class="opt"><b>Just not here</b><small>Stays in the library. May suit another shot.</small></button>
+      <button class="opt"><b>Never suggest for this</b><small>Blocked for this query only. Still available elsewhere.</small></button>
+      <button class="opt"><b>Retire it</b><small>Removed from search. Recoverable from _retired.</small></button>
+    </div>
+    <p style="font-size:12.5px;color:var(--ink-3);margin-top:2px">Permanent deletion lives in
+    the Library manager, not here &mdash; a rejection is usually about fit, not quality.</p>
+  </div>
+</section>
+
+</div>

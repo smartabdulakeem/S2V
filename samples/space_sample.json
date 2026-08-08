@@ -1,7 +1,7 @@
 {
   "project": {
     "title": "Apollo 11 Moon Landing",
-    "series_slug": "space",
+    "series_slug": "space_science",
     "output_filename": "apollo11_sample.mp4",
     "voice": "en-US-News-M",
     "world_anchor": "1969 NASA Space Program",

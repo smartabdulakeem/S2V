@@ -181,13 +181,13 @@ def test_islamic_series_prompt_composition():
 
 def test_space_series_prompt_composition():
     """Script with series_slug 'space' must contain neither scimitars nor Arabian Peninsula anchors."""
-    cfg = library.get_series_config(series_slug="space")
+    cfg = library.get_series_config(series_slug="space_science")
     assert "scimitar" not in cfg.get("negative_block", "").lower()
     assert "arabian" not in cfg.get("world_anchor", "").lower()
 
     composed = library.compose_gap_prompt(
         shot_query="lunar rover on dusty crater rim",
-        series_slug="space"
+        series_slug="space_science"
     )
     assert "scimitar" not in composed.lower()
     assert "arabian" not in composed.lower()
