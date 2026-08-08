@@ -98,3 +98,38 @@ def test_narration_verbatim_copy_byte_identical():
     for i, seg_obj in enumerate(script_json["segments"]):
         # Assert byte-identical string match
         assert seg_obj["narration"] == expected_split[i]
+
+
+class _FailingProvider(BaseLLMProvider):
+    """Stands in for an unreachable or rate-limited provider."""
+
+    def complete(self, system, user, json_schema=None, **kwargs):
+        raise RuntimeError("provider unreachable")
+
+
+def test_planning_degrades_to_keywords_when_provider_fails():
+    """
+    A dead provider must fall back to rule-based keywords, not crash.
+    Fails if the fallback branch references a name that does not exist.
+    """
+    script = build_script_with_ai(
+        text="First paragraph about the desert caravan.\n\nSecond paragraph about the city walls.",
+        title="Offline Test",
+        llm_provider=_FailingProvider(),
+    )
+    segments = script["segments"]
+    assert len(segments) == 2
+    for seg in segments:
+        assert seg["shots"], "every segment needs at least one shot after fallback"
+        assert seg["shots"][0]["query"].strip(), "fallback must produce a non-empty query"
+
+
+def test_user_output_filename_is_not_overwritten_by_title():
+    """The filename the user chose must survive planning."""
+    script = build_script_with_ai(
+        text="One paragraph.\n\nTwo paragraph.",
+        title="A Very Different Title",
+        output_filename="THE_NAME_I_CHOSE.mp4",
+        llm_provider=_FailingProvider(),
+    )
+    assert script["project"]["output_filename"] == "THE_NAME_I_CHOSE.mp4"

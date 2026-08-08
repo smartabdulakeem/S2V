@@ -49,13 +49,16 @@ TRANSITION_CYCLE = ["fade", "crossfade", "fade", "crossfade"]
 
 def sanitize_output_filename(filename: str) -> str:
     """Sanitize the output filename to be safe for filenames and end with .mp4."""
-    safe_name = re.sub(r'[^\w\-]', '_', filename.strip())
+    stem = filename.strip()
+    # Strip a supplied .mp4 before sanitising — otherwise the dot becomes an
+    # underscore and "s2e6.mp4" comes back as "s2e6_mp4.mp4".
+    if stem.lower().endswith('.mp4'):
+        stem = stem[:-4]
+    safe_name = re.sub(r'[^\w\-]', '_', stem)
     safe_name = re.sub(r'_+', '_', safe_name).strip('_')
     if not safe_name:
         safe_name = "my_video"
-    if not safe_name.lower().endswith('.mp4'):
-        safe_name += '.mp4'
-    return safe_name
+    return safe_name + '.mp4'
 
 
 # ── Sentence / paragraph splitter ──────────────────────────────────────────────
@@ -590,6 +593,7 @@ def build_script_with_ai(
     text: str,
     title: str = "My Video",
     voice: str = "google:en-US-Neural2-D",
+    output_filename: str = "",
     visual_style: str = "vintage_documentary",
     series_slug: str = "islamic_history",
     ai_guideline: str = "",
@@ -689,7 +693,7 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
             res_shots = res.get("shots", [])
             if res_shots and isinstance(res_shots, list):
                 for s_idx, s_obj in enumerate(res_shots):
-                    query_str = s_obj.get("query", "").strip() or extract_keywords(seg_text)
+                    query_str = s_obj.get("query", "").strip() or extract_keyword(seg_text)
                     shots_list.append({
                         "shot_id": f"{seg_id}{chr(97 + s_idx)}",
                         "duration": None,
@@ -711,7 +715,7 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
                     "shot_id": f"{seg_id}a",
                     "duration": None,
                     "source": "library",
-                    "query": extract_keywords(seg_text),
+                    "query": extract_keyword(seg_text),
                     "min_score": 0.26,
                     "motion": {
                         "kind": "ken_burns",
@@ -742,7 +746,8 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
         "project": {
             "title": title.strip() or "My Video",
             "series_slug": series_slug,
-            "output_filename": sanitize_output_filename(title),
+            # The user's chosen filename wins; fall back to the title only when none was given.
+            "output_filename": sanitize_output_filename(output_filename or title),
             "aspect_ratio": "16:9",
             "resolution": "1280x720",
             "fps": 30,
@@ -789,6 +794,7 @@ def build_script_with_deepseek_and_gemini(
         text=text,
         title=title,
         voice=voice,
+        output_filename=output_filename,
         visual_style=visual_style,
         series_slug=series_slug,
         ai_guideline=ai_guideline,
