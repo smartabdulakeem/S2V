@@ -33,29 +33,22 @@ FALLBACK_MIN_SCORE = 0.2796
 FALLBACK_WEAK_BAND = 0.0045
 RENDER_USAGE_PENALTY = 0.0008
 
+import datetime
 import warnings
 
 
-def get_calibration_config() -> dict:
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                return {
-                    "min_score": float(cfg.get("min_score", FALLBACK_MIN_SCORE)),
-                    "weak_band": float(cfg.get("weak_band", FALLBACK_WEAK_BAND))
-                }
-        except Exception:
-            pass
-    return {"min_score": FALLBACK_MIN_SCORE, "weak_band": FALLBACK_WEAK_BAND}
+def get_calibrated_min_score(series_slug: str = None) -> float:
+    cfg = get_calibration_config(series_slug=series_slug)
+    if cfg.get("min_score") is not None:
+        return cfg["min_score"]
+    return FALLBACK_MIN_SCORE
 
 
-def get_calibrated_min_score() -> float:
-    return get_calibration_config()["min_score"]
-
-
-def get_calibrated_weak_band() -> float:
-    return get_calibration_config()["weak_band"]
+def get_calibrated_weak_band(series_slug: str = None) -> float:
+    cfg = get_calibration_config(series_slug=series_slug)
+    if cfg.get("weak_band") is not None:
+        return cfg["weak_band"]
+    return FALLBACK_WEAK_BAND
 
 
 def save_calibration_config(min_score: float, weak_band: float):
@@ -522,14 +515,15 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     Reports 3 states per shot: matched, weak, gap.
     Keeps GAPS and WEAK lists separated so counters and lists match strictly.
     """
-    if min_score is None:
-        min_score = get_calibrated_min_score()
-    if weak_band is None:
-        weak_band = get_calibrated_weak_band()
-
     project_info = script_data.get("project", {})
     title = project_info.get("title", "Untitled Project")
     series_slug = project_info.get("series_slug")
+
+    if min_score is None:
+        min_score = get_calibrated_min_score(series_slug=series_slug)
+    if weak_band is None:
+        weak_band = get_calibrated_weak_band(series_slug=series_slug)
+
     world_anchor = project_info.get("world_anchor") or project_info.get("visual_style")
     character_bible = project_info.get("character_bible") or {}
 
