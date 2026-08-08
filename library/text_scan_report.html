@@ -1,0 +1,3059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Studio — Image Text Scan Report</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card-bg: #1e293b;
+    --border: #334155;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --burned: #ef4444;
+    --review: #f59e0b;
+    --clean: #10b981;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 24px;
+  }
+  h1 {
+    margin-top: 0;
+    font-size: 24px;
+  }
+  .stats-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 24px;
+    min-width: 140px;
+  }
+  .stat-val {
+    font-size: 28px;
+    font-weight: bold;
+  }
+  .stat-val.burned { color: var(--burned); }
+  .stat-val.review { color: var(--review); }
+  .stat-val.clean { color: var(--clean); }
+  .stat-lbl {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  section {
+    margin-bottom: 40px;
+  }
+  h2 {
+    font-size: 18px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-img {
+    width: 100%;
+    height: 190px;
+    object-fit: cover;
+    background: #000;
+  }
+  .card-body {
+    padding: 12px 16px;
+    font-size: 13px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+  }
+  .badge.burned { background: rgba(239, 68, 68, 0.2); color: var(--burned); border: 1px solid var(--burned); }
+  .badge.review { background: rgba(245, 158, 11, 0.2); color: var(--review); border: 1px solid var(--review); }
+  .badge.clean { background: rgba(16, 185, 129, 0.2); color: var(--clean); border: 1px solid var(--clean); }
+
+  .path {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    word-break: break-all;
+  }
+  .detections-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .detections-table th, .detections-table td {
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detections-table th {
+    color: var(--text-muted);
+  }
+  .detected-text {
+    color: #f1f5f9;
+    font-weight: 500;
+  }
+  .reason {
+    font-size: 12px;
+    color: #cbd5e1;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+  <h1>Smart Studio — Image Text Scan Report</h1>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-val">1070</div>
+      <div class="stat-lbl">Total Scanned</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val burned">91</div>
+      <div class="stat-lbl">Burned Text</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val review">69</div>
+      <div class="stat-lbl">Review Needed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val clean">910</div>
+      <div class="stat-lbl">Clean</div>
+    </div>
+  </div>
+
+  <section>
+    <h2 style="color: var(--burned);">🔥 Burned Text (91)</h2>
+    <div class="grid">
+            <div class="card">
+              <img class="card-img" src="images/dDNXfln54uo-MQ.jpg" alt="dDNXfln54uo-MQ.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">dDNXfln54uo-MQ.jpg (12.74% text area)</div>
+                <div class="reason">Matches script/manifest text (word 'greatest')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>HISTORY GREATEST TRAP</td><td>0.96</td><td>11.04%</td></tr><tr><td class='detected-text'>Early Muslim Wars:EP.5</td><td>0.93</td><td>1.70%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/dDNXfln54uo-MQ.jpg" alt="dDNXfln54uo-MQ.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">dDNXfln54uo-MQ.jpg (12.74% text area)</div>
+                <div class="reason">Matches script/manifest text (word 'greatest')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>HISTORY GREATEST TRAP</td><td>0.96</td><td>11.04%</td></tr><tr><td class='detected-text'>Early Muslim Wars:EP.5</td><td>0.93</td><td>1.70%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/mq6-_UeQC0Y-SD.jpg" alt="mq6-_UeQC0Y-SD.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">mq6-_UeQC0Y-SD.jpg (12.00% text area)</div>
+                <div class="reason">Matches script/manifest text (word 'muslim')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>ROME + PERSIA VS KHALID IBN AL-WALID</td><td>0.93</td><td>7.90%</td></tr><tr><td class='detected-text'>Early Muslim Wars:EP.12（End of Iraq Campaign)</td><td>0.95</td><td>4.10%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/33c27ce72ee6.jpg" alt="33c27ce72ee6.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">33c27ce72ee6.jpg (10.13% text area)</div>
+                <div class="reason">Matches script/manifest text (abraham lincoln)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>AMERICAN</td><td>0.99</td><td>2.10%</td></tr><tr><td class='detected-text'>CIVIL WAR</td><td>0.95</td><td>2.32%</td></tr><tr><td class='detected-text'>★</td><td>0.96</td><td>0.05%</td></tr><tr><td class='detected-text'>President Abraham Lincoln stem the</td><td>0.96</td><td>1.38%</td></tr><tr><td class='detected-text'>nation through its greatest trial,</td><td>0.99</td><td>1.37%</td></tr><tr><td class='detected-text'>determined he preserve the</td><td>0.98</td><td>1.18%</td></tr><tr><td class='detected-text'>Union at all costs.</td><td>0.98</td><td>0.67%</td></tr><tr><td class='detected-text'>Abraham Lincoln</td><td>1.00</td><td>1.06%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/5f7a2430edbb.jpg" alt="5f7a2430edbb.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">5f7a2430edbb.jpg (9.47% text area)</div>
+                <div class="reason">Matches script/manifest text (american civil war intro sample)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>AMERICAN</td><td>0.99</td><td>1.38%</td></tr><tr><td class='detected-text'>CIVIL WAR INTRO SAMPLE</td><td>0.98</td><td>3.54%</td></tr><tr><td class='detected-text'>FORT SUMTER</td><td>0.94</td><td>1.91%</td></tr><tr><td class='detected-text'>Sloositort</td><td>0.86</td><td>0.11%</td></tr><tr><td class='detected-text'>AOnC</td><td>0.69</td><td>0.08%</td></tr><tr><td class='detected-text'>DGBLCIUS</td><td>0.61</td><td>0.07%</td></tr><tr><td class='detected-text'>ApriL1861</td><td>0.95</td><td>0.26%</td></tr><tr><td class='detected-text'>AC</td><td>0.74</td><td>0.05%</td></tr><tr><td class='detected-text'>unGe</td><td>0.75</td><td>0.05%</td></tr><tr><td class='detected-text'>Asin</td><td>0.77</td><td>0.03%</td></tr><tr><td class='detected-text'>Fort Sumter</td><td>0.98</td><td>0.75%</td></tr><tr><td class='detected-text'>NOAONCO-</td><td>0.66</td><td>0.10%</td></tr><tr><td class='detected-text'>uiam</td><td>0.66</td><td>0.07%</td></tr><tr><td class='detected-text'>10</td><td>0.90</td><td>0.01%</td></tr><tr><td class='detected-text'>KAcorou</td><td>0.82</td><td>0.07%</td></tr><tr><td class='detected-text'>FORTSUMTER</td><td>0.98</td><td>0.43%</td></tr><tr><td class='detected-text'>sTanrs</td><td>0.75</td><td>0.08%</td></tr><tr><td class='detected-text'>Koonr</td><td>0.96</td><td>0.15%</td></tr><tr><td class='detected-text'>funICRoat</td><td>0.57</td><td>0.12%</td></tr><tr><td class='detected-text'>Romun.</td><td>0.82</td><td>0.10%</td></tr><tr><td class='detected-text'>6</td><td>0.52</td><td>0.02%</td></tr><tr><td class='detected-text'>Rronrye</td><td>0.71</td><td>0.08%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/ca44d553520a.jpg" alt="ca44d553520a.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">ca44d553520a.jpg (8.96% text area)</div>
+                <div class="reason">Matches script/manifest text (civil war)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>★★★</td><td>0.94</td><td>0.42%</td></tr><tr><td class='detected-text'>AMERICAN</td><td>0.99</td><td>2.02%</td></tr><tr><td class='detected-text'>CIVIL WAR</td><td>0.96</td><td>2.14%</td></tr><tr><td class='detected-text'>★</td><td>0.99</td><td>0.13%</td></tr><tr><td class='detected-text'>President Abraham Lincoln stem the</td><td>0.98</td><td>1.25%</td></tr><tr><td class='detected-text'>?</td><td>0.50</td><td>0.03%</td></tr><tr><td class='detected-text'>nation tthrough its greatest trial,</td><td>0.99</td><td>1.28%</td></tr><tr><td class='detected-text'>determined he preserve the</td><td>0.97</td><td>1.08%</td></tr><tr><td class='detected-text'>Union at all costs.</td><td>1.00</td><td>0.61%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/3aff355c166f.jpg" alt="3aff355c166f.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">3aff355c166f.jpg (7.54% text area)</div>
+                <div class="reason">Matches script/manifest text (american civil war intro sample)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>AMERICAN CIVIL WAR INTRO SAMPLE</td><td>0.97</td><td>3.54%</td></tr><tr><td class='detected-text'>FORT SUMTER</td><td>0.95</td><td>1.28%</td></tr><tr><td class='detected-text'>Soositort</td><td>0.94</td><td>0.07%</td></tr><tr><td class='detected-text'>AOnX</td><td>0.63</td><td>0.06%</td></tr><tr><td class='detected-text'>ApriL1861</td><td>0.94</td><td>0.15%</td></tr><tr><td class='detected-text'>unce</td><td>0.69</td><td>0.02%</td></tr><tr><td class='detected-text'>NOAONCO-</td><td>0.61</td><td>0.07%</td></tr><tr><td class='detected-text'>Richmond Captured</td><td>0.97</td><td>0.95%</td></tr><tr><td class='detected-text'>wnnp</td><td>0.55</td><td>0.03%</td></tr><tr><td class='detected-text'>FORTSUMTER</td><td>0.96</td><td>0.37%</td></tr><tr><td class='detected-text'>S'sTanurs</td><td>0.71</td><td>0.07%</td></tr><tr><td class='detected-text'>Koonr</td><td>0.90</td><td>0.12%</td></tr><tr><td class='detected-text'>nicRoal</td><td>0.59</td><td>0.07%</td></tr><tr><td class='detected-text'>Rromun</td><td>0.76</td><td>0.09%</td></tr><tr><td class='detected-text'>Rtonye</td><td>0.79</td><td>0.08%</td></tr><tr><td class='detected-text'>B.gtacuuico</td><td>0.66</td><td>0.07%</td></tr><tr><td class='detected-text'>APRIL186</td><td>0.99</td><td>0.50%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/6a07e894f1e5.jpg" alt="6a07e894f1e5.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">6a07e894f1e5.jpg (7.41% text area)</div>
+                <div class="reason">Matches script/manifest text (word 'standing')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>nderstanding thethree categrie</td><td>0.98</td><td>1.55%</td></tr><tr><td class='detected-text'>s not an academic exernise.</td><td>0.95</td><td>1.25%</td></tr><tr><td class='detected-text'>AbuBakr</td><td>1.00</td><td>0.38%</td></tr><tr><td class='detected-text'>Umar</td><td>0.99</td><td>0.24%</td></tr><tr><td class='detected-text'>was stratecgally essential.</td><td>0.99</td><td>1.49%</td></tr><tr><td class='detected-text'>S2E3-FIREIN EVERYDIRECTION</td><td>0.95</td><td>2.50%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/65415f80a51e.jpg" alt="65415f80a51e.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">65415f80a51e.jpg (7.17% text area)</div>
+                <div class="reason">Matches script/manifest text (american civil war intro sample)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>AMERICAN CIVIL WAR INTRO SAMPLE</td><td>0.97</td><td>3.54%</td></tr><tr><td class='detected-text'>FORT SUMTER</td><td>0.95</td><td>1.28%</td></tr><tr><td class='detected-text'>Union March</td><td>1.00</td><td>0.70%</td></tr><tr><td class='detected-text'>Soositort</td><td>0.94</td><td>0.07%</td></tr><tr><td class='detected-text'>人AOnC</td><td>0.55</td><td>0.06%</td></tr><tr><td class='detected-text'>ApriL1861</td><td>0.94</td><td>0.15%</td></tr><tr><td class='detected-text'>NOAONtO</td><td>0.61</td><td>0.07%</td></tr><tr><td class='detected-text'>onn</td><td>0.58</td><td>0.02%</td></tr><tr><td class='detected-text'>FORTSUMTER</td><td>0.97</td><td>0.30%</td></tr><tr><td class='detected-text'>LS</td><td>0.53</td><td>0.01%</td></tr><tr><td class='detected-text'>Koonr</td><td>0.90</td><td>0.12%</td></tr><tr><td class='detected-text'>nicRoal</td><td>0.59</td><td>0.07%</td></tr><tr><td class='detected-text'>Romun</td><td>0.85</td><td>0.09%</td></tr><tr><td class='detected-text'>Rtonye</td><td>0.79</td><td>0.08%</td></tr><tr><td class='detected-text'>B.gtacuuico</td><td>0.66</td><td>0.07%</td></tr><tr><td class='detected-text'>Horsrotne</td><td>0.74</td><td>0.04%</td></tr><tr><td class='detected-text'>APRIL186</td><td>0.99</td><td>0.50%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/a6f79e1590a4.jpg" alt="a6f79e1590a4.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">a6f79e1590a4.jpg (6.75% text area)</div>
+                <div class="reason">Matches script/manifest text (word 'standing')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Understanding thethree categries</td><td>1.00</td><td>1.75%</td></tr><tr><td class='detected-text'>wasnotanacademicexernise.</td><td>0.99</td><td>1.16%</td></tr><tr><td class='detected-text'>It was stratecgally essential.</td><td>0.98</td><td>1.47%</td></tr><tr><td class='detected-text'>S2E3 - FIRE IN EVERY DIRECTION</td><td>0.95</td><td>2.37%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/896a5be47cf0.jpg" alt="896a5be47cf0.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">896a5be47cf0.jpg (6.08% text area)</div>
+                <div class="reason">Matches script/manifest text (american civil war intro sample)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>AMERICAN CIVIL WAR INTRO SAMPLE</td><td>0.97</td><td>3.27%</td></tr><tr><td class='detected-text'>FORT SUMTER</td><td>0.95</td><td>1.21%</td></tr><tr><td class='detected-text'>Sloositort</td><td>0.91</td><td>0.08%</td></tr><tr><td class='detected-text'>AOn</td><td>0.73</td><td>0.05%</td></tr><tr><td class='detected-text'>April1861</td><td>0.96</td><td>0.15%</td></tr><tr><td class='detected-text'>NORONCD</td><td>0.64</td><td>0.07%</td></tr><tr><td class='detected-text'>liram</td><td>0.74</td><td>0.03%</td></tr><tr><td class='detected-text'>KAcorou</td><td>0.90</td><td>0.05%</td></tr><tr><td class='detected-text'>ORT</td><td>0.99</td><td>0.06%</td></tr><tr><td class='detected-text'>SUMTER</td><td>0.98</td><td>0.17%</td></tr><tr><td class='detected-text'>Koonr</td><td>0.94</td><td>0.10%</td></tr><tr><td class='detected-text'>nicRoat</td><td>0.69</td><td>0.07%</td></tr><tr><td class='detected-text'>Rromun.</td><td>0.75</td><td>0.07%</td></tr><tr><td class='detected-text'>Htonrye</td><td>0.72</td><td>0.06%</td></tr><tr><td class='detected-text'>Bgtucuco</td><td>0.71</td><td>0.10%</td></tr><tr><td class='detected-text'>ElarsrotnoI</td><td>0.62</td><td>0.07%</td></tr><tr><td class='detected-text'>APRIL186</td><td>0.99</td><td>0.47%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/25f6d87be67a.jpg" alt="25f6d87be67a.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">25f6d87be67a.jpg (4.59% text area)</div>
+                <div class="reason">Matches script/manifest text (fiogght)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>FORFOURLONGYEARS,THEUNITEDSTATES</td><td>0.89</td><td>1.47%</td></tr><tr><td class='detected-text'>FIOGGHT,BRUTAL WAR OFBROTHER AGAINST BROTHER,</td><td>0.95</td><td>1.86%</td></tr><tr><td class='detected-text'>RESHAPINGTHEFATEOFTHENATION.</td><td>0.97</td><td>1.25%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/7562114cf6bb.jpg" alt="7562114cf6bb.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">7562114cf6bb.jpg (4.32% text area)</div>
+                <div class="reason">Matches script/manifest text (word 'islamic')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Mitthor abou"</td><td>0.93</td><td>0.37%</td></tr><tr><td class='detected-text'>iMchakedt</td><td>0.99</td><td>0.30%</td></tr><tr><td class='detected-text'>Mose heut</td><td>0.98</td><td>0.30%</td></tr><tr><td class='detected-text'>Mou mistoked</td><td>0.98</td><td>0.35%</td></tr><tr><td class='detected-text'>gnovensily</td><td>1.00</td><td>0.30%</td></tr><tr><td class='detected-text'>coinsteres.</td><td>1.00</td><td>0.25%</td></tr><tr><td class='detected-text'>and terms.</td><td>0.96</td><td>0.25%</td></tr><tr><td class='detected-text'>Now the terms abous changed</td><td>0.97</td><td>0.86%</td></tr><tr><td class='detected-text'>changed'stesterwith teew</td><td>0.97</td><td>0.75%</td></tr><tr><td class='detected-text'>Islamicunderstandng.</td><td>0.97</td><td>0.60%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/1a8b2e0473e4.jpg" alt="1a8b2e0473e4.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">1a8b2e0473e4.jpg (2.31% text area)</div>
+                <div class="reason">Matches script/manifest text (fort sumter)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>April 1861: Bombardment of Fort Sumter</td><td>1.00</td><td>2.31%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_p0kgu5p0kgu5p0kg.png" alt="Gemini_Generated_Image_p0kgu5p0kgu5p0kg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_p0kgu5p0kgu5p0kg.png (1.08% text area)</div>
+                <div class="reason">Matches script/manifest text (word 'persian')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>W</td><td>0.87</td><td>0.02%</td></tr><tr><td class='detected-text'>Persian army</td><td>0.96</td><td>0.36%</td></tr><tr><td class='detected-text'>Khalid's forces</td><td>0.98</td><td>0.41%</td></tr><tr><td class='detected-text'>100</td><td>1.00</td><td>0.07%</td></tr><tr><td class='detected-text'>200</td><td>1.00</td><td>0.06%</td></tr><tr><td class='detected-text'>300</td><td>1.00</td><td>0.06%</td></tr><tr><td class='detected-text'>400m</td><td>0.99</td><td>0.10%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_sju7g4sju7g4sju7.png" alt="Gemini_Generated_Image_sju7g4sju7g4sju7.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_sju7g4sju7g4sju7.png (24.89% text area)</div>
+                <div class="reason">Large text block (covered area 24.89% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>9 BROKEN SWORDS</td><td>0.97</td><td>24.89%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (28).png" alt="nano_banana_removed (28).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (28).png (23.06% text area)</div>
+                <div class="reason">Large text block (covered area 23.06% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>THE SWORD</td><td>0.96</td><td>7.25%</td></tr><tr><td class='detected-text'>THE IRON</td><td>0.95</td><td>4.86%</td></tr><tr><td class='detected-text'>VS THE EMPIRE</td><td>0.99</td><td>8.30%</td></tr><tr><td class='detected-text'>TRAP</td><td>0.99</td><td>2.66%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_bti752bti752bti7.png" alt="Gemini_Generated_Image_bti752bti752bti7.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_bti752bti752bti7.png (20.52% text area)</div>
+                <div class="reason">Large text block (covered area 20.52% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>THE</td><td>1.00</td><td>0.87%</td></tr><tr><td class='detected-text'>IRON TRAP</td><td>0.97</td><td>7.63%</td></tr><tr><td class='detected-text'>THE</td><td>1.00</td><td>1.75%</td></tr><tr><td class='detected-text'>ESWORD</td><td>0.96</td><td>3.59%</td></tr><tr><td class='detected-text'>VS</td><td>0.96</td><td>1.00%</td></tr><tr><td class='detected-text'>THE EMPIRE</td><td>0.96</td><td>5.67%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_utxlvxutxlvxutxl.png" alt="Gemini_Generated_Image_utxlvxutxlvxutxl.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_utxlvxutxlvxutxl.png (19.37% text area)</div>
+                <div class="reason">Large text block (covered area 19.37% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>THE SWORD</td><td>1.00</td><td>5.85%</td></tr><tr><td class='detected-text'>THE IRON</td><td>0.98</td><td>4.42%</td></tr><tr><td class='detected-text'>VS THE EMPIRE</td><td>0.99</td><td>6.90%</td></tr><tr><td class='detected-text'>TRAP</td><td>0.99</td><td>2.20%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_k8mqcwk8mqcwk8mq.png" alt="Gemini_Generated_Image_k8mqcwk8mqcwk8mq.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_k8mqcwk8mqcwk8mq.png (16.82% text area)</div>
+                <div class="reason">Large text block (covered area 16.82% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>ENEMYTO LEGEND</td><td>0.96</td><td>16.82%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_k8mqcwk8mqcwk8mq.png" alt="Gemini_Generated_Image_k8mqcwk8mqcwk8mq.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_k8mqcwk8mqcwk8mq.png (16.82% text area)</div>
+                <div class="reason">Large text block (covered area 16.82% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>ENEMYTO LEGEND</td><td>0.96</td><td>16.82%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/download (5).png" alt="download (5).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">download (5).png (15.52% text area)</div>
+                <div class="reason">Large text block (covered area 15.52% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>物</td><td>0.79</td><td>15.52%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (25).png" alt="nano_banana_removed (25).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (25).png (14.74% text area)</div>
+                <div class="reason">Large text block (covered area 14.74% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>HOW HE DID IT</td><td>0.97</td><td>14.74%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/2b4c24be7a06.jpg" alt="2b4c24be7a06.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">2b4c24be7a06.jpg (12.74% text area)</div>
+                <div class="reason">Large text block (covered area 12.74% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3—FIREIN EVERYDIRECTION</td><td>0.94</td><td>2.28%</td></tr><tr><td class='detected-text'>The eleven commanders received aier assignments, But before</td><td>0.98</td><td>3.81%</td></tr><tr><td class='detected-text'>then marched, Abu Bakr sent something ahead of them.</td><td>0.98</td><td>3.10%</td></tr><tr><td class='detected-text'>1. Call to Islam</td><td>0.92</td><td>1.00%</td></tr><tr><td class='detected-text'>2.Adhan=Peace</td><td>0.99</td><td>1.15%</td></tr><tr><td class='detected-text'>3. No Adhan = Advance</td><td>0.98</td><td>1.40%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_rzwav8rzwav8rzwa.png" alt="Gemini_Generated_Image_rzwav8rzwav8rzwa.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_rzwav8rzwav8rzwa.png (12.73% text area)</div>
+                <div class="reason">Large text block (covered area 12.73% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>HOW HE DID IT</td><td>0.92</td><td>12.73%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/khalid ibn al-walid Military background.png" alt="khalid ibn al-walid Military background.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">khalid ibn al-walid Military background.png (11.97% text area)</div>
+                <div class="reason">Large text block (covered area 11.97% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>khalid ibnal-walid</td><td>0.98</td><td>5.37%</td></tr><tr><td class='detected-text'>Military</td><td>0.99</td><td>2.54%</td></tr><tr><td class='detected-text'>background</td><td>1.00</td><td>4.05%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/khalid ibn al-walid Military background 11.png" alt="khalid ibn al-walid Military background 11.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">khalid ibn al-walid Military background 11.png (11.69% text area)</div>
+                <div class="reason">Large text block (covered area 11.69% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>HOW A</td><td>0.95</td><td>3.65%</td></tr><tr><td class='detected-text'>PART1</td><td>0.99</td><td>0.68%</td></tr><tr><td class='detected-text'>MAN</td><td>0.99</td><td>1.73%</td></tr><tr><td class='detected-text'>BROOKE</td><td>1.00</td><td>2.63%</td></tr><tr><td class='detected-text'>9 SWORD</td><td>0.99</td><td>3.01%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/ecb2ca0d7097.jpg" alt="ecb2ca0d7097.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">ecb2ca0d7097.jpg (10.32% text area)</div>
+                <div class="reason">Large text block (covered area 10.32% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREINEVERYDIRECTION</td><td>0.97</td><td>2.41%</td></tr><tr><td class='detected-text'>To understand the Ridda --</td><td>0.98</td><td>1.76%</td></tr><tr><td class='detected-text'>apostasy - you have to understand what</td><td>1.00</td><td>2.86%</td></tr><tr><td class='detected-text'>Arabia actually was in 11 AH.</td><td>0.99</td><td>1.94%</td></tr><tr><td class='detected-text'>It was not a nation.</td><td>0.99</td><td>1.34%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/867fdb833bfb.jpg" alt="867fdb833bfb.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">867fdb833bfb.jpg (10.24% text area)</div>
+                <div class="reason">Large text block (covered area 10.24% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>印</td><td>0.89</td><td>10.24%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/a1e3d2cbebac.jpg" alt="a1e3d2cbebac.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">a1e3d2cbebac.jpg (10.07% text area)</div>
+                <div class="reason">Large text block (covered area 10.07% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREIN EVERY DIRECTION</td><td>0.94</td><td>2.66%</td></tr><tr><td class='detected-text'>Saifullah (Sword of Allah)</td><td>0.94</td><td>1.71%</td></tr><tr><td class='detected-text'>Among the men recieiving banners in these weeks,</td><td>0.99</td><td>2.72%</td></tr><tr><td class='detected-text'>tho reqluire requires special attention herenot because..</td><td>0.98</td><td>2.98%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/a8e144badc56.jpg" alt="a8e144badc56.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">a8e144badc56.jpg (9.68% text area)</div>
+                <div class="reason">Large text block (covered area 9.68% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREIN EVERY DIRECTION</td><td>0.94</td><td>4.24%</td></tr><tr><td class='detected-text'>51</td><td>0.85</td><td>0.16%</td></tr><tr><td class='detected-text'>MEDINA</td><td>0.94</td><td>0.37%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.98</td><td>1.21%</td></tr><tr><td class='detected-text'>emen</td><td>1.00</td><td>0.18%</td></tr><tr><td class='detected-text'>Hadramaut</td><td>1.00</td><td>0.43%</td></tr><tr><td class='detected-text'>THECOUNCILATAL-MADINAHTHATPRODUCED.BANERNOT</td><td>0.99</td><td>1.94%</td></tr><tr><td class='detected-text'>DESORIBEDINTHESOURCESS.</td><td>0.97</td><td>1.15%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/8f8a5676803b.jpg" alt="8f8a5676803b.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">8f8a5676803b.jpg (9.53% text area)</div>
+                <div class="reason">Large text block (covered area 9.53% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3—FIRE IN EVERY DIRECTION</td><td>0.95</td><td>2.66%</td></tr><tr><td class='detected-text'>PEMAR</td><td>0.98</td><td>0.09%</td></tr><tr><td class='detected-text'>AL-NATTAB</td><td>0.93</td><td>0.18%</td></tr><tr><td class='detected-text'>PLhLE</td><td>0.74</td><td>0.06%</td></tr><tr><td class='detected-text'>He was also difficult. He was</td><td>1.00</td><td>1.36%</td></tr><tr><td class='detected-text'>abrasivehowaysthatmade</td><td>1.00</td><td>1.18%</td></tr><tr><td class='detected-text'>the senior Companions unmoftable.</td><td>0.98</td><td>2.00%</td></tr><tr><td class='detected-text'>Umar ibn al-Khattab</td><td>0.99</td><td>1.09%</td></tr><tr><td class='detected-text'>He was capable of</td><td>0.93</td><td>0.92%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (31).png" alt="nano_banana_removed (31).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (31).png (9.09% text area)</div>
+                <div class="reason">Large text block (covered area 9.09% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3 DUELS. 3 DEATHS.</td><td>0.92</td><td>6.14%</td></tr><tr><td class='detected-text'>Episode 6</td><td>0.96</td><td>2.95%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f898dd26a55a.jpg" alt="f898dd26a55a.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">f898dd26a55a.jpg (8.90% text area)</div>
+                <div class="reason">Large text block (covered area 8.90% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>There is question I</td><td>0.99</td><td>1.71%</td></tr><tr><td class='detected-text'>want to put to you</td><td>0.98</td><td>1.21%</td></tr><tr><td class='detected-text'>before we go forther,</td><td>0.98</td><td>1.60%</td></tr><tr><td class='detected-text'>forther, abcause sits sito</td><td>1.00</td><td>1.57%</td></tr><tr><td class='detected-text'>ots the center of</td><td>0.98</td><td>1.07%</td></tr><tr><td class='detected-text'>everything this episode.</td><td>0.98</td><td>1.74%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_w36v2xw36v2xw36v.png" alt="Gemini_Generated_Image_w36v2xw36v2xw36v.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_w36v2xw36v2xw36v.png (8.78% text area)</div>
+                <div class="reason">Large text block (covered area 8.78% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3 DUELS. 3 DEATHS.</td><td>0.99</td><td>5.84%</td></tr><tr><td class='detected-text'>Episode 6</td><td>1.00</td><td>2.94%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/cf16670c9e51.jpg" alt="cf16670c9e51.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">cf16670c9e51.jpg (8.75% text area)</div>
+                <div class="reason">Large text block (covered area 8.75% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREINEVERYDIRECTION</td><td>0.97</td><td>4.46%</td></tr><tr><td class='detected-text'>5</td><td>0.93</td><td>0.08%</td></tr><tr><td class='detected-text'>MEDINA</td><td>0.99</td><td>0.35%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.99</td><td>1.15%</td></tr><tr><td class='detected-text'>THE COUNCILATAL-MADINAH THAT PRODUCED. BANER NOT DESCRIBED IN THE SOURCESS.</td><td>0.95</td><td>2.72%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/c91c6a3066b4.jpg" alt="c91c6a3066b4.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">c91c6a3066b4.jpg (8.49% text area)</div>
+                <div class="reason">Large text block (covered area 8.49% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3—FIREIN EVERYDIRECTION</td><td>0.95</td><td>2.32%</td></tr><tr><td class='detected-text'>The eleven commanders received aier assignments, But before</td><td>0.99</td><td>3.28%</td></tr><tr><td class='detected-text'>then marched, Abu Bakr sent something ahead of them.</td><td>0.98</td><td>2.90%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/e12aa38c1501.jpg" alt="e12aa38c1501.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">e12aa38c1501.jpg (8.48% text area)</div>
+                <div class="reason">Large text block (covered area 8.48% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREIN EVERY DIRECTION</td><td>0.94</td><td>2.54%</td></tr><tr><td class='detected-text'>Among the men recieiving banners in these weeks,</td><td>0.99</td><td>2.75%</td></tr><tr><td class='detected-text'>tho require requires special attention herenot because..</td><td>0.99</td><td>3.19%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (32).png" alt="nano_banana_removed (32).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (32).png (8.40% text area)</div>
+                <div class="reason">Large text block (covered area 8.40% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>RIVER</td><td>0.99</td><td>3.73%</td></tr><tr><td class='detected-text'>00018</td><td>0.93</td><td>4.67%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/6c226cf6c9a2.jpg" alt="6c226cf6c9a2.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">6c226cf6c9a2.jpg (8.10% text area)</div>
+                <div class="reason">Large text block (covered area 8.10% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3 — FIRE IN EVERY DIRECTION</td><td>0.95</td><td>2.47%</td></tr><tr><td class='detected-text'>PEMAR</td><td>0.95</td><td>0.09%</td></tr><tr><td class='detected-text'>AL-NATTAB</td><td>0.91</td><td>0.16%</td></tr><tr><td class='detected-text'>Bino'3</td><td>0.81</td><td>0.04%</td></tr><tr><td class='detected-text'>PlhLBL</td><td>0.65</td><td>0.09%</td></tr><tr><td class='detected-text'>He was also difficult. He was</td><td>0.98</td><td>1.24%</td></tr><tr><td class='detected-text'>abrasive ho ways that made</td><td>0.96</td><td>1.11%</td></tr><tr><td class='detected-text'>the senior Companions unmoftable.</td><td>1.00</td><td>1.96%</td></tr><tr><td class='detected-text'>He was capable of</td><td>0.95</td><td>0.93%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Whisk_cd9f05c2d8710b299dc4eb0578157770eg.png" alt="Whisk_cd9f05c2d8710b299dc4eb0578157770eg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Whisk_cd9f05c2d8710b299dc4eb0578157770eg.png (7.58% text area)</div>
+                <div class="reason">Large text block (covered area 7.58% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3 RAIDS.</td><td>0.90</td><td>3.65%</td></tr><tr><td class='detected-text'>ALL NIGHT</td><td>0.96</td><td>3.09%</td></tr><tr><td class='detected-text'>KHALID</td><td>0.98</td><td>0.85%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f7eb1fb0f4b9.jpg" alt="f7eb1fb0f4b9.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">f7eb1fb0f4b9.jpg (7.54% text area)</div>
+                <div class="reason">Large text block (covered area 7.54% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREINEVERY DIRECTION</td><td>0.96</td><td>4.24%</td></tr><tr><td class='detected-text'>5①</td><td>0.95</td><td>0.16%</td></tr><tr><td class='detected-text'>Yamamah (Musailamaho 40k)</td><td>0.94</td><td>1.57%</td></tr><tr><td class='detected-text'>MEDINA</td><td>0.99</td><td>0.37%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.99</td><td>1.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/c46f52ab08dc.jpg" alt="c46f52ab08dc.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">c46f52ab08dc.jpg (7.37% text area)</div>
+                <div class="reason">Large text block (covered area 7.37% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3 - FIRE IN EVERY DIRECTION</td><td>0.95</td><td>2.39%</td></tr><tr><td class='detected-text'>THEAPOSTASYWASNOT</td><td>0.99</td><td>0.78%</td></tr><tr><td class='detected-text'>AMIILIITARYPROBLEM</td><td>0.98</td><td>0.70%</td></tr><tr><td class='detected-text'>WITH A MILITARYSOLUTION</td><td>0.95</td><td>0.90%</td></tr><tr><td class='detected-text'>WAS IT WASA POLITICAL</td><td>0.93</td><td>0.78%</td></tr><tr><td class='detected-text'>CRISIS THADA MILITARY</td><td>0.95</td><td>0.79%</td></tr><tr><td class='detected-text'>HISTORE HISTORE</td><td>0.97</td><td>1.02%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/cf90bc3df652.jpg" alt="cf90bc3df652.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">cf90bc3df652.jpg (7.34% text area)</div>
+                <div class="reason">Large text block (covered area 7.34% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3</td><td>0.99</td><td>0.38%</td></tr><tr><td class='detected-text'>FIRE IN EVERY DIRECTION</td><td>0.95</td><td>1.64%</td></tr><tr><td class='detected-text'>AND IF YOU ARENEWTO THISCHANNEL --</td><td>0.94</td><td>1.55%</td></tr><tr><td class='detected-text'>WE HAVE BEEN BUILLDINGTHISSTORY THEBEGINNING</td><td>0.95</td><td>2.08%</td></tr><tr><td class='detected-text'>BEGINNING,ANDITONLYGETSLARGERFROM</td><td>0.96</td><td>1.69%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Whisk_15fb5f37d5b3e3da46e47c7a79f79972eg.png" alt="Whisk_15fb5f37d5b3e3da46e47c7a79f79972eg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Whisk_15fb5f37d5b3e3da46e47c7a79f79972eg.png (7.22% text area)</div>
+                <div class="reason">Large text block (covered area 7.22% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3 RAIDS</td><td>0.90</td><td>3.58%</td></tr><tr><td class='detected-text'>ALL NIGHT</td><td>0.95</td><td>2.79%</td></tr><tr><td class='detected-text'>KHALID</td><td>0.98</td><td>0.85%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Whisk_7ab3449dece5f48bc624e3984ef71a3beg.png" alt="Whisk_7ab3449dece5f48bc624e3984ef71a3beg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Whisk_7ab3449dece5f48bc624e3984ef71a3beg.png (7.19% text area)</div>
+                <div class="reason">Large text block (covered area 7.19% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>KHALID</td><td>0.97</td><td>4.72%</td></tr><tr><td class='detected-text'>3 RaidS.</td><td>0.81</td><td>1.07%</td></tr><tr><td class='detected-text'>ALL NIGHT.</td><td>0.93</td><td>1.40%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/b98694b22f0f.jpg" alt="b98694b22f0f.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  <span style='color:#38bdf8;'>[in manifest]</span>
+                </div>
+                <div class="path">b98694b22f0f.jpg (7.18% text area)</div>
+                <div class="reason">Large text block (covered area 7.18% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>H</td><td>0.81</td><td>7.18%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/thumbnail-1.png" alt="thumbnail-1.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">thumbnail-1.png (7.07% text area)</div>
+                <div class="reason">Large text block (covered area 7.07% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>RIVER</td><td>0.99</td><td>3.26%</td></tr><tr><td class='detected-text'>BLOOD</td><td>0.89</td><td>3.81%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/thumbnail-1.png" alt="thumbnail-1.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">thumbnail-1.png (7.07% text area)</div>
+                <div class="reason">Large text block (covered area 7.07% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>RIVER</td><td>0.99</td><td>3.26%</td></tr><tr><td class='detected-text'>BLOOD</td><td>0.89</td><td>3.81%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/thumbnail-2.png" alt="thumbnail-2.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">thumbnail-2.png (6.99% text area)</div>
+                <div class="reason">Large text block (covered area 6.99% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>DEADLY</td><td>0.97</td><td>4.20%</td></tr><tr><td class='detected-text'>VOW</td><td>0.88</td><td>2.79%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/thumbnail-2.png" alt="thumbnail-2.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">thumbnail-2.png (6.99% text area)</div>
+                <div class="reason">Large text block (covered area 6.99% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>DEADLY</td><td>0.97</td><td>4.20%</td></tr><tr><td class='detected-text'>VOW</td><td>0.88</td><td>2.79%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/eefcbb0e21a4.jpg" alt="eefcbb0e21a4.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">eefcbb0e21a4.jpg (6.93% text area)</div>
+                <div class="reason">Large text block (covered area 6.93% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREIN EVERY DIRECTION</td><td>0.95</td><td>4.24%</td></tr><tr><td class='detected-text'>Hostile Confederacy</td><td>0.96</td><td>0.95%</td></tr><tr><td class='detected-text'>51</td><td>0.77</td><td>0.17%</td></tr><tr><td class='detected-text'>MEDINA</td><td>0.99</td><td>0.37%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.99</td><td>1.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/69253c756094.jpg" alt="69253c756094.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">69253c756094.jpg (6.75% text area)</div>
+                <div class="reason">Large text block (covered area 6.75% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREIN EVERY DIRECTION</td><td>0.95</td><td>4.24%</td></tr><tr><td class='detected-text'>BuzakhahTulaihah)</td><td>0.99</td><td>0.77%</td></tr><tr><td class='detected-text'>51</td><td>0.77</td><td>0.17%</td></tr><tr><td class='detected-text'>MEDINA</td><td>0.99</td><td>0.37%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.99</td><td>1.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/6560b60cf62d.jpg" alt="6560b60cf62d.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">6560b60cf62d.jpg (6.70% text area)</div>
+                <div class="reason">Large text block (covered area 6.70% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREIN EVERY DIRECTION</td><td>0.95</td><td>4.24%</td></tr><tr><td class='detected-text'>Amr&Shurahbil</td><td>0.98</td><td>0.73%</td></tr><tr><td class='detected-text'>5①</td><td>0.74</td><td>0.16%</td></tr><tr><td class='detected-text'>MEDINA</td><td>0.99</td><td>0.37%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.99</td><td>1.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/26e858890238.jpg" alt="26e858890238.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">26e858890238.jpg (6.62% text area)</div>
+                <div class="reason">Large text block (covered area 6.62% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREINEVERY DIRECTION</td><td>0.96</td><td>4.24%</td></tr><tr><td class='detected-text'>5①</td><td>0.90</td><td>0.17%</td></tr><tr><td class='detected-text'>Oman(Laqit)</td><td>0.97</td><td>0.63%</td></tr><tr><td class='detected-text'>MEDINA</td><td>0.99</td><td>0.37%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.99</td><td>1.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/763a20141326.jpg" alt="763a20141326.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">763a20141326.jpg (6.55% text area)</div>
+                <div class="reason">Large text block (covered area 6.55% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREINEVERYDIRECTION</td><td>0.98</td><td>4.24%</td></tr><tr><td class='detected-text'>Bahrain(Hatm)</td><td>0.97</td><td>0.71%</td></tr><tr><td class='detected-text'>MEDINA</td><td>1.00</td><td>0.39%</td></tr><tr><td class='detected-text'>ARABIA</td><td>0.99</td><td>1.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/b7f722807d29.jpg" alt="b7f722807d29.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">b7f722807d29.jpg (6.51% text area)</div>
+                <div class="reason">Large text block (covered area 6.51% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3 - Fire In Every Direction</td><td>0.94</td><td>1.86%</td></tr><tr><td class='detected-text'>WhenTheProphetSallallahu</td><td>0.99</td><td>0.99%</td></tr><tr><td class='detected-text'>Sallallahu wasallam died, The calcullation changed.</td><td>1.00</td><td>1.95%</td></tr><tr><td class='detected-text'>The network of protection was suddeny in...</td><td>1.00</td><td>1.70%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/cefd3c7adbd6.jpg" alt="cefd3c7adbd6.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">cefd3c7adbd6.jpg (5.89% text area)</div>
+                <div class="reason">Large text block (covered area 5.89% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Abs & Dhubyan (Zakat Refusal)</td><td>0.96</td><td>1.32%</td></tr><tr><td class='detected-text'>-S2E3</td><td>0.98</td><td>0.35%</td></tr><tr><td class='detected-text'>FIREINEVERYDIRECTION</td><td>0.99</td><td>0.87%</td></tr><tr><td class='detected-text'>THEARMYOFUSAMAHHAD</td><td>0.98</td><td>0.76%</td></tr><tr><td class='detected-text'>HADJUSTRETURNED.</td><td>0.99</td><td>0.51%</td></tr><tr><td class='detected-text'>IMMEDIATETHREAT</td><td>0.99</td><td>0.48%</td></tr><tr><td class='detected-text'>ATDHUKHUSHUBHAD</td><td>0.99</td><td>0.55%</td></tr><tr><td class='detected-text'>HADBEREPECTED.</td><td>0.99</td><td>0.44%</td></tr><tr><td class='detected-text'>ANDFROMEVERYDIRECTION-</td><td>0.98</td><td>0.62%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/1a98c594b4d1.jpg" alt="1a98c594b4d1.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">1a98c594b4d1.jpg (5.83% text area)</div>
+                <div class="reason">Large text block (covered area 5.83% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-</td><td>0.99</td><td>0.35%</td></tr><tr><td class='detected-text'>FIREIN EVERY DIRECTION</td><td>0.95</td><td>1.76%</td></tr><tr><td class='detected-text'>THESIRTSHHTIOWDREVERTIONOFTRIBESTO</td><td>0.97</td><td>1.32%</td></tr><tr><td class='detected-text'>PAGANISMATSLEN AFTERBROUGHT.BROUGHT</td><td>0.97</td><td>1.44%</td></tr><tr><td class='detected-text'>BROUGSTIROQUESTICPOLITICAL</td><td>0.99</td><td>0.97%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/abb9420bda95.jpg" alt="abb9420bda95.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">abb9420bda95.jpg (5.55% text area)</div>
+                <div class="reason">Large text block (covered area 5.55% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>AI-Madinah(Held)</td><td>0.94</td><td>0.98%</td></tr><tr><td class='detected-text'>-S2E3</td><td>0.98</td><td>0.35%</td></tr><tr><td class='detected-text'>FIREINEVERYDIRECTION</td><td>0.99</td><td>0.87%</td></tr><tr><td class='detected-text'>THEARMYOFUSAMAHHAD</td><td>0.98</td><td>0.76%</td></tr><tr><td class='detected-text'>HADJUSTRETURNED.</td><td>0.99</td><td>0.51%</td></tr><tr><td class='detected-text'>IMMEDIATETHREAT</td><td>0.99</td><td>0.48%</td></tr><tr><td class='detected-text'>ATDHUKHUSHUBHAD</td><td>0.99</td><td>0.55%</td></tr><tr><td class='detected-text'>HADBEREPECTED.</td><td>0.99</td><td>0.44%</td></tr><tr><td class='detected-text'>ANDFROMEVERYDIRECTION-</td><td>0.98</td><td>0.62%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/462f43ee8506.jpg" alt="462f43ee8506.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">462f43ee8506.jpg (5.47% text area)</div>
+                <div class="reason">Large text block (covered area 5.47% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Tulaihah</td><td>0.99</td><td>0.31%</td></tr><tr><td class='detected-text'>Musailamah</td><td>0.99</td><td>0.40%</td></tr><tr><td class='detected-text'>-S2E3</td><td>0.99</td><td>0.35%</td></tr><tr><td class='detected-text'>FIREINEVERYDIRECTION</td><td>0.99</td><td>0.87%</td></tr><tr><td class='detected-text'>THEARMYOFUSAMAHHAD</td><td>0.98</td><td>0.76%</td></tr><tr><td class='detected-text'>HADJUSTRETURNED.</td><td>0.99</td><td>0.51%</td></tr><tr><td class='detected-text'>IMMEDIATETHREAT</td><td>0.99</td><td>0.48%</td></tr><tr><td class='detected-text'>ATDHUKHUSHUBHAD</td><td>0.99</td><td>0.55%</td></tr><tr><td class='detected-text'>HADBEREPECTED.</td><td>0.99</td><td>0.44%</td></tr><tr><td class='detected-text'>Aswad</td><td>1.00</td><td>0.20%</td></tr><tr><td class='detected-text'>ANDFROMEVERYDIRECTION-</td><td>0.98</td><td>0.62%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/07f59b12398c.jpg" alt="07f59b12398c.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">07f59b12398c.jpg (5.40% text area)</div>
+                <div class="reason">Large text block (covered area 5.40% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Rebellion</td><td>0.99</td><td>0.42%</td></tr><tr><td class='detected-text'>-S2E3</td><td>0.98</td><td>0.35%</td></tr><tr><td class='detected-text'>Rebellion</td><td>0.99</td><td>0.42%</td></tr><tr><td class='detected-text'>FIREINEVERYDIRECTION</td><td>0.99</td><td>0.87%</td></tr><tr><td class='detected-text'>THEARMYOFUSAMAHHAD</td><td>0.98</td><td>0.76%</td></tr><tr><td class='detected-text'>HADJUSTRETURNED.</td><td>0.99</td><td>0.51%</td></tr><tr><td class='detected-text'>IMMEDIATETHREAT</td><td>0.99</td><td>0.48%</td></tr><tr><td class='detected-text'>ATDHUKHUSHUBHAD</td><td>0.99</td><td>0.55%</td></tr><tr><td class='detected-text'>HADBEREPECTED.</td><td>0.99</td><td>0.44%</td></tr><tr><td class='detected-text'>ANDFROMEVERYDIRECTION-</td><td>0.98</td><td>0.62%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/1fd1bf2c3cfd.jpg" alt="1fd1bf2c3cfd.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">1fd1bf2c3cfd.jpg (5.40% text area)</div>
+                <div class="reason">Large text block (covered area 5.40% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>False Prophets</td><td>0.99</td><td>0.83%</td></tr><tr><td class='detected-text'>-S2E3</td><td>0.98</td><td>0.35%</td></tr><tr><td class='detected-text'>FIREINEVERYDIRECTION</td><td>0.99</td><td>0.87%</td></tr><tr><td class='detected-text'>THEARMYOFUSAMAHHAD</td><td>0.98</td><td>0.76%</td></tr><tr><td class='detected-text'>HADJUSTRETURNED.</td><td>0.99</td><td>0.51%</td></tr><tr><td class='detected-text'>IMMEDIATETHREAT</td><td>0.99</td><td>0.48%</td></tr><tr><td class='detected-text'>ATDHUKHUSHUBHAD</td><td>0.99</td><td>0.55%</td></tr><tr><td class='detected-text'>HADBEREPECTED.</td><td>0.99</td><td>0.44%</td></tr><tr><td class='detected-text'>ANDFROMEVERYDIRECTION-</td><td>0.98</td><td>0.62%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f9943ed1bba9.jpg" alt="f9943ed1bba9.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">f9943ed1bba9.jpg (5.25% text area)</div>
+                <div class="reason">Large text block (covered area 5.25% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>2WOWEEKSINTIO</td><td>0.99</td><td>0.61%</td></tr><tr><td class='detected-text'>CALIPIHAATFABUBAKRAL-SIDDIQ</td><td>0.98</td><td>1.28%</td></tr><tr><td class='detected-text'>ALALRIKA</td><td>0.91</td><td>0.16%</td></tr><tr><td class='detected-text'>AALHAA</td><td>0.74</td><td>0.05%</td></tr><tr><td class='detected-text'>OLANTOA</td><td>0.86</td><td>0.08%</td></tr><tr><td class='detected-text'>AL-MADINAH</td><td>0.94</td><td>0.29%</td></tr><tr><td class='detected-text'>ALMADINAH</td><td>0.94</td><td>0.17%</td></tr><tr><td class='detected-text'>S2E3 - FIRE IN EVERY DIRECTION</td><td>0.88</td><td>2.60%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_jx4s6ijx4s6ijx4s.png" alt="Gemini_Generated_Image_jx4s6ijx4s6ijx4s.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_jx4s6ijx4s6ijx4s.png (4.94% text area)</div>
+                <div class="reason">Large text block (covered area 4.94% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>THE BATTLE OF AJNADEIN</td><td>0.92</td><td>0.85%</td></tr><tr><td class='detected-text'>CHAKK</td><td>0.99</td><td>0.93%</td></tr><tr><td class='detected-text'>FTVEEUN</td><td>0.92</td><td>0.09%</td></tr><tr><td class='detected-text'>NOTURITTL</td><td>0.92</td><td>0.06%</td></tr><tr><td class='detected-text'>AS</td><td>0.54</td><td>0.10%</td></tr><tr><td class='detected-text'>ZENIITT.</td><td>0.79</td><td>0.07%</td></tr><tr><td class='detected-text'>CHAK!</td><td>0.99</td><td>1.14%</td></tr><tr><td class='detected-text'>ASEURTL</td><td>0.84</td><td>0.08%</td></tr><tr><td class='detected-text'>TELLHIM</td><td>0.94</td><td>0.06%</td></tr><tr><td class='detected-text'>JILLWIN</td><td>0.82</td><td>0.07%</td></tr><tr><td class='detected-text'>PGERALET</td><td>0.97</td><td>0.07%</td></tr><tr><td class='detected-text'>]GCTP2</td><td>0.75</td><td>0.07%</td></tr><tr><td class='detected-text'>ACCSPT</td><td>0.92</td><td>0.08%</td></tr><tr><td class='detected-text'>FENKE.</td><td>0.84</td><td>0.05%</td></tr><tr><td class='detected-text'>50.0OOROMANSFELLTROMMADINA..</td><td>0.91</td><td>0.53%</td></tr><tr><td class='detected-text'>KMALIDTODAMASIS</td><td>0.99</td><td>0.23%</td></tr><tr><td class='detected-text'>NEXTEPISODE:THESACKOFKHALID</td><td>0.99</td><td>0.46%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_x06uo0x06uo0x06u.png" alt="Gemini_Generated_Image_x06uo0x06uo0x06u.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_x06uo0x06uo0x06u.png (4.83% text area)</div>
+                <div class="reason">Large text block (covered area 4.83% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>THE GHOST ARMY</td><td>0.97</td><td>4.83%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/b39d3b7498bd.jpg" alt="b39d3b7498bd.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">b39d3b7498bd.jpg (4.81% text area)</div>
+                <div class="reason">Large text block (covered area 4.81% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>文</td><td>0.86</td><td>4.81%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/8aa9ef734065.jpg" alt="8aa9ef734065.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">8aa9ef734065.jpg (4.77% text area)</div>
+                <div class="reason">Large text block (covered area 4.77% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>L</td><td>0.93</td><td>4.77%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/b56750048bc8.jpg" alt="b56750048bc8.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">b56750048bc8.jpg (4.65% text area)</div>
+                <div class="reason">Large text block (covered area 4.65% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>X</td><td>0.92</td><td>4.65%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/4d0db15b6162.jpg" alt="4d0db15b6162.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  <span style='color:#38bdf8;'>[in manifest]</span>
+                </div>
+                <div class="path">4d0db15b6162.jpg (4.48% text area)</div>
+                <div class="reason">Large text block (covered area 4.48% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>(C</td><td>0.80</td><td>4.48%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f6a1e54e3f1f.jpg" alt="f6a1e54e3f1f.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">f6a1e54e3f1f.jpg (4.34% text area)</div>
+                <div class="reason">Large text block (covered area 4.34% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>-S2E3-</td><td>0.92</td><td>0.41%</td></tr><tr><td class='detected-text'>FIREINEVERYDIRECTION</td><td>0.99</td><td>0.82%</td></tr><tr><td class='detected-text'>THEARMYOFUSAMAHHAD</td><td>0.98</td><td>0.69%</td></tr><tr><td class='detected-text'>HADJUSTRETURNED.</td><td>0.99</td><td>0.49%</td></tr><tr><td class='detected-text'>IMMEDIATETHREAT</td><td>0.99</td><td>0.43%</td></tr><tr><td class='detected-text'>ATDHUKHUSHUBHAD</td><td>0.99</td><td>0.52%</td></tr><tr><td class='detected-text'>HADBEREPECTED.</td><td>0.99</td><td>0.34%</td></tr><tr><td class='detected-text'>ANDFROMEVERYDIRECTION-</td><td>0.98</td><td>0.65%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/The_impossible_standoff_cinematic_hookvisual_compo_delpmaspu.png" alt="The_impossible_standoff_cinematic_hookvisual_compo_delpmaspu.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">The_impossible_standoff_cinematic_hookvisual_compo_delpmaspu.png (4.21% text area)</div>
+                <div class="reason">Large text block (covered area 4.21% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>15,000 vs 150,000</td><td>0.99</td><td>4.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/956b8a306aad.jpg" alt="956b8a306aad.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">956b8a306aad.jpg (4.01% text area)</div>
+                <div class="reason">Large text block (covered area 4.01% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-</td><td>0.98</td><td>0.59%</td></tr><tr><td class='detected-text'>FIREINEVERYDIRECTION</td><td>0.99</td><td>1.40%</td></tr><tr><td class='detected-text'>DIVIDINEFORCESOFWHIENWHENWEAK</td><td>0.99</td><td>1.01%</td></tr><tr><td class='detected-text'>CROMANDECLLIEOFDISCPLNED UNITY</td><td>0.98</td><td>1.01%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/fb5d4910e10e.jpg" alt="fb5d4910e10e.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">fb5d4910e10e.jpg (3.61% text area)</div>
+                <div class="reason">Large text block (covered area 3.61% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIREINEVERYDIRECTION</td><td>0.98</td><td>1.11%</td></tr><tr><td class='detected-text'>1. Call Adhan</td><td>0.95</td><td>0.74%</td></tr><tr><td class='detected-text'>2. Islam Obligations</td><td>0.94</td><td>1.08%</td></tr><tr><td class='detected-text'>3. Pay Zakat</td><td>0.93</td><td>0.69%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/7e3bfcaa9650.png" alt="7e3bfcaa9650.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">7e3bfcaa9650.png (3.55% text area)</div>
+                <div class="reason">Large text block (covered area 3.55% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>JL</td><td>0.95</td><td>3.55%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Whisk_c1888cd7a67f906b7af4ba62c6347264eg.png" alt="Whisk_c1888cd7a67f906b7af4ba62c6347264eg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Whisk_c1888cd7a67f906b7af4ba62c6347264eg.png (3.53% text area)</div>
+                <div class="reason">Large text block (covered area 3.53% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3 RAIDS. ALL NIGHT.</td><td>0.83</td><td>3.53%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/download (1).png" alt="download (1).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">download (1).png (3.07% text area)</div>
+                <div class="reason">Large text block (covered area 3.07% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>CHENNG</td><td>0.99</td><td>0.18%</td></tr><tr><td class='detected-text'>Lor</td><td>0.77</td><td>0.02%</td></tr><tr><td class='detected-text'>EcLite</td><td>0.76</td><td>0.05%</td></tr><tr><td class='detected-text'>Jotufipst</td><td>0.52</td><td>0.08%</td></tr><tr><td class='detected-text'>PontDbtude</td><td>0.85</td><td>0.13%</td></tr><tr><td class='detected-text'>Elcogturate</td><td>0.81</td><td>0.06%</td></tr><tr><td class='detected-text'>SYRIA</td><td>0.97</td><td>0.75%</td></tr><tr><td class='detected-text'>AAetnie</td><td>0.62</td><td>0.05%</td></tr><tr><td class='detected-text'>OOKOCO</td><td>0.60</td><td>0.04%</td></tr><tr><td class='detected-text'>Eonlior</td><td>0.71</td><td>0.08%</td></tr><tr><td class='detected-text'>CareciRal</td><td>0.70</td><td>0.15%</td></tr><tr><td class='detected-text'>2UT</td><td>0.72</td><td>0.05%</td></tr><tr><td class='detected-text'>eRiavpdun</td><td>0.56</td><td>0.09%</td></tr><tr><td class='detected-text'>OpncdoeDn</td><td>0.63</td><td>0.12%</td></tr><tr><td class='detected-text'>Kolutna</td><td>0.78</td><td>0.07%</td></tr><tr><td class='detected-text'>MER</td><td>0.99</td><td>0.21%</td></tr><tr><td class='detected-text'>Gleo</td><td>0.69</td><td>0.03%</td></tr><tr><td class='detected-text'>cdabon</td><td>0.74</td><td>0.12%</td></tr><tr><td class='detected-text'>Totiton</td><td>0.79</td><td>0.11%</td></tr><tr><td class='detected-text'>S</td><td>0.95</td><td>0.02%</td></tr><tr><td class='detected-text'>302</td><td>0.86</td><td>0.03%</td></tr><tr><td class='detected-text'>CAMPAIGNS</td><td>0.97</td><td>0.37%</td></tr><tr><td class='detected-text'>INSYRIA</td><td>0.97</td><td>0.25%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/34085b496a78.jpg" alt="34085b496a78.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">34085b496a78.jpg (2.99% text area)</div>
+                <div class="reason">Large text block (covered area 2.99% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIRE IN EVERY DIRECTION</td><td>0.95</td><td>2.99%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/fd8711016170.png" alt="fd8711016170.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">fd8711016170.png (2.94% text area)</div>
+                <div class="reason">Large text block (covered area 2.94% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Jiball</td><td>0.92</td><td>0.08%</td></tr><tr><td class='detected-text'>alSh</td><td>0.93</td><td>0.10%</td></tr><tr><td class='detected-text'>ul</td><td>0.51</td><td>0.10%</td></tr><tr><td class='detected-text'>Ba</td><td>0.58</td><td>0.10%</td></tr><tr><td class='detected-text'>300m</td><td>0.78</td><td>0.05%</td></tr><tr><td class='detected-text'>majd</td><td>0.83</td><td>0.14%</td></tr><tr><td class='detected-text'>:Al-Masjid al-Haram</td><td>0.92</td><td>0.41%</td></tr><tr><td class='detected-text'>Ta'if</td><td>0.90</td><td>0.15%</td></tr><tr><td class='detected-text'>Jeroli</td><td>0.60</td><td>0.08%</td></tr><tr><td class='detected-text'>sann</td><td>0.81</td><td>0.07%</td></tr><tr><td class='detected-text'>ialocre</td><td>0.53</td><td>0.08%</td></tr><tr><td class='detected-text'>Rub'al Khali</td><td>0.95</td><td>0.30%</td></tr><tr><td class='detected-text'>Hejaz</td><td>0.99</td><td>0.11%</td></tr><tr><td class='detected-text'>Najcan</td><td>0.97</td><td>0.21%</td></tr><tr><td class='detected-text'>eSE</td><td>0.50</td><td>0.30%</td></tr><tr><td class='detected-text'>Hadramawt</td><td>0.99</td><td>0.40%</td></tr><tr><td class='detected-text'>Al-Yaman</td><td>0.95</td><td>0.26%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/e88a40611917.jpg" alt="e88a40611917.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">e88a40611917.jpg (2.83% text area)</div>
+                <div class="reason">Large text block (covered area 2.83% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3 -</td><td>0.98</td><td>0.63%</td></tr><tr><td class='detected-text'>FIRE IN EVERY DIRECTION</td><td>0.96</td><td>1.63%</td></tr><tr><td class='detected-text'>AEIMANA</td><td>0.97</td><td>0.15%</td></tr><tr><td class='detected-text'>Fianin</td><td>0.92</td><td>0.09%</td></tr><tr><td class='detected-text'>RireinDiretiois</td><td>0.85</td><td>0.21%</td></tr><tr><td class='detected-text'>HISTORY</td><td>0.99</td><td>0.12%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/e74698a2f285.jpg" alt="e74698a2f285.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">e74698a2f285.jpg (2.75% text area)</div>
+                <div class="reason">Large text block (covered area 2.75% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>L</td><td>0.86</td><td>2.75%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Whisk_d292bf5222c8d2f86af434c734b5cf89eg.png" alt="Whisk_d292bf5222c8d2f86af434c734b5cf89eg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Whisk_d292bf5222c8d2f86af434c734b5cf89eg.png (2.65% text area)</div>
+                <div class="reason">Large text block (covered area 2.65% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>VICTORY & TEARS</td><td>0.91</td><td>1.65%</td></tr><tr><td class='detected-text'>FIRST RAMADAN</td><td>0.96</td><td>0.99%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/6e177bf28abf.jpg" alt="6e177bf28abf.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">6e177bf28abf.jpg (2.53% text area)</div>
+                <div class="reason">Large text block (covered area 2.53% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>COUNCIL</td><td>0.99</td><td>0.35%</td></tr><tr><td class='detected-text'>COUNCIL</td><td>0.99</td><td>0.37%</td></tr><tr><td class='detected-text'>Abu Bakr (The Decision Maker)</td><td>0.97</td><td>1.82%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Whisk_5df280bd9c9feb381db490c7b9179a01eg.png" alt="Whisk_5df280bd9c9feb381db490c7b9179a01eg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Whisk_5df280bd9c9feb381db490c7b9179a01eg.png (2.20% text area)</div>
+                <div class="reason">Large text block (covered area 2.20% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>VICTORY & TEARS</td><td>0.85</td><td>1.65%</td></tr><tr><td class='detected-text'>FIRST RAMADAN</td><td>0.94</td><td>0.55%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/2220ecea0764.jpg" alt="2220ecea0764.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">2220ecea0764.jpg (1.93% text area)</div>
+                <div class="reason">Large text block (covered area 1.93% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3-FIRE IN EVERY DIRECTION</td><td>0.96</td><td>1.93%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f9a3d8f5565e.jpg" alt="f9a3d8f5565e.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">f9a3d8f5565e.jpg (1.34% text area)</div>
+                <div class="reason">Large text block (covered area 1.34% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>T</td><td>0.94</td><td>1.34%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Episode 8.png" alt="Episode 8.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">Episode 8.png (1.25% text area)</div>
+                <div class="reason">Large text block (covered area 1.25% >= 1.2%)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Episode 8</td><td>0.95</td><td>1.25%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f723394f2a02.jpg" alt="f723394f2a02.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">f723394f2a02.jpg (1.13% text area)</div>
+                <div class="reason">Long text block detected ('S2E3—FIREIN EVERYDIR...')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>S2E3—FIREIN EVERYDIRECTION</td><td>0.96</td><td>1.13%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/1d05dc05d1b1.jpg" alt="1d05dc05d1b1.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">1d05dc05d1b1.jpg (1.11% text area)</div>
+                <div class="reason">Long text block detected ('Abu Bakr al-Siddiq...')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Abu Bakr al-Siddiq</td><td>0.94</td><td>1.11%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/c67d5bbd1a8c.jpg" alt="c67d5bbd1a8c.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">c67d5bbd1a8c.jpg (0.62% text area)</div>
+                <div class="reason">Multiple text blocks detected (4 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>LTTL</td><td>0.63</td><td>0.03%</td></tr><tr><td class='detected-text'>LEEn</td><td>0.69</td><td>0.03%</td></tr><tr><td class='detected-text'>LON</td><td>0.63</td><td>0.03%</td></tr><tr><td class='detected-text'>JENNA</td><td>0.86</td><td>0.15%</td></tr><tr><td class='detected-text'>FERNCA</td><td>0.95</td><td>0.19%</td></tr><tr><td class='detected-text'>YEMEN</td><td>0.99</td><td>0.12%</td></tr><tr><td class='detected-text'>N</td><td>0.97</td><td>0.03%</td></tr><tr><td class='detected-text'>QAHUTC</td><td>0.55</td><td>0.04%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/6535445c8105.png" alt="6535445c8105.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge burned">burned</span>
+                  
+                </div>
+                <div class="path">6535445c8105.png (0.20% text area)</div>
+                <div class="reason">Long text block detected ('HARRATALAWALJ-ALAIAD...')</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>HARRATALAWALJ-ALAIADNA</td><td>0.84</td><td>0.20%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            </div>
+  </section>
+
+  <section>
+    <h2 style="color: var(--review);">⚠️ Review Needed (69)</h2>
+    <div class="grid">
+            <div class="card">
+              <img class="card-img" src="images/9c38bc601f60.jpg" alt="9c38bc601f60.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">9c38bc601f60.jpg (46.69% text area)</div>
+                <div class="reason">Low-confidence or small text (area 46.69%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>+</td><td>0.56</td><td>46.69%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/4585371de4d4.jpg" alt="4585371de4d4.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">4585371de4d4.jpg (41.52% text area)</div>
+                <div class="reason">Low-confidence or small text (area 41.52%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>PY</td><td>0.62</td><td>41.52%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/3429fc2a8b05.jpg" alt="3429fc2a8b05.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">3429fc2a8b05.jpg (32.24% text area)</div>
+                <div class="reason">Low-confidence or small text (area 32.24%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>MLM</td><td>0.53</td><td>32.24%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/bbb3ef800f2c.jpg" alt="bbb3ef800f2c.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">bbb3ef800f2c.jpg (27.50% text area)</div>
+                <div class="reason">Low-confidence or small text (area 27.50%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>中</td><td>0.53</td><td>27.50%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/294c87a057e8.jpg" alt="294c87a057e8.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">294c87a057e8.jpg (26.67% text area)</div>
+                <div class="reason">Low-confidence or small text (area 26.67%, 2 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>米</td><td>0.51</td><td>24.75%</td></tr><tr><td class='detected-text'>m</td><td>0.50</td><td>1.93%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/e693ffe74efd.jpg" alt="e693ffe74efd.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">e693ffe74efd.jpg (23.26% text area)</div>
+                <div class="reason">Low-confidence or small text (area 23.26%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>MY</td><td>0.66</td><td>23.26%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/4b0430f19ac1.jpg" alt="4b0430f19ac1.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">4b0430f19ac1.jpg (22.06% text area)</div>
+                <div class="reason">Low-confidence or small text (area 22.06%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>KSLLRN</td><td>0.52</td><td>22.06%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/0d242eafa754.jpg" alt="0d242eafa754.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">0d242eafa754.jpg (18.75% text area)</div>
+                <div class="reason">Low-confidence or small text (area 18.75%, 2 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>三盛式</td><td>0.53</td><td>18.49%</td></tr><tr><td class='detected-text'>福</td><td>0.51</td><td>0.26%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/c3ea9c08a13b.jpg" alt="c3ea9c08a13b.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">c3ea9c08a13b.jpg (16.18% text area)</div>
+                <div class="reason">Low-confidence or small text (area 16.18%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>贝</td><td>0.55</td><td>16.18%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/c4ecbe31ddc1.jpg" alt="c4ecbe31ddc1.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">c4ecbe31ddc1.jpg (14.65% text area)</div>
+                <div class="reason">Low-confidence or small text (area 14.65%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>童</td><td>0.52</td><td>14.65%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/34f5b271f118.jpg" alt="34f5b271f118.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">34f5b271f118.jpg (12.82% text area)</div>
+                <div class="reason">Low-confidence or small text (area 12.82%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>H</td><td>0.63</td><td>12.82%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/dbdc1e48014c.jpg" alt="dbdc1e48014c.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">dbdc1e48014c.jpg (10.56% text area)</div>
+                <div class="reason">Low-confidence or small text (area 10.56%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>二</td><td>0.58</td><td>10.56%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f21277f7d009.jpg" alt="f21277f7d009.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">f21277f7d009.jpg (10.33% text area)</div>
+                <div class="reason">Low-confidence or small text (area 10.33%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>金</td><td>0.60</td><td>10.33%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/8325290055b1.jpg" alt="8325290055b1.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">8325290055b1.jpg (9.38% text area)</div>
+                <div class="reason">Low-confidence or small text (area 9.38%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>mn</td><td>0.60</td><td>9.38%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/352b31639031.png" alt="352b31639031.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">352b31639031.png (9.29% text area)</div>
+                <div class="reason">Low-confidence or small text (area 9.29%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>恭福</td><td>0.69</td><td>9.29%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/fe64b0c45126.jpg" alt="fe64b0c45126.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">fe64b0c45126.jpg (8.47% text area)</div>
+                <div class="reason">Low-confidence or small text (area 8.47%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>U</td><td>0.64</td><td>8.47%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/e95422df9d6d.jpg" alt="e95422df9d6d.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">e95422df9d6d.jpg (8.26% text area)</div>
+                <div class="reason">Low-confidence or small text (area 8.26%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>B</td><td>0.52</td><td>8.26%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/6bfbfb9577c7.jpg" alt="6bfbfb9577c7.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">6bfbfb9577c7.jpg (7.21% text area)</div>
+                <div class="reason">Low-confidence or small text (area 7.21%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>金食照</td><td>0.68</td><td>7.21%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/1e0aa755d76c.jpg" alt="1e0aa755d76c.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">1e0aa755d76c.jpg (7.16% text area)</div>
+                <div class="reason">Low-confidence or small text (area 7.16%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>t</td><td>0.67</td><td>7.16%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/398a9dc64364.jpg" alt="398a9dc64364.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">398a9dc64364.jpg (5.19% text area)</div>
+                <div class="reason">Low-confidence or small text (area 5.19%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>X</td><td>0.70</td><td>5.19%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/5754d9c96602.png" alt="5754d9c96602.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">5754d9c96602.png (5.01% text area)</div>
+                <div class="reason">Low-confidence or small text (area 5.01%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>®</td><td>0.73</td><td>5.01%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/7204558f3caa.jpg" alt="7204558f3caa.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  <span style='color:#38bdf8;'>[in manifest]</span>
+                </div>
+                <div class="path">7204558f3caa.jpg (4.49% text area)</div>
+                <div class="reason">Low-confidence or small text (area 4.49%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>一</td><td>0.58</td><td>4.49%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/e0803f7bd5bb.jpg" alt="e0803f7bd5bb.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">e0803f7bd5bb.jpg (4.29% text area)</div>
+                <div class="reason">Low-confidence or small text (area 4.29%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Y</td><td>0.63</td><td>4.29%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/28b8861ece3e.jpg" alt="28b8861ece3e.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">28b8861ece3e.jpg (4.20% text area)</div>
+                <div class="reason">Low-confidence or small text (area 4.20%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>福</td><td>0.55</td><td>4.20%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/fb073ae9b846.jpg" alt="fb073ae9b846.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">fb073ae9b846.jpg (3.62% text area)</div>
+                <div class="reason">Low-confidence or small text (area 3.62%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>拉</td><td>0.53</td><td>3.62%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/47669b81cc0c.jpg" alt="47669b81cc0c.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">47669b81cc0c.jpg (2.46% text area)</div>
+                <div class="reason">Low-confidence or small text (area 2.46%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>鲁</td><td>0.70</td><td>2.46%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/b5f7f2ed167b.jpg" alt="b5f7f2ed167b.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">b5f7f2ed167b.jpg (2.40% text area)</div>
+                <div class="reason">Low-confidence or small text (area 2.40%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>大</td><td>0.51</td><td>2.40%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/b5b8aec5aa31.jpg" alt="b5b8aec5aa31.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  <span style='color:#38bdf8;'>[in manifest]</span>
+                </div>
+                <div class="path">b5b8aec5aa31.jpg (2.36% text area)</div>
+                <div class="reason">Low-confidence or small text (area 2.36%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>天</td><td>0.55</td><td>2.36%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/3ed8538514c1.jpg" alt="3ed8538514c1.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">3ed8538514c1.jpg (2.30% text area)</div>
+                <div class="reason">Low-confidence or small text (area 2.30%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>口</td><td>0.51</td><td>2.30%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/8f7384f09e42.png" alt="8f7384f09e42.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">8f7384f09e42.png (2.15% text area)</div>
+                <div class="reason">Low-confidence or small text (area 2.15%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>L</td><td>0.73</td><td>2.15%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/5b7e6dad5ea3.jpg" alt="5b7e6dad5ea3.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">5b7e6dad5ea3.jpg (2.07% text area)</div>
+                <div class="reason">Low-confidence or small text (area 2.07%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>木</td><td>0.54</td><td>2.07%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/3412c8391779.jpg" alt="3412c8391779.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">3412c8391779.jpg (2.02% text area)</div>
+                <div class="reason">Low-confidence or small text (area 2.02%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>口</td><td>0.68</td><td>2.02%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/cac5acdb93f8.jpg" alt="cac5acdb93f8.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">cac5acdb93f8.jpg (1.67% text area)</div>
+                <div class="reason">Low-confidence or small text (area 1.67%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3</td><td>0.57</td><td>1.67%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_yyy5t0yyy5t0yyy5.png" alt="Gemini_Generated_Image_yyy5t0yyy5t0yyy5.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_yyy5t0yyy5t0yyy5.png (1.64% text area)</div>
+                <div class="reason">Low-confidence or small text (area 1.64%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>L</td><td>0.61</td><td>1.64%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/3aa7ad41fdc8.jpg" alt="3aa7ad41fdc8.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">3aa7ad41fdc8.jpg (1.47% text area)</div>
+                <div class="reason">Low-confidence or small text (area 1.47%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>年</td><td>0.64</td><td>1.47%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f1dec9ff5e1e.jpg" alt="f1dec9ff5e1e.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">f1dec9ff5e1e.jpg (1.42% text area)</div>
+                <div class="reason">Low-confidence or small text (area 1.42%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>T</td><td>0.55</td><td>1.42%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/93d838ef508b.jpg" alt="93d838ef508b.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">93d838ef508b.jpg (1.12% text area)</div>
+                <div class="reason">Low-confidence or small text (area 1.12%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>O</td><td>0.81</td><td>1.12%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/c86cca918cdc.jpg" alt="c86cca918cdc.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">c86cca918cdc.jpg (1.03% text area)</div>
+                <div class="reason">Low-confidence or small text (area 1.03%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>O</td><td>0.62</td><td>1.03%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f582e4b5cc49.png" alt="f582e4b5cc49.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">f582e4b5cc49.png (0.86% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.86%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>云</td><td>0.54</td><td>0.86%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/ec44a2753d28.jpg" alt="ec44a2753d28.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">ec44a2753d28.jpg (0.84% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.84%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>1</td><td>0.94</td><td>0.84%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/3f250b6f75ad.jpg" alt="3f250b6f75ad.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">3f250b6f75ad.jpg (0.83% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.83%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>盟</td><td>0.60</td><td>0.83%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/ead3ee62002b.jpg" alt="ead3ee62002b.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">ead3ee62002b.jpg (0.72% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.72%, 2 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>COUNCIL</td><td>0.99</td><td>0.36%</td></tr><tr><td class='detected-text'>COUNCIL</td><td>0.99</td><td>0.36%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/a3d804fde9b2.jpg" alt="a3d804fde9b2.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">a3d804fde9b2.jpg (0.72% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.72%, 2 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Abu Bakr</td><td>0.98</td><td>0.41%</td></tr><tr><td class='detected-text'>Khalid</td><td>1.00</td><td>0.31%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (24).png" alt="nano_banana_removed (24).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (24).png (0.68% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.68%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>OMAN</td><td>0.70</td><td>0.68%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_jzueanjzueanjzue.png" alt="Gemini_Generated_Image_jzueanjzueanjzue.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_jzueanjzueanjzue.png (0.55% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.55%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Euphrates</td><td>0.99</td><td>0.55%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_jzueanjzueanjzue.png" alt="Gemini_Generated_Image_jzueanjzueanjzue.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_jzueanjzueanjzue.png (0.55% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.55%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Euphrates</td><td>0.99</td><td>0.55%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_jzueanjzueanjzue.png" alt="Gemini_Generated_Image_jzueanjzueanjzue.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_jzueanjzueanjzue.png (0.55% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.55%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>Euphrates</td><td>0.99</td><td>0.55%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (18).png" alt="nano_banana_removed (18).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (18).png (0.52% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.52%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>品</td><td>0.50</td><td>0.52%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/de3e7aa766ea.jpg" alt="de3e7aa766ea.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">de3e7aa766ea.jpg (0.45% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.45%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>1</td><td>0.72</td><td>0.45%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/e5043e2ad928.jpg" alt="e5043e2ad928.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">e5043e2ad928.jpg (0.44% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.44%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>AINN</td><td>0.54</td><td>0.44%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/5ecf0d5c8b11.jpg" alt="5ecf0d5c8b11.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">5ecf0d5c8b11.jpg (0.29% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.29%, 2 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>厂</td><td>0.54</td><td>0.25%</td></tr><tr><td class='detected-text'>05</td><td>0.53</td><td>0.04%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/download.png" alt="download.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">download.png (0.26% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.26%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>DN</td><td>0.71</td><td>0.26%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/bcf423b65efa.jpg" alt="bcf423b65efa.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">bcf423b65efa.jpg (0.26% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.26%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>皖EC7A</td><td>0.55</td><td>0.26%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/007256c6428a.jpg" alt="007256c6428a.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">007256c6428a.jpg (0.26% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.26%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>H9</td><td>0.57</td><td>0.26%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_3ayews3ayews3aye.png" alt="Gemini_Generated_Image_3ayews3ayews3aye.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_3ayews3ayews3aye.png (0.24% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.24%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>OMAN</td><td>0.87</td><td>0.24%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/80c1c899929d.jpg" alt="80c1c899929d.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">80c1c899929d.jpg (0.24% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.24%, 2 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>cietror</td><td>0.76</td><td>0.17%</td></tr><tr><td class='detected-text'>CWI</td><td>0.67</td><td>0.07%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_j6yi55j6yi55j6yi (3).png" alt="Gemini_Generated_Image_j6yi55j6yi55j6yi (3).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_j6yi55j6yi55j6yi (3).png (0.19% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.19%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>y</td><td>0.68</td><td>0.19%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/67b69422094f.jpg" alt="67b69422094f.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">67b69422094f.jpg (0.18% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.18%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>aie</td><td>0.53</td><td>0.18%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/72249ab628f7.jpg" alt="72249ab628f7.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">72249ab628f7.jpg (0.17% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.17%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>DCDO</td><td>0.56</td><td>0.17%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/f9bcf20e1da6.jpg" alt="f9bcf20e1da6.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">f9bcf20e1da6.jpg (0.17% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.17%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>店</td><td>0.78</td><td>0.17%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_t7rgkht7rgkht7rg.png" alt="Gemini_Generated_Image_t7rgkht7rgkht7rg.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_t7rgkht7rgkht7rg.png (0.14% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.14%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>米</td><td>0.64</td><td>0.14%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/6e43a080ddea.jpg" alt="6e43a080ddea.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">6e43a080ddea.jpg (0.14% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.14%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>福</td><td>0.70</td><td>0.14%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/7aca86269cf6.png" alt="7aca86269cf6.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">7aca86269cf6.png (0.07% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.07%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>D</td><td>0.74</td><td>0.07%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_oejixioejixioeji.png" alt="Gemini_Generated_Image_oejixioejixioeji.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_oejixioejixioeji.png (0.07% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.07%, 2 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>70</td><td>0.64</td><td>0.01%</td></tr><tr><td class='detected-text'>3</td><td>0.60</td><td>0.06%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/2e01b0bf1e49.jpg" alt="2e01b0bf1e49.jpg" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">2e01b0bf1e49.jpg (0.03% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.03%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3</td><td>0.69</td><td>0.03%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (4).png" alt="nano_banana_removed (4).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (4).png (0.03% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.03%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>中</td><td>0.68</td><td>0.03%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (4).png" alt="nano_banana_removed (4).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (4).png (0.03% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.03%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>中</td><td>0.68</td><td>0.03%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/Gemini_Generated_Image_jo77lkjo77lkjo77.png" alt="Gemini_Generated_Image_jo77lkjo77lkjo77.png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">Gemini_Generated_Image_jo77lkjo77lkjo77.png (0.02% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.02%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>3</td><td>0.66</td><td>0.02%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            
+            <div class="card">
+              <img class="card-img" src="images/nano_banana_removed (2).png" alt="nano_banana_removed (2).png" loading="lazy" />
+              <div class="card-body">
+                <div class="card-header">
+                  <span class="badge review">review</span>
+                  
+                </div>
+                <div class="path">nano_banana_removed (2).png (0.02% text area)</div>
+                <div class="reason">Low-confidence or small text (area 0.02%, 1 lines)</div>
+                
+            <table class='detections-table'>
+              <thead><tr><th>Text Detected</th><th>Conf</th><th>Area</th></tr></thead>
+              <tbody><tr><td class='detected-text'>G</td><td>0.59</td><td>0.02%</td></tr></tbody>
+            </table>
+            
+              </div>
+            </div>
+            </div>
+  </section>
+
+  <section>
+    <h2 style="color: var(--clean);">✅ Clean Images (910)</h2>
+    <p style="color: var(--text-muted);">910 clean images verified without text artifacts.</p>
+  </section>
+</body>
+</html>
