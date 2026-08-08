@@ -7,4 +7,4 @@ pywebview>=4.4.1
 pyinstaller>=6.0.0
 Flask>=3.0.0
 open-clip-torch
-
+rapidocr-onnxruntime
