@@ -654,7 +654,11 @@ def main():
         det_texts = [f"'{d['text']}'" for d in r.get("detections", [])[:5]]
         text_str = ", ".join(det_texts) if det_texts else "None"
         cov_pct = r.get("total_covered_area_pct", 0.0)
-        print(f"{idx:2d}. {fname:<25} (Area: {cov_pct:5.2f}%) -> Detected: {text_str}")
+        line = f"{idx:2d}. {fname:<25} (Area: {cov_pct:5.2f}%) -> Detected: {text_str}"
+        try:
+            print(line)
+        except UnicodeEncodeError:
+            print(line.encode("ascii", errors="backslashreplace").decode("ascii"))
 
     if args.quarantine:
         quarantine_burned_images(results)
