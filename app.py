@@ -1,5 +1,5 @@
 """
-S2V — Script-to-Video Pipeline
+Smart Studio — Script to Video
 Entry point: creates the PyWebView window and exposes the Python API to the frontend.
 """
 
@@ -378,7 +378,7 @@ def main():
     api = Api()
 
     window = webview.create_window(
-        title="S2V — Script-to-Video Pipeline v2.0",
+        title="Smart Studio",
         url=os.path.join(BASE_DIR, "frontend", "index.html"),
         js_api=api,
         width=1000,

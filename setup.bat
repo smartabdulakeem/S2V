@@ -1,12 +1,12 @@
 @echo off
 setlocal enabledelayedexpansion
-title S2V Setup
+title Smart Studio Setup
 color 0A
 cd /d "%~dp0"
 
 echo.
 echo  ================================================
-echo   S2V -- Script-to-Video Pipeline
+echo   Smart Studio -- Script to Video
 echo   First-time setup
 echo  ================================================
 echo.

@@ -15,7 +15,7 @@ from pipeline.orchestrator import RenderOrchestrator
 from app import _load_settings
 
 def main():
-    parser = argparse.ArgumentParser(description="S2V Command Line Interface for rendering videos.")
+    parser = argparse.ArgumentParser(description="Smart Studio command line renderer.")
     parser.add_argument("script_path", help="Path to the JSON script file to render.")
     args = parser.parse_args()
     
@@ -28,7 +28,7 @@ def main():
     google_key = settings.get("google_api_key", "").strip()
     google_tts_key = settings.get("google_tts_api_key", "").strip()
     
-    print(f"Starting S2V CLI Render for: {script_path}")
+    print(f"Starting Smart Studio render for: {script_path}")
     if google_key:
         print("Google API Key loaded.")
     else:
@@ -52,10 +52,10 @@ def main():
     result = orchestrator.render(script_path, google_api_key=google_key, google_tts_api_key=google_tts_key)
     
     if result.get("success"):
-        print("\nS2V Render finished successfully!")
+        print("\nSmart Studio render finished successfully!")
         sys.exit(0)
     else:
-        print(f"\nS2V Render failed: {result.get('error')}")
+        print(f"\nSmart Studio render failed: {result.get('error')}")
         sys.exit(1)
 
 if __name__ == "__main__":

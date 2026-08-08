@@ -1,5 +1,5 @@
 /**
- * S2V frontend — IPC bridge between the PyWebView API and the UI.
+ * Smart Studio frontend — IPC bridge between the PyWebView API and the UI.
  * Supports running inside local desktop PyWebView and standard web browsers (cloud-mode Vercel).
  */
 
@@ -183,7 +183,7 @@ async function initApp() {
   isWebMode = typeof window.pywebview === "undefined" || !window.pywebview.api;
   
   if (isWebMode) {
-    console.log("S2V running in Cloud Web Mode");
+    console.log("Smart Studio running in Cloud Web Mode");
     document.getElementById("version-badge").textContent = `v2.0.0 (Cloud)`;
     
     // Load credentials from browser localStorage
@@ -1067,7 +1067,7 @@ function appendLog(msg, cls) {
 
 async function openOutputFolder() {
   if (isWebMode) {
-    alert("Output folders are on your local computer. Run S2V locally to view outputs.");
+    alert("Output folders are on your local computer. Run Smart Studio locally to view outputs.");
     return;
   }
   await window.pywebview.api.open_output_folder(lastOutputPath);

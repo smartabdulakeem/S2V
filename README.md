@@ -1,4 +1,4 @@
-# S2V — Script-to-Video Pipeline
+# Smart Studio — Script to Video
 
 **Turn a JSON script into a finished 720p (1280x720) YouTube video — no coding required.**
 
