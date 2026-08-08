@@ -10,6 +10,13 @@ _WHISPER_MODELS = {}
 _WHISPER_LOCK = threading.Lock()
 _WHISPER_LOAD_COUNT = 0
 
+# A Whisper model holds mutable decode state, so two threads calling transcribe()
+# on the same instance corrupt each other — the failure surfaces as a different
+# torch error each run ("cannot reshape tensor of 0 elements", a bare module repr).
+# Phase 4 made the model a singleton to stop 52 reloads per render; this serialises
+# its use. Transcription is already multi-threaded inside torch, so little is lost.
+_TRANSCRIBE_LOCK = threading.Lock()
+
 
 def _ensure_ffmpeg_on_path():
     """Ensure vendor/ffmpeg directory is in os.environ['PATH'] for whisper subprocess calls."""
@@ -180,7 +187,8 @@ def generate_captions(
     if on_progress:
         on_progress(f"Segment {segment_id} — transcribing audio (Whisper {model_name})")
     model = _get_whisper_model(model_name, on_progress)
-    result = model.transcribe(audio_path, word_timestamps=False)
+    with _TRANSCRIBE_LOCK:
+        result = model.transcribe(audio_path, word_timestamps=False)
     segments = result.get("segments", [])
 
     if not segments:

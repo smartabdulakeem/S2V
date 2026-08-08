@@ -191,3 +191,32 @@ def test_whisper_fallback_when_timings_unavailable():
         assert os.path.exists(srt_path)
         entries = parse_srt(srt_path)
         assert len(entries) > 0, "Whisper fallback produced no SRT entries"
+
+
+def test_concurrent_caption_workers_do_not_corrupt_whisper(tmp_path):
+    """
+    The Whisper model is a shared singleton; concurrent transcribe() calls on one
+    instance corrupt each other. Fails (with a varying torch RuntimeError) if the
+    transcribe lock is removed.
+    """
+    import glob
+    from concurrent.futures import ThreadPoolExecutor
+    from pipeline import captions as cap
+
+    audio = sorted(glob.glob("cache/*/segment_*_audio.mp3"))[:3]
+    if len(audio) < 2:
+        pytest.skip("needs at least two cached narration clips")
+
+    errors = []
+
+    def transcribe(job):
+        idx, path = job
+        try:
+            cap.generate_captions(idx, path, str(tmp_path))
+        except Exception as exc:  # noqa: BLE001 — the point is to catch anything
+            errors.append(f"segment {idx}: {type(exc).__name__}: {exc}")
+
+    with ThreadPoolExecutor(max_workers=len(audio)) as pool:
+        list(pool.map(transcribe, enumerate(audio, 1)))
+
+    assert not errors, "concurrent transcription failed: " + "; ".join(errors)
