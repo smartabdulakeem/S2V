@@ -68,8 +68,8 @@ def load_and_upconvert(script_data: dict) -> dict:
     # Resolution default based on aspect ratio
     if "resolution" not in proj:
         ratio = proj.get("aspect_ratio", "16:9")
-        res_map = {"16:9": "1280x720", "9:16": "720x1280", "1:1": "1080x1080", "4:3": "960x720"}
-        proj["resolution"] = res_map.get(ratio, "1280x720")
+        res_map = {"16:9": "1920x1080", "9:16": "1080x1920", "1:1": "1080x1080", "4:3": "1440x1080"}
+        proj["resolution"] = res_map.get(ratio, "1920x1080")
 
     if "segments" not in script or not isinstance(script["segments"], list):
         return script

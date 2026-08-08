@@ -279,6 +279,7 @@ class RenderOrchestrator:
                         segment_id=seg_id,
                         audio_path=audio_path,
                         cache_dir=self.cache_dir,
+                        narration=seg.get("narration", ""),
                         on_progress=progress_cb,
                     )
                     with self._lock:

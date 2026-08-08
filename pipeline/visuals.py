@@ -29,8 +29,8 @@ PIXABAY_SEARCH_URL = "https://pixabay.com/api/"
 POLLINATIONS_URL   = "https://image.pollinations.ai/prompt/{prompt}?width={width}&height={height}&nologo=true&seed={seed}&model=flux"
 
 ASPECT_RATIOS = {
-    "16:9": (1280, 720),
-    "9:16": (720, 1280),
+    "16:9": (1920, 1080),
+    "9:16": (1080, 1920),
     "1:1": (1080, 1080),
     "4:3": (1440, 1080)
 }
@@ -110,16 +110,14 @@ def _fetch_google_imagen_image(
         "Content-Type": "application/json"
     }
     
-    # Map S2V dimensions to strict Imagen supported aspect ratios
-    aspect_ratio_str = "1:1"
-    if width == 1280 and height == 720:
-        aspect_ratio_str = "16:9"
-    elif width == 720 and height == 1280:
-        aspect_ratio_str = "9:16"
-    elif width == 1080 and height == 1080:
-        aspect_ratio_str = "1:1"
-    elif width == 1440 and height == 1080:
-        aspect_ratio_str = "4:3"
+    # Map dimensions to the aspect ratios Imagen accepts. Match on the ratio, not on
+    # exact pixel sizes — an exact-size table silently fell through to "1:1" and
+    # returned square images the moment the 16:9 default moved from 720p to 1080p.
+    ratio = width / height if height else 1.0
+    aspect_ratio_str = min(
+        (("16:9", 16 / 9), ("9:16", 9 / 16), ("1:1", 1.0), ("4:3", 4 / 3), ("3:4", 3 / 4)),
+        key=lambda pair: abs(pair[1] - ratio),
+    )[0]
 
     payload = {
         "instances": [

@@ -183,8 +183,11 @@ def test_caption_timing_correctness_and_monotonicity():
 def test_whisper_fallback_when_timings_unavailable():
     """Verify that generate_captions falls back to Whisper when no cached SRT or TTS timings exist."""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        audio_path = os.path.abspath("cache/2c39a59e/segment_1_audio.mp3")
-        assert os.path.exists(audio_path), "Test fixture audio missing"
+        import glob
+        candidates = sorted(glob.glob("cache/*/segment_*_audio.mp3"))
+        if not candidates:
+            pytest.skip("no cached narration audio to transcribe")
+        audio_path = os.path.abspath(candidates[0])
 
         srt_path = generate_captions(999, audio_path, tmp_dir)
 
@@ -220,3 +223,42 @@ def test_concurrent_caption_workers_do_not_corrupt_whisper(tmp_path):
         list(pool.map(transcribe, enumerate(audio, 1)))
 
     assert not errors, "concurrent transcription failed: " + "; ".join(errors)
+
+
+def test_captions_use_the_real_narration_not_the_transcription():
+    """
+    Whisper mis-hears synthesised speech, and proper nouns go first: "the Caliph
+    Al-Mansur founded" came back as "the Kayla Falmon surfounded". We know the exact
+    words, so its timings are kept and the true narration is laid over them.
+    """
+    from pipeline.captions import _redistribute_narration
+
+    narration = ("In the year 762, the Caliph Al-Mansur founded a city that would become "
+                 "the beating heart of human civilisation.")
+    misheard = [
+        {"text": "In the year 762, the Kayla Falmon surfounded a city"},
+        {"text": "that would become the beating heart of human civilization."},
+    ]
+
+    out = _redistribute_narration(narration, misheard)
+
+    assert len(out) == len(misheard)
+    rebuilt = " ".join(out)
+    assert rebuilt == " ".join(narration.split()), "no word may be dropped or invented"
+    assert "Al-Mansur" in rebuilt
+    assert "Kayla Falmon" not in rebuilt
+    assert all(chunk.strip() for chunk in out), "no caption line may be empty"
+
+
+def test_captions_fall_back_to_transcription_without_narration():
+    from pipeline.captions import _redistribute_narration
+    misheard = [{"text": "whatever it heard"}]
+    assert _redistribute_narration("", misheard) == ["whatever it heard"]
+
+
+def test_captions_strip_ssml_before_laying_text_over_timings():
+    from pipeline.captions import _redistribute_narration
+    out = _redistribute_narration("<speak>Hello there<break time='400ms'/> friend</speak>",
+                                  [{"text": "a b"}, {"text": "c"}])
+    assert "<" not in " ".join(out) and "speak" not in " ".join(out)
+    assert " ".join(out) == "Hello there friend"

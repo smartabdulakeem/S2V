@@ -633,7 +633,7 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
             # The user's chosen filename wins; fall back to the title only when none was given.
             "output_filename": sanitize_output_filename(output_filename or title),
             "aspect_ratio": "16:9",
-            "resolution": "1280x720",
+            "resolution": "1920x1080",
             "fps": 30,
             "voice": resolved_voice,
             "voice_rate": "+0%",

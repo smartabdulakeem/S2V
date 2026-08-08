@@ -167,6 +167,7 @@ def generate_captions(
     audio_path: str,
     cache_dir: str,
     model_name: str = "base",
+    narration: str = "",
     on_progress=None,
 ) -> str:
     """
@@ -196,14 +197,53 @@ def generate_captions(
             f.write("1\n00:00:00,000 --> 00:00:05,000\n \n\n")
         return srt_path
 
+    texts = _redistribute_narration(narration, segments)
+
     with open(srt_path, "w", encoding="utf-8") as f:
-        for i, seg in enumerate(segments, 1):
+        for i, (seg, text) in enumerate(zip(segments, texts), 1):
             start = _seconds_to_srt_time(seg["start"])
             end = _seconds_to_srt_time(seg["end"])
-            text = seg["text"].strip()
-            f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
+            f.write(f"{i}\n{start} --> {end}\n{text.strip()}\n\n")
 
     return srt_path
+
+
+def _redistribute_narration(narration: str, segments: list) -> list:
+    """
+    Whisper gives good timings and unreliable words. We already know the exact words,
+    so keep its timings and lay the real narration over them, split in proportion to
+    how many words it heard in each segment.
+
+    Without this, synthesised speech comes back mis-transcribed and proper nouns are
+    the first casualty — "the Caliph Al-Mansur founded" was captioned as "the Kayla
+    Falmon surfounded". Names are exactly what a history channel cannot get wrong.
+
+    Falls back to Whisper's own text when no narration is supplied.
+    """
+    heard = [str(s.get("text", "")).strip() for s in segments]
+    if not narration or not narration.strip():
+        return heard
+
+    # SSML tags are spoken as nothing — strip them before counting words.
+    clean = re.sub(r"<[^>]+>", " ", narration)
+    true_words = clean.split()
+    if not true_words:
+        return heard
+
+    heard_counts = [max(1, len(t.split())) for t in heard]
+    total_heard = sum(heard_counts)
+
+    out, cursor = [], 0
+    for idx, count in enumerate(heard_counts):
+        if idx == len(heard_counts) - 1:
+            take = len(true_words) - cursor           # last segment absorbs the remainder
+        else:
+            take = round(len(true_words) * count / total_heard)
+            take = max(1, min(take, len(true_words) - cursor - (len(heard_counts) - idx - 1)))
+        out.append(" ".join(true_words[cursor:cursor + take]))
+        cursor += take
+
+    return out
 
 
 def parse_srt(srt_path: str) -> list[tuple[float, float, str]]:
