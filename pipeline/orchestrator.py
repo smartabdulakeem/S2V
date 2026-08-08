@@ -55,6 +55,26 @@ def _load_concurrency_settings(base_dir: str) -> dict:
     return defaults
 
 
+def _load_auto_generate(base_dir: str) -> bool:
+    """
+    When true, a library gap is filled by generating the image instead of failing
+    the render. Google Imagen is used when a key is present; otherwise it falls
+    back to Pollinations, which needs no key and costs nothing.
+
+    Defaults to False so a render stops and hands you the composed prompt — the
+    right behaviour when you would rather make the image yourself and grow the
+    library than accept whatever a generator returns.
+    """
+    settings_file = os.path.join(base_dir, "config", "settings.json")
+    if os.path.exists(settings_file):
+        try:
+            with open(settings_file, "r", encoding="utf-8") as f:
+                return bool(json.load(f).get("auto_generate_missing_images", False))
+        except Exception:
+            pass
+    return False
+
+
 class RenderOrchestrator:
     def __init__(self, base_dir: str, on_event=None):
         """
@@ -135,6 +155,7 @@ class RenderOrchestrator:
 
         # Load concurrency settings
         concurrency = _load_concurrency_settings(self.base_dir)
+        auto_generate = _load_auto_generate(self.base_dir)
 
         self._log(f"Loaded script: {proj['title']} — {total} segments")
         self._log(f"Aspect Ratio: {aspect_ratio} ({width}x{height})")
@@ -319,6 +340,7 @@ class RenderOrchestrator:
                     level1_overlay=seg.get("level1_overlay"),
                     crop=seg.get("crop"),
                     series_slug=proj.get("series_slug"),
+                    auto_generate=auto_generate,
                     on_library_hit=library_hit_cb,
                 )
                 with self._lock:

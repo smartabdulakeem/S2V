@@ -505,7 +505,7 @@ def fetch_visual(
     level1_overlay: dict = None,
     crop: dict = None,
     auto_generate: bool = False,
-    min_score: float = 0.26,
+    min_score: float = None,
     exclude_paths: set = None,
     series_slug: str = None,
     on_library_hit=None,
@@ -520,6 +520,13 @@ def fetch_visual(
     library. The caller decides whether the render completed; this only reports use.
     """
     from pipeline import library
+
+    # Fall back to the pack's calibrated floor, not a literal. A hardcoded 0.26 here
+    # made the renderer accept images the storyboard had already called gaps —
+    # islamic_history calibrates to 0.2796, so anything scoring 0.26–0.2796 was a
+    # gap on screen and a match on disk.
+    if min_score is None:
+        min_score = library.get_calibrated_min_score(series_slug=series_slug)
 
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_visual.jpg")
     width, height = _get_dimensions(aspect_ratio)
