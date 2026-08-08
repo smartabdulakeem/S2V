@@ -125,12 +125,86 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    @staticmethod
+    def _media_url(repo_relative_path: str) -> str:
+        """
+        Absolute file:// URL for an image.
+
+        The page is loaded from frontend/index.html, so a repo-relative src like
+        "library/images/x.jpg" resolves to frontend/library/images/x.jpg and 404s —
+        which is why every storyboard thumbnail fell back to a grey placeholder.
+        """
+        if not repo_relative_path:
+            return ""
+        abs_path = os.path.join(BASE_DIR, str(repo_relative_path).replace("/", os.sep))
+        return Path(abs_path).as_uri()
+
     def get_storyboard_coverage(self, script_data: dict) -> dict:
         """Calculate clip coverage per shot using pipeline.library.plan_shots()."""
         try:
             from pipeline.library import plan_shots
             report = plan_shots(script_data)
+
+            # Attach displayable URLs so the board can actually show what it matched.
+            for shot in report.get("shot_reports", []):
+                shot["best_url"] = self._media_url(shot.get("best_path"))
+                shot["alternative_urls"] = [
+                    {"url": self._media_url(p), "path": p, "score": score}
+                    for p, score in (shot.get("alternatives") or [])
+                ]
             return {"success": True, "report": report}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def import_shot_image(self, query: str = "") -> dict:
+        """
+        Bring an image you made outside the app into the library.
+
+        This closes the loop the storyboard was missing: copy the prompt, generate the
+        image somewhere else, then hand it back here. The file is content-hashed into
+        library/images, recorded in the manifest against the query it fills, and the
+        index is rebuilt so the shot matches on the next plan.
+        """
+        try:
+            import hashlib
+            import shutil
+            import time as _time
+            from pipeline import library
+
+            picked = self._window.create_file_dialog(
+                dialog_type=10,  # OPEN_DIALOG
+                allow_multiple=False,
+                file_types=("Images (*.jpg;*.jpeg;*.png;*.webp)", "All files (*.*)"),
+            )
+            if not picked:
+                return {"success": False, "cancelled": True}
+
+            source = picked[0]
+            with open(source, "rb") as f:
+                data = f.read()
+
+            ext = os.path.splitext(source)[1].lower() or ".jpg"
+            if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+                return {"success": False, "error": f"{ext} is not an image file"}
+
+            name = hashlib.sha1(data).hexdigest()[:12] + ext
+            os.makedirs(library.IMAGES_DIR, exist_ok=True)
+            target = os.path.join(library.IMAGES_DIR, name)
+            if not os.path.exists(target):
+                shutil.copy(source, target)
+
+            rel = f"library/images/{name}"
+            with open(library.MANIFEST_PATH, "a", encoding="utf-8") as mf:
+                mf.write(json.dumps({
+                    "path": rel,
+                    "prompt": query,
+                    "source": "imported",
+                    "bytes": len(data),
+                    "created_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                }, ensure_ascii=False) + "\n")
+
+            library.reindex(force=True)
+            return {"success": True, "path": rel, "url": self._media_url(rel), "filename": name}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -166,7 +240,14 @@ class Api:
             q_lower = query.lower()
             img_files = [f for f in img_files if q_lower in f.lower()]
 
-        images_info = [{"filename": f, "path": f"library/images/{f}"} for f in img_files[:60]]
+        images_info = [
+            {
+                "filename": f,
+                "path": f"library/images/{f}",
+                "url": self._media_url(f"library/images/{f}"),
+            }
+            for f in img_files[:60]
+        ]
         return {
             "total_images": len(img_files),
             "images": images_info,

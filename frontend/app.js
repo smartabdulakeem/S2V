@@ -633,7 +633,7 @@ function renderStoryboardScreen() {
           </div>
         `;
       } else {
-        const imgUrl = rep.best_path;
+        const imgUrl = rep.best_url || rep.best_path;
         thumbHtml = `
           <div class="thumb">
             <img src="${imgUrl}" alt="${shot.query}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'112\\' fill=\\'%2326313C\\'><text x=\\'50%\\' y=\\'50%\\' fill=\\'%2378848F\\' text-anchor=\\'middle\\'>image</text></svg>'"/>
@@ -644,17 +644,20 @@ function renderStoryboardScreen() {
 
       // Alternatives strip for weak matches
       let altsHtml = "";
-      if (rep.state === "weak" && rep.alternatives && rep.alternatives.length > 0) {
-        const altImgs = rep.alternatives.slice(0, 3).map(alt => `
-          <span class="altwrap" onclick="selectAlternative('${segId}', '${shotId}', '${alt[0]}')">
-            <img class="alt" src="${alt[0]}" alt="alternative"/>
-            <i>${(alt[1] || 0.25).toFixed(2)}</i>
+      if (rep.alternatives && rep.alternatives.length > 0 && rep.state !== "gap") {
+        const altSource = (rep.alternative_urls && rep.alternative_urls.length)
+          ? rep.alternative_urls
+          : rep.alternatives.map(a => ({ url: a[0], path: a[0], score: a[1] }));
+        const altImgs = altSource.slice(0, 3).map(alt => `
+          <span class="altwrap" onclick="selectAlternative('${segId}', '${shotId}', '${alt.path}')">
+            <img class="alt" src="${alt.url}" alt="alternative"/>
+            <i>${(alt.score || 0.25).toFixed(2)}</i>
           </span>
         `).join("");
 
         altsHtml = `
           <div class="alts">
-            <span class="lbl">Better options in your library</span>
+            <span class="lbl">Other options in your library &mdash; click one to use it</span>
             ${altImgs}
           </div>
         `;
@@ -669,9 +672,9 @@ function renderStoryboardScreen() {
             <code>${rep.composed_prompt || 'cinematic shot'}</code>
             <div style="display:flex; gap:7px; flex-wrap:wrap">
               <button type="button" onclick="navigator.clipboard.writeText('${(rep.composed_prompt || '').replace(/'/g, "\\'")}')">Copy prompt</button>
-              <button type="button" class="primary" onclick="alert('Imagen generation estimate: ~$0.04')">Generate with Imagen &middot; ~$0.04</button>
+              <button type="button" class="primary" onclick="importShotImage('${(rep.query || '').replace(/'/g, "\'")}')">I made this image &mdash; add it</button>
             </div>
-            <div class="drop">Drop the generated image here &mdash; it joins the library automatically</div>
+            <div class="drop">Generate it anywhere, then add it here. It joins the library and this shot fills in.</div>
           </div>
         `;
       }
@@ -884,7 +887,7 @@ function renderLibraryGrid(images) {
 
   grid.innerHTML = images.map(img => `
     <div class="img-card">
-      <img src="${img.path}" alt="${img.filename}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'180\\' height=\\'110\\' fill=\\'%2326313C\\'></svg>'"/>
+      <img src="${img.url || img.path}" alt="${img.filename}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'180\\' height=\\'110\\' fill=\\'%2326313C\\'></svg>'"/>
       <div class="info">
         <span class="fname">${img.filename}</span>
         <button type="button" class="ghost" style="padding: 2px 6px; font-size: 10.5px; border-color: var(--gap); color: var(--gap)" onclick="deleteImage('${img.filename}')">Delete</button>
@@ -912,3 +915,18 @@ async function clearLibraryCache() {
     alert("Cache cleared.");
   }
 }
+
+
+// Bring an image made outside the app into the library, then re-plan so the shot fills.
+async function importShotImage(query) {
+  if (!window.pywebview) { alert("Image import is only available in the desktop app."); return; }
+  try {
+    const res = await window.pywebview.api.import_shot_image(query || "");
+    if (res.cancelled) return;
+    if (!res.success) { alert("Could not add the image: " + (res.error || "unknown error")); return; }
+    await refreshStoryboardCoverage();
+  } catch (e) {
+    alert("Could not add the image: " + e.message);
+  }
+}
+window.importShotImage = importShotImage;
