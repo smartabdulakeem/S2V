@@ -549,6 +549,7 @@ def fetch_visual(
     on_library_hit=None,
     style_preset: str = "",
     project_brief: str = "",
+    visual_description: str = None,
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
@@ -646,7 +647,8 @@ def fetch_visual(
                     series_slug=series_slug,
                     project_title=video_title,
                     visual_type=style_preset,
-                    project_brief=project_brief
+                    project_brief=project_brief,
+                    visual_description=f"{visual_description} (Left part)" if visual_description else None,
                 )
                 success = False
                 if google_api_key:
@@ -671,7 +673,8 @@ def fetch_visual(
                     series_slug=series_slug,
                     project_title=video_title,
                     visual_type=style_preset,
-                    project_brief=project_brief
+                    project_brief=project_brief,
+                    visual_description=f"{visual_description} (Right part)" if visual_description else None,
                 )
                 success = False
                 if google_api_key:
@@ -752,7 +755,8 @@ def fetch_visual(
                     series_slug=series_slug,
                     project_title=video_title,
                     visual_type=style_preset,
-                    project_brief=project_brief
+                    project_brief=project_brief,
+                    visual_description=visual_description,
                 )
                 if not auto_generate:
                     raise ValueError(
@@ -856,7 +860,8 @@ def fetch_visual(
         series_slug=series_slug,
         project_title=video_title,
         visual_type=style_preset,
-        project_brief=project_brief
+        project_brief=project_brief,
+        visual_description=visual_description,
     )
     
     existing_lines = {}
@@ -911,6 +916,9 @@ def initialize_project_sourcing(script_dict: dict) -> str:
         keyword = segment_keyword(seg)
         narration = seg.get("narration", "")
         magick_filter = seg.get("magick_filter", "vignette")
+        v_desc = seg.get("visual_description")
+        if not v_desc and seg.get("shots"):
+            v_desc = seg["shots"][0].get("visual_description")
         
         # 1. Generate placeholder if neither jpg nor png exists
         if magick_filter in ["diptych", "collage"]:
@@ -951,7 +959,8 @@ def initialize_project_sourcing(script_dict: dict) -> str:
             series_slug=series_slug,
             project_title=title,
             visual_type=proj.get("visual_type", ""),
-            project_brief=proj.get("project_brief", "")
+            project_brief=proj.get("project_brief", ""),
+            visual_description=v_desc,
         )
         lines.append(f"Segment {segment_id}: {prompt_desc}")
         

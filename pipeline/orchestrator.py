@@ -409,6 +409,7 @@ class RenderOrchestrator:
                     # visual_type above already means the image SOURCE.
                     style_preset=proj.get("visual_type", ""),
                     project_brief=proj.get("project_brief", ""),
+                    visual_description=(seg.get("shots") and seg["shots"][0].get("visual_description")) or seg.get("visual_description"),
                 )
                 with self._lock:
                     visual_paths_map[seg_id] = vis_path
