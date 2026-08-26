@@ -220,7 +220,14 @@ def test_matching_words_keep_the_number():
 
 
 def test_a_project_tag_before_the_number_is_understood():
-    """Copy all prompts emits "thebat12." so two films cannot both produce a 1_."""
+    """
+    A project tag in front of the number still parses.
+
+    Copy all prompts no longer emits one - a tag at the head of the prompt came
+    back burnt into the picture as a slate - but the user is free to name files
+    that way themselves, and it remains the only thing keeping two films from
+    both producing a 1_.
+    """
     tagged = ["library/new image/thebat1_house_wisdom.jpg",
               "library/new image/thebat2_battle_fahl.jpg",
               "library/new image/thebat3_quran_states.jpg"]

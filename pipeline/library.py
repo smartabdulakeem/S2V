@@ -911,6 +911,30 @@ def filename_subject_words(filename: str) -> list:
     return words
 
 
+def _words_agree(name_words, prompt_words) -> bool:
+    """
+    Whether a filename's surviving words back up a prompt.
+
+    Exact equality is the wrong test, because the truncation that makes this
+    check necessary is the same truncation that breaks it: a tool cutting the
+    name at twenty characters turns "illustration" into "illustrati", which
+    matches no prompt word at all. Every image in a real sheet folder was
+    rejected on that alone.
+
+    So a filename word counts when it is the start of a prompt word, or the
+    prompt word is the start of it. Four characters minimum - shorter stems
+    agree by accident.
+    """
+    for nw in name_words:
+        for pw in prompt_words:
+            if nw == pw:
+                return True
+            shorter, longer = (nw, pw) if len(nw) <= len(pw) else (pw, nw)
+            if len(shorter) >= 4 and longer.startswith(shorter):
+                return True
+    return False
+
+
 def match_shots_by_number(paths: list, shot_count: int, shot_prompts: dict = None) -> dict:
     """
     Images named 1_, 2_, 3_… belong to shots 1, 2, 3.
@@ -962,7 +986,7 @@ def match_shots_by_number(paths: list, shot_count: int, shot_prompts: dict = Non
         words = filename_subject_words(path)
         if words and shot_prompts and idx in shot_prompts:
             prompt_words = set(prompt_head(shot_prompts[idx], words=10))
-            if prompt_words and not (set(words) & prompt_words):
+            if prompt_words and not _words_agree(words, prompt_words):
                 continue
 
         out[idx] = path
@@ -1279,12 +1303,21 @@ def scene_from_narration(narration: str, max_words: int = 34) -> str:
 BRIEF_MAX_WORDS = 30
 
 #: How each treatment names the kind of picture the film is made of.
+#: How every prompt in one film opens.
+#:
+#: These name the *kind of picture*, never a physical object. "Illustration
+#: plate from a documentary on early Islamic history" came back as a decorative
+#: plate with that sentence lettered underneath it, and "Plate 40:" printed
+#: across the frame. A generator draws the nouns it is given: ask for a plate,
+#: a still, a study or a panel and it renders the artefact and captions it.
+#: "of" rather than "from" matters for the same reason - "from" implies the
+#: picture was cut out of some larger printed thing.
 BRIEF_OPENERS = {
-    "documentary": "Documentary still from",
-    "illustration": "Illustration plate from",
-    "silhouette": "Silhouette study from",
-    "vox_collage": "Collage panel from",
-    "vignette": "Cinematic still from",
+    "documentary": "A documentary photograph of",
+    "illustration": "An illustrated scene of",
+    "silhouette": "A silhouetted scene of",
+    "vox_collage": "Collaged imagery of",
+    "vignette": "A cinematic scene of",
 }
 
 #: A capitalised name, allowing hyphenated forms (Jean-Baptiste) and the Arabic
@@ -1500,6 +1533,7 @@ def compose_gap_prompt(
     include_negative: bool = None,
     visual_type: str = None,
     project_brief: str = None,
+    visual_description: str = None,
 ) -> str:
     """
     A ready-to-use image prompt for one shot, built from named slots.
@@ -1527,12 +1561,15 @@ def compose_gap_prompt(
     if project_brief:
         parts.append(project_brief.rstrip(" ,."))
 
-    # Only supply framing the query does not already state, or the same phrase
+    # Subject slot: use visual_description when present and non-empty, otherwise shot_query
+    subject_text = (visual_description or "").strip() if (visual_description and visual_description.strip()) else (shot_query or "").strip()
+
+    # Only supply framing the subject does not already state, or the same phrase
     # lands twice: "wide establishing shot, ..., wide establishing shot of a
     # muddy riverbank at dawn".
-    if match_slot(PROMPT_FRAMING, shot_query or "") is None:
+    if match_slot(PROMPT_FRAMING, subject_text) is None:
         parts.append(DEFAULT_FRAMING)
-    parts.append((shot_query or "").strip())
+    parts.append(subject_text)
 
     for table in (PROMPT_MOTION, PROMPT_GROUND, PROMPT_ATMOSPHERE):
         phrase = match_slot(table, blob)
@@ -1660,8 +1697,33 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 # board shows a prompt, the user goes away and makes the picture,
                 # and Refresh has to know what it was waiting for.
                 "prompt": shot.get("prompt") or "",
+                "share_with": shot.get("share_with"),
+                "run_index": shot.get("run_index"),
+                "run_position": shot.get("run_position"),
+                "visual_description": shot.get("visual_description"),
                 "_shot": shot,
             })
+
+    if _setting("ai_shot_descriptions", False):
+        try:
+            from pipeline.shot_description import describe_shots
+            google_key = _setting("google_api_key", "")
+            shots_for_desc = []
+            for s in all_shots:
+                scene_text = s.get("narration") or (s.get("_shot") and s["_shot"].get("scene")) or ""
+                shots_for_desc.append({
+                    "shot_id": s["shot_id"],
+                    "scene": scene_text,
+                    "visual_description": s.get("visual_description") or (s.get("_shot") and s["_shot"].get("visual_description")),
+                })
+            descriptions = describe_shots(shots_for_desc, api_key=google_key)
+            for s in all_shots:
+                if s["shot_id"] in descriptions:
+                    s["visual_description"] = descriptions[s["shot_id"]]
+                    if s.get("_shot") is not None:
+                        s["_shot"]["visual_description"] = descriptions[s["shot_id"]]
+        except Exception as e:
+            sys.stderr.write(f"[plan_shots] AI shot description failed: {e}\n")
 
     script_used_images = set()
 
@@ -1671,6 +1733,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     pinned_count = 0
 
     shot_reports = []
+    resolved_by_id = {}
     query_to_segments = {}
 
     # Reserve pinned and previously-resolved images before anything searches, so a
@@ -1718,7 +1781,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     # the loss cascades — which is exactly what happens to a folder of images
     # generated one per shot.
     open_shots = [i for i, s in enumerate(all_shots)
-                  if not s["pin_resolved"] and not s["keep_resolved"]]
+                  if not s["pin_resolved"] and not s["keep_resolved"] and not s.get("share_with")]
 
     # An image named after a shot's own prompt belongs to that shot. This is
     # exact — the filename literally repeats the prompt's opening words — so it
@@ -1789,12 +1852,71 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
 
         pin_missing = bool(s["pin"]) and not s["pin_resolved"]
 
+        # When a shot shares an image with an earlier shot in a run, copy the
+        # resolution directly without running its own library search.
+        # A pin outranks sharing. The run assigns one image to a stretch of
+        # segments, but a pin is the user pointing at a picture and saying "this
+        # one, here" - it survives a re-plan at any image count. Without this
+        # guard the branch below runs first and its `continue` skips the pin
+        # branch entirely, silently discarding the choice.
+        if s.get("share_with") and not s["pin_resolved"]:
+            ref_id = s["share_with"]
+            ref_rep = resolved_by_id.get(ref_id)
+            if ref_rep and ref_rep.get("best_path"):
+                best_path = ref_rep["best_path"]
+                best_score = ref_rep["best_score"]
+                state = ref_rep["state"]
+                alts = ref_rep.get("alternatives") or []
+
+                if state in ("matched", "pinned"):
+                    matched_count += 1
+                elif state == "weak":
+                    weak_count += 1
+                else:
+                    gap_count += 1
+
+                composed = compose_gap_prompt(
+                    shot_query=q,
+                    world_anchor=world_anchor,
+                    character_bible=character_bible,
+                    script_context=s["narration"],
+                    series_slug=series_slug,
+                    project_title=title,
+                    visual_type=visual_type,
+                    project_brief=project_brief,
+                    visual_description=s.get("visual_description"),
+                )
+                if s.get("_shot") is not None:
+                    if not s["_shot"].get("prompt"):
+                        s["_shot"]["prompt"] = composed
+                    s["_shot"]["resolved"] = best_path
+                    s["_shot"]["resolved_score"] = best_score
+                    if "source" in ref_rep:
+                        s["_shot"]["source"] = ref_rep["source"]
+
+                rep = {
+                    "segment_id": s["segment_id"],
+                    "shot_id": s["shot_id"],
+                    "query": q,
+                    "state": state,
+                    "best_score": best_score,
+                    "best_path": best_path,
+                    "alternatives": alts,
+                    "pin_missing": False,
+                    "composed_prompt": composed,
+                    "share_with": ref_id,
+                    "source": ref_rep.get("source", "library"),
+                }
+                shot_reports.append(rep)
+                resolved_by_id[s["shot_id"]] = rep
+                continue
+
         if s["pin_resolved"]:
             # The user chose this image. Offer alternatives so Replace still has
             # something to show, but the choice itself is not up for re-litigation.
             alt_results = search(q, k=5, exclude=script_used_images, min_score=0.0,
                                  folder=folder, allow_reuse=allow_reuse)
-            shot_reports.append({
+            rep = {
                 "segment_id": s["segment_id"],
                 "shot_id": s["shot_id"],
                 "query": q,
@@ -1812,8 +1934,15 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     project_title=title,
                     visual_type=visual_type,
                     project_brief=project_brief,
+                    visual_description=s.get("visual_description"),
                 ),
-            })
+                "source": s["_shot"].get("source", "library") if s.get("_shot") else "library",
+            }
+            if s.get("_shot") is not None:
+                s["_shot"]["resolved"] = rep["best_path"]
+                s["_shot"]["resolved_score"] = 1.0
+            shot_reports.append(rep)
+            resolved_by_id[s["shot_id"]] = rep
             pinned_count += 1
             continue
 
@@ -1828,7 +1957,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 matched_count += 1
             else:
                 weak_count += 1
-            shot_reports.append({
+            rep = {
                 "segment_id": s["segment_id"],
                 "shot_id": s["shot_id"],
                 "query": q,
@@ -1846,8 +1975,15 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     project_title=title,
                     visual_type=visual_type,
                     project_brief=project_brief,
+                    visual_description=s.get("visual_description"),
                 ),
-            })
+                "source": s["_shot"].get("source", "library") if s.get("_shot") else "library",
+            }
+            if s.get("_shot") is not None:
+                s["_shot"]["resolved"] = rep["best_path"]
+                s["_shot"]["resolved_score"] = kept_score
+            shot_reports.append(rep)
+            resolved_by_id[s["shot_id"]] = rep
             continue
 
         results = search(q, k=5, exclude=script_used_images, min_score=target_min,
@@ -1894,16 +2030,21 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             project_title=title,
             visual_type=visual_type,
             project_brief=project_brief,
+            visual_description=s.get("visual_description"),
         )
 
         # Remember the prompt on the shot itself. The board shows it, the user
         # goes away and generates the picture, and when they come back Refresh
         # has to still know what this shot asked for — that memory has to
         # outlive the session, so it lives in the script, not in a variable.
-        if s.get("_shot") is not None and not s["_shot"].get("prompt"):
-            s["_shot"]["prompt"] = composed
+        if s.get("_shot") is not None:
+            if not s["_shot"].get("prompt"):
+                s["_shot"]["prompt"] = composed
+            if best_path:
+                s["_shot"]["resolved"] = best_path
+                s["_shot"]["resolved_score"] = best_score
 
-        shot_reports.append({
+        rep = {
             "segment_id": s["segment_id"],
             "shot_id": s["shot_id"],
             "query": q,
@@ -1912,8 +2053,11 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             "best_path": best_path,
             "alternatives": results[1:] if len(results) > 1 else [],
             "pin_missing": pin_missing,
-            "composed_prompt": composed
-        })
+            "composed_prompt": composed,
+            "source": s["_shot"].get("source", "library") if s.get("_shot") else "library",
+        }
+        shot_reports.append(rep)
+        resolved_by_id[s["shot_id"]] = rep
 
     # Alternatives are computed while the board is planned, so a shot could be
     # offered an image that a *later* shot then claims as its own best match.

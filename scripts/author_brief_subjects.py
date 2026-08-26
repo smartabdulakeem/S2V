@@ -16,17 +16,23 @@ import json
 import os
 from collections import OrderedDict
 
+#: Subject matter only - never the word for a film, documentary or picture.
+#:
+#: These follow an opener from BRIEF_OPENERS, so the brief reads "An
+#: illustrated scene of seventh century Arabia". Naming the artefact twice
+#: ("Illustration plate from a documentary on...") is what put a lettered
+#: caption under every generated image.
 SUBJECTS = {
-    "biography": "a historical biography film",
-    "business_money": "a documentary on business and finance",
-    "default": "a documentary film",
-    "islamic_history": "a documentary on seventh century Arabia and early Islamic history",
-    "motivational": "a contemporary motivational film",
-    "mythology_folklore": "a film on myth and folklore",
-    "nature_wildlife": "a natural history wildlife film",
-    "space_science": "a documentary on space and science",
-    "true_crime": "a true crime documentary",
-    "world_military_history": "a military history documentary",
+    "biography": "a figure from history",
+    "business_money": "business and finance",
+    "default": "real people and places",
+    "islamic_history": "seventh century Arabia and early Islamic history",
+    "motivational": "contemporary everyday life",
+    "mythology_folklore": "myth and folklore",
+    "nature_wildlife": "wildlife and the natural world",
+    "space_science": "space and science",
+    "true_crime": "a criminal investigation",
+    "world_military_history": "military history",
 }
 
 SERIES_DIR = os.path.join("config", "series")

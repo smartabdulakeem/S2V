@@ -33,6 +33,7 @@ def _load_settings() -> dict:
         "output_dir": "output",
         "cache_dir": "cache",
         "whisper_model": "base",
+        "ai_shot_descriptions": False,
     }
     if os.path.exists(SETTINGS_PATH):
         try:
@@ -79,6 +80,11 @@ class Api:
         for key in self.SECRET_SETTING_KEYS:
             safe[f"{key}_set"] = bool(str(self._settings.get(key, "")).strip())
         return safe
+
+    def save_ai_shot_descriptions(self, enabled: bool) -> dict:
+        self._settings["ai_shot_descriptions"] = bool(enabled)
+        _save_settings(self._settings)
+        return {"success": True}
 
 
 
@@ -331,7 +337,7 @@ class Api:
             return {"success": False, "error": str(e), "brief": ""}
 
     UI_DEFAULT_KEYS = ("voice", "series_slug", "tone", "visual_style", "visual_type",
-                       "captions_enabled", "shot_rhythm_seconds", "formats")
+                       "captions_enabled", "shot_rhythm_seconds", "image_count", "formats")
 
     def save_ui_defaults(self, defaults: dict) -> dict:
         """
@@ -518,27 +524,22 @@ class Api:
 
             report = plan_shots(script_data)
 
-            # One prompt per line, numbered in shot order.
+            # One prompt per line, in shot order. Line N is shot N.
             #
-            # The number is the whole point: image tools name their output after
-            # the start of the prompt and truncate it to about twenty characters,
-            # so "wide establishing shot of…" becomes "12_wide_establishing_sh"
-            # and nineteen of forty-seven real files carried no subject words at
-            # all. The leading number survives that truncation and says exactly
-            # which shot the picture belongs to.
-            # The number is prefixed with a short tag from the project title, so
-            # two videos cannot both produce a "1_". Once these images move into
-            # the shared library, an untagged 1_ from last month's film would
-            # otherwise be a perfectly good candidate for this month's shot 1.
-            import re as _re
-            title = ((script_data or {}).get("project") or {}).get("title", "")
-            tag = "".join(_re.findall(r"[A-Za-z0-9]+", title))[:6].lower() or "shot"
-
+            # The line used to open with a project tag and the shot number
+            # ("whydid1. ..."), because that survives the ~20-character filename
+            # truncation image tools apply and says which shot a picture is for.
+            # But the generator reads it as part of the picture: a prompt opening
+            # with a scene label comes back with a slate burnt into the frame.
+            # The number is worth nothing if it costs a watermark on every image.
+            #
+            # So the prompt is now description only. The number goes on the file
+            # at generation time instead, where no generator can read it.
             lines = []
-            for i, r in enumerate(report.get("shot_reports", []), 1):
+            for r in report.get("shot_reports", []):
                 prompt = " ".join((r.get("composed_prompt") or "").split())
                 if prompt:
-                    lines.append(f"{tag}{i}. {prompt}")
+                    lines.append(prompt)
 
             return {
                 "success": True,
@@ -560,6 +561,20 @@ class Api:
         try:
             from pipeline.text_parser import apply_shot_rhythm
             stats = apply_shot_rhythm(script_data, seconds_per_shot)
+            return {"success": True, "script_data": script_data, **stats}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def set_image_count(self, script_data: dict, image_count: int) -> dict:
+        """
+        Re-cut the whole script so it uses exactly image_count images.
+
+        Plans across the whole script: when fewer images are asked for than there
+        are segments, consecutive segments share one image.
+        """
+        try:
+            from pipeline.text_parser import plan_image_budget
+            stats = plan_image_budget(script_data, image_count)
             return {"success": True, "script_data": script_data, **stats}
         except Exception as e:
             return {"success": False, "error": str(e)}

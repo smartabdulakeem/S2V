@@ -5,7 +5,7 @@ from pipeline.library import draft_project_brief, BRIEF_MAX_WORDS
 
 CFG = {
     "world_anchor": "7th century Arabian Peninsula, early Islamic era",
-    "brief_subject": "a documentary on seventh century Arabia and early Islamic history",
+    "brief_subject": "seventh century Arabia and early Islamic history",
 }
 SCRIPT = ("Khalid ibn al-Walid rode through the night. Abu Ubaidah held the centre. "
           "Khalid reached the Jordan valley before dawn and Abu Ubaidah followed.")
@@ -13,22 +13,22 @@ SCRIPT = ("Khalid ibn al-Walid rode through the night. Abu Ubaidah held the cent
 
 def test_documentary_treatment_opens_with_documentary_still():
     brief = draft_project_brief("The Battle of the Mud", CFG, SCRIPT, "documentary")
-    assert brief.startswith("Documentary still from")
+    assert brief.startswith("A documentary photograph of")
 
 
 def test_illustration_treatment_opens_with_illustration_plate():
     brief = draft_project_brief("The Battle of the Mud", CFG, SCRIPT, "illustration")
-    assert brief.startswith("Illustration plate from")
+    assert brief.startswith("An illustrated scene of")
 
 
 def test_silhouette_treatment_opens_with_silhouette_study():
     brief = draft_project_brief("X", CFG, SCRIPT, "silhouette")
-    assert brief.startswith("Silhouette study from")
+    assert brief.startswith("A silhouetted scene of")
 
 
 def test_unknown_treatment_falls_back_to_documentary_still():
     brief = draft_project_brief("X", CFG, SCRIPT, None)
-    assert brief.startswith("Documentary still from")
+    assert brief.startswith("A documentary photograph of")
 
 
 def test_brief_names_the_subject_not_the_medium():
@@ -114,7 +114,7 @@ def test_plan_shots_returns_the_brief_it_drafted():
     d.setdefault("project", {})["series_slug"] = "islamic_history"
     d["project"]["visual_type"] = "architectural_plate"
     report = plan_shots(d)
-    assert report.get("project_brief", "").startswith("Documentary still from"), \
+    assert report.get("project_brief", "").startswith("A documentary photograph of"), \
         report.get("project_brief")
 
 
@@ -131,7 +131,7 @@ def test_a_missing_brief_is_drafted():
     info = {"title": "The Battle of the Mud", "series_slug": "islamic_history",
             "visual_type": "architectural_plate"}
     out = ensure_project_brief(info, SCRIPT)
-    assert out.startswith("Documentary still from")
+    assert out.startswith("A documentary photograph of")
 
 
 def test_an_existing_brief_is_left_alone():
@@ -144,4 +144,28 @@ def test_an_existing_brief_is_left_alone():
 def test_a_blank_brief_is_treated_as_missing():
     info = {"title": "X", "series_slug": "islamic_history",
             "visual_type": "architectural_plate", "project_brief": "   "}
-    assert ensure_project_brief(info, SCRIPT).startswith("Documentary still from")
+    assert ensure_project_brief(info, SCRIPT).startswith("A documentary photograph of")
+
+
+def test_no_opener_names_a_physical_object():
+    """
+    An opener describes the kind of picture, never a thing you could hold.
+
+    "Illustration plate from a documentary on early Islamic history" came back
+    from the generator as a decorative plate with that sentence lettered
+    underneath, and another frame carried "PLATE 40:" across it. The generator
+    draws the nouns it is handed. This guards the whole table, so a future
+    opener cannot quietly reintroduce the artefact.
+    """
+    from pipeline.library import BRIEF_OPENERS
+
+    banned = ("plate", "still", "study", "panel", "print", "poster",
+              "page", "sheet", "card", "frame", "clipping")
+    for treatment, opener in BRIEF_OPENERS.items():
+        words = opener.lower().replace(",", " ").split()
+        hit = [w for w in words if w in banned]
+        assert not hit, f"{treatment!r} opener names an artefact: {opener!r} ({hit})"
+        assert not opener.lower().endswith(" from"), (
+            f"{treatment!r} opener says 'from', which implies the picture was cut "
+            f"out of a larger printed thing: {opener!r}"
+        )

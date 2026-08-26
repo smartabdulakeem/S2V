@@ -118,6 +118,10 @@ async function rememberUiChoices() {
   // Store the seconds, not the slider position. A stored position silently
   // changes meaning the moment the slider's range or mapping is edited.
   if (rhythm) defaults.shot_rhythm_seconds = RHYTHM_SECONDS[rhythm.value] || 7;
+  const imgCountEl = document.getElementById("image-count");
+  if (imgCountEl && imgCountEl.value) {
+    defaults.image_count = parseInt(imgCountEl.value, 10);
+  }
   defaults.formats = getSelectedFormats();
   try { await window.pywebview.api.save_ui_defaults(defaults); } catch (e) {}
 }
@@ -157,6 +161,11 @@ async function applyUiDefaults() {
       rhythm.value = rhythmPositionFor(d.shot_rhythm_seconds);
       const lbl = document.getElementById("rhythm-label");
       if (lbl) lbl.textContent = `~${RHYTHM_SECONDS[rhythm.value] || 7}s per shot`;
+    }
+    const imgCountEl = document.getElementById("image-count");
+    if (imgCountEl && d.image_count) {
+      imgCountEl.value = d.image_count;
+      updateImageCountHint(d.image_count);
     }
     if (Array.isArray(d.formats) && d.formats.length) {
       document.querySelectorAll(".fmt").forEach(btn => {
@@ -638,8 +647,21 @@ async function loadSettingsData() {
       const input = document.getElementById(`${id}-input`);
       if (input && isSet) input.placeholder = "•••••• stored — type a new key to replace";
     });
+    const aiDescCb = document.getElementById("setting-ai-shot-descriptions");
+    if (aiDescCb) {
+      aiDescCb.checked = !!settings.ai_shot_descriptions;
+    }
   } catch (e) {}
 }
+
+async function toggleAiShotDescriptions(enabled) {
+  if (!isWebMode) {
+    await window.pywebview.api.save_ai_shot_descriptions(enabled);
+  } else {
+    localStorage.setItem("ai_shot_descriptions", enabled ? "1" : "0");
+  }
+}
+window.toggleAiShotDescriptions = toggleAiShotDescriptions;
 
 function setKeyStatus(id, connected) {
   const el = document.getElementById(id);
@@ -944,6 +966,14 @@ function renderStoryboardScreen() {
   document.getElementById("board-cnt-gaps").textContent = gapCnt;
   document.getElementById("board-cnt-shots").textContent = totalShots || currentScriptData.segments.length;
 
+  const estSecs = getScriptEstSeconds();
+  const rMins = Math.floor(estSecs / 60);
+  const rSecs = Math.floor(estSecs % 60);
+  const rtEl = document.getElementById("board-cnt-runtime");
+  if (rtEl) rtEl.textContent = `${rMins}:${String(rSecs).padStart(2, "0")}`;
+
+  syncImageCountControl();
+
   let html = "";
 
   currentScriptData.segments.forEach(seg => {
@@ -1071,14 +1101,127 @@ function rhythmPositionFor(secs) {
 
 let rhythmTimer = null;
 
-function updateRhythmLabel(val) {
+// ── Image Budget & Shot Rhythm Control ───────────────────────────────────────
+
+function getScriptWordCount() {
+  if (!currentScriptData || !currentScriptData.segments) return 0;
+  return currentScriptData.segments.reduce((acc, s) => {
+    const text = (s.narration || "").trim();
+    return acc + (text ? text.split(/\s+/).filter(Boolean).length : 0);
+  }, 0);
+}
+
+function getScriptEstSeconds() {
+  const words = getScriptWordCount();
+  return words > 0 ? (words / 2.6) : 0.0;
+}
+
+function countScriptImages(scriptData) {
+  if (!scriptData || !scriptData.segments) return 0;
+  let cnt = 0;
+  scriptData.segments.forEach(seg => {
+    const shots = seg.shots || [];
+    if (shots.length) {
+      cnt += shots.filter(s => !s.share_with).length;
+    } else {
+      cnt += 1;
+    }
+  });
+  return cnt;
+}
+
+function updateImageCountHint(val) {
+  const hintEl = document.getElementById("image-count-hint");
+  if (!hintEl) return;
+  const words = getScriptWordCount();
+  const estSecs = getScriptEstSeconds();
+  const mins = (estSecs / 60).toFixed(1);
+  const count = Math.max(1, Math.min(500, parseInt(val, 10) || 1));
+  const secsPerImg = estSecs > 0 ? Math.round(estSecs / count) : 25;
+  hintEl.textContent = `~${words.toLocaleString()} words · ${mins} min · about ${secsPerImg}s per image`;
+}
+
+function syncImageCountControl() {
+  const input = document.getElementById("image-count");
+  if (!input) return;
+  const estSecs = getScriptEstSeconds();
+  const currentImages = countScriptImages(currentScriptData);
+  const suggested = Math.max(1, Math.round(estSecs / 25)) || 1;
+  const val = currentImages || suggested;
+  input.value = val;
+  updateImageCountHint(val);
+
+  const slider = document.getElementById("shot-rhythm-slider");
   const lbl = document.getElementById("rhythm-label");
-  const secs = RHYTHM_SECONDS[val] || 7;
+  if (slider && estSecs > 0) {
+    const secsPerImg = estSecs / val;
+    const pos = rhythmPositionFor(secsPerImg);
+    slider.value = pos;
+    if (lbl) lbl.textContent = `~${RHYTHM_SECONDS[pos] || 7}s per shot`;
+  }
+}
+
+function onImageCountInput(val) {
+  updateImageCountHint(val);
+  const estSecs = getScriptEstSeconds();
+  const count = Math.max(1, Math.min(500, parseInt(val, 10) || 1));
+  const slider = document.getElementById("shot-rhythm-slider");
+  const lbl = document.getElementById("rhythm-label");
+  if (slider && estSecs > 0) {
+    const secsPerImg = estSecs / count;
+    const pos = rhythmPositionFor(secsPerImg);
+    slider.value = pos;
+    if (lbl) lbl.textContent = `~${RHYTHM_SECONDS[pos] || 7}s per shot`;
+  }
+}
+
+function onImageCountCommit(val) {
+  const count = Math.max(1, Math.min(500, parseInt(val, 10) || 1));
+  const input = document.getElementById("image-count");
+  if (input) input.value = count;
+  updateImageCountHint(count);
+  applyImageBudget(count);
+}
+
+function onRhythmSliderInput(pos) {
+  const secs = RHYTHM_SECONDS[pos] || 7;
+  const lbl = document.getElementById("rhythm-label");
   if (lbl) lbl.textContent = `~${secs}s per shot`;
 
-  // Re-cutting runs CLIP over every new shot, so wait until the slider settles.
+  const estSecs = getScriptEstSeconds();
+  const impliedN = Math.max(1, Math.min(500, Math.round(estSecs / secs) || 1));
+  const input = document.getElementById("image-count");
+  if (input) input.value = impliedN;
+  updateImageCountHint(impliedN);
+
   clearTimeout(rhythmTimer);
-  rhythmTimer = setTimeout(() => applyShotRhythm(secs), 450);
+  rhythmTimer = setTimeout(() => applyImageBudget(impliedN), 450);
+}
+
+function updateRhythmLabel(val) {
+  onRhythmSliderInput(val);
+}
+
+async function applyImageBudget(imageCount) {
+  if (isWebMode || !currentScriptData) return;
+  const count = Math.max(1, Math.min(500, parseInt(imageCount, 10) || 1));
+  setBoardBusy(true, `Planning budget for ${count} image${count === 1 ? '' : 's'}…`);
+  try {
+    const res = await window.pywebview.api.set_image_count(currentScriptData, count);
+    if (!res.success) {
+      alert("Could not update image budget: " + (res.error || "unknown error"));
+      return;
+    }
+    currentScriptData = res.script_data;
+    if (currentScriptPath) {
+      await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+    }
+    await refreshStoryboardCoverage();
+  } catch (e) {
+    alert("Could not update image budget: " + e.message);
+  } finally {
+    setBoardBusy(false);
+  }
 }
 
 /** Re-cut every segment into shots of roughly `secs`, then re-plan the board. */
@@ -1103,6 +1246,10 @@ async function applyShotRhythm(secs) {
   }
 }
 window.applyShotRhythm = applyShotRhythm;
+window.applyImageBudget = applyImageBudget;
+window.onImageCountInput = onImageCountInput;
+window.onImageCountCommit = onImageCountCommit;
+window.onRhythmSliderInput = onRhythmSliderInput;
 
 // ── Replace: the one place a shot's image changes ─────────────────────────────
 

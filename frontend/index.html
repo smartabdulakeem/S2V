@@ -175,16 +175,24 @@
           <div><b id="board-cnt-shots">0</b><span>shots</span></div>
           <div><b id="board-cnt-runtime">0:00</b><span>runtime</span></div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-          <span class="mono">shot rhythm</span>
-          <input type="range" id="shot-rhythm-slider" min="1" max="5" value="3" style="width:110px" oninput="updateRhythmLabel(this.value)">
-          <span class="mono" id="rhythm-label">~7s per shot</span>
-          <button type="button" id="btn-working-folder-board" onclick="chooseWorkingFolder()">Work from this folder…</button>
-          <span class="mono" id="working-folder-label-board" title="">whole library</span>
-          <button type="button" id="btn-copy-prompts" onclick="copyAllPrompts()">Copy all prompts</button>
-          <button type="button" id="btn-refresh-library" onclick="refreshLibraryAndReplan()">Refresh library</button>
-          <button type="button" id="btn-fill-gaps" onclick="fillAllGaps()">Use nearest image for all gaps</button>
-          <button type="button" class="primary" id="btn-start-render-board" onclick="startRenderFromBoard()">Render video →</button>
+        <div style="display:flex; flex-direction:column; gap:4px">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+            <label for="image-count" class="mono" style="font-weight:600; font-size:12.5px; color:var(--ink)">How many images?</label>
+            <input type="number" id="image-count" min="1" max="500" value="31" style="width:65px; font-family:var(--mono); font-weight:700; text-align:center" oninput="onImageCountInput(this.value)" onblur="onImageCountCommit(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
+            <span class="mono" id="image-count-hint" style="color:var(--ink-2)">~0 words · 0.0 min · about 25s per image</span>
+            <span class="mono" style="margin-left:10px; color:var(--ink-3)">rhythm</span>
+            <input type="range" id="shot-rhythm-slider" min="1" max="5" value="3" style="width:90px" oninput="onRhythmSliderInput(this.value)">
+            <span class="mono" id="rhythm-label">~7s per shot</span>
+            <button type="button" id="btn-working-folder-board" onclick="chooseWorkingFolder()">Work from this folder…</button>
+            <span class="mono" id="working-folder-label-board" title="">whole library</span>
+            <button type="button" id="btn-copy-prompts" onclick="copyAllPrompts()">Copy all prompts</button>
+            <button type="button" id="btn-refresh-library" onclick="refreshLibraryAndReplan()">Refresh library</button>
+            <button type="button" id="btn-fill-gaps" onclick="fillAllGaps()">Use nearest image for all gaps</button>
+            <button type="button" class="primary" id="btn-start-render-board" onclick="startRenderFromBoard()">Render video →</button>
+          </div>
+          <p class="mono" style="margin:0; font-size:11px; color:var(--ink-3)">
+            Fewer images means each one is held longer with a slow pan. One image can carry a whole script.
+          </p>
         </div>
       </div>
 
@@ -471,6 +479,12 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border, #2a3642);">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text, #e1e7ec);">
+              <input type="checkbox" id="setting-ai-shot-descriptions" onchange="toggleAiShotDescriptions(this.checked)">
+              <span>Write descriptive image prompts with AI</span>
+            </label>
           </div>
           <p class="mono">
             Keys are stored on this machine only, in <code>config/settings.json</code>, and never

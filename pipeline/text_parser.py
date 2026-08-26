@@ -136,9 +136,9 @@ def split_narration_for_shots(narration: str, n: int) -> list:
     # difference between a 12-second hold and a 5-second one.
     if len(sentences) < n:
         words = narration.split()
-        if len(words) < n * 3:
+        if len(words) < n:
             return [narration] if len(sentences) <= 1 else sentences
-        size = max(3, len(words) // n)
+        size = max(1, len(words) // n)
         chunks = [" ".join(words[i:i + size]) for i in range(0, len(words), size)]
         while len(chunks) > n:
             chunks[-2] = chunks[-2] + " " + chunks[-1]
@@ -148,14 +148,28 @@ def split_narration_for_shots(narration: str, n: int) -> list:
     total = sum(len(s.split()) for s in sentences)
     target = total / n
     chunks, current, count = [], [], 0
-    for sentence in sentences:
+    for idx, sentence in enumerate(sentences):
         current.append(sentence)
         count += len(sentence.split())
-        if count >= target and len(chunks) < n - 1:
+        remaining_sentences = len(sentences) - 1 - idx
+        needed_chunks = (n - 1) - len(chunks)
+        if (count >= target or remaining_sentences == needed_chunks) and len(chunks) < n - 1:
             chunks.append(" ".join(current))
             current, count = [], 0
     if current:
         chunks.append(" ".join(current))
+
+    # If sentence boundary grouping produced fewer chunks due to sentence size variation,
+    # subdivide mid-sentence to satisfy the requested shot count.
+    if len(chunks) < n:
+        words = narration.split()
+        if len(words) >= n:
+            size = max(1, len(words) // n)
+            chunks = [" ".join(words[i:i + size]) for i in range(0, len(words), size)]
+            while len(chunks) > n:
+                chunks[-2] = chunks[-2] + " " + chunks[-1]
+                chunks.pop()
+
     return chunks
 
 
@@ -224,6 +238,192 @@ def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
         "shots_after": after,
         "segments": len(script_data.get("segments", [])),
     }
+
+
+def _count_distinct_images(segments) -> int:
+    """
+    How many distinct images the plan actually uses.
+
+    Counted from the shots themselves rather than returned from the number that
+    was asked for. A budget that reports back its own input cannot tell you it
+    missed, and `images_after == N` is the one assertion this feature rests on.
+    """
+    return sum(1 for seg in segments
+               for shot in (seg.get("shots") or [])
+               if not shot.get("share_with"))
+
+
+def plan_image_budget(script_data: dict, image_count: int) -> dict:
+    """
+    Re-cut the whole script so it uses exactly image_count images.
+
+    Unlike apply_shot_rhythm, which floors at one shot per segment, this plans
+    across the whole script: when fewer images are asked for than there are
+    segments, a run of consecutive segments shares one image.
+
+    Returns {"images_before": int, "images_after": int, "segments": int,
+             "shared_runs": int}.
+    """
+    import math
+
+    N = max(1, min(500, int(image_count if image_count is not None else 1)))
+    segments = script_data.get("segments", [])
+    S = len(segments)
+
+    if S == 0:
+        return {"images_before": 0, "images_after": 0, "segments": 0, "shared_runs": 0}
+
+    # Count distinct images before re-planning (non-sharing shots)
+    before = 0
+    for seg in segments:
+        shots = seg.get("shots") or []
+        if shots:
+            before += sum(1 for s in shots if not s.get("share_with"))
+        else:
+            before += 1
+
+    # Duration estimates per segment
+    seg_seconds = []
+    for seg in segments:
+        narration = seg.get("narration", "") or ""
+        words = len(narration.split())
+        seg_seconds.append(words / WORDS_PER_SECOND if words else 0.0)
+
+    total_seconds = sum(seg_seconds)
+    if total_seconds <= 0.0:
+        seg_seconds = [1.0] * S
+        total_seconds = float(S)
+
+    if N >= S:
+        # Case A — N >= S (split segments proportional to duration)
+        raw = [N * (sec / total_seconds) for sec in seg_seconds]
+        base = [max(1, math.floor(r)) for r in raw]
+
+        # While sum(base) > N: decrement the largest base[i] that is > 1
+        while sum(base) > N:
+            candidates = [i for i, b in enumerate(base) if b > 1]
+            if not candidates:
+                break
+            best_idx = max(candidates, key=lambda i: (base[i], -(raw[i] - math.floor(raw[i]))))
+            base[best_idx] -= 1
+
+        # While sum(base) < N: increment the base[i] with largest fractional remainder
+        while sum(base) < N:
+            remainders = [(raw[i] - math.floor(raw[i]), i) for i in range(S)]
+            remainders.sort(key=lambda x: x[0], reverse=True)
+            for _, i in remainders:
+                if sum(base) < N:
+                    base[i] += 1
+
+        for i, seg in enumerate(segments):
+            seg_id = seg.get("segment_id", i + 1)
+            narration = seg.get("narration", "") or ""
+            old_shots = seg.get("shots") or []
+
+            chunks = split_narration_for_shots(narration, base[i])
+
+            carried = [
+                {k: s[k] for k in ("source", "pin", "resolved", "resolved_score") if k in s}
+                for s in old_shots
+            ]
+            template = old_shots[0] if old_shots else {}
+            treatment = template.get("treatment") or {"filter": "vignette", "grade": None}
+
+            new_shots = []
+            for j, chunk in enumerate(chunks):
+                shot = {
+                    "shot_id": f"{seg_id}{chr(97 + j)}",
+                    "duration": None,
+                    "source": "library",
+                    "query": extract_keyword(chunk) or extract_keyword(narration) or "documentary shot",
+                    "pin": None,
+                    "min_score": template.get("min_score", 0.26),
+                    "motion": {"kind": "ken_burns", "effect": _MOTION_CYCLE[j % len(_MOTION_CYCLE)]},
+                    "treatment": dict(treatment),
+                    "scene": chunk,
+                    "share_with": None,
+                }
+                if j < len(carried) and carried[j].get("pin"):
+                    shot.update(carried[j])
+                new_shots.append(shot)
+
+            seg["shots"] = new_shots
+
+        return {
+            "images_before": before,
+            "images_after": _count_distinct_images(segments),
+            "segments": S,
+            "shared_runs": 0,
+        }
+
+    else:
+        # Case B — N < S (share images across segments)
+        target_dur = total_seconds / N
+        runs = []
+        current_run = []
+        current_dur = 0.0
+
+        for i, seg in enumerate(segments):
+            current_run.append((i, seg))
+            current_dur += seg_seconds[i]
+            remaining_segs = S - 1 - i
+            runs_needed = (N - 1) - len(runs)
+
+            if len(runs) < N - 1:
+                if current_dur >= target_dur or remaining_segs == runs_needed:
+                    runs.append(current_run)
+                    current_run = []
+                    current_dur = 0.0
+
+        if current_run:
+            runs.append(current_run)
+
+        for run_idx, run_items in enumerate(runs):
+            run_narrations = [(seg.get("narration", "") or "").strip() for _, seg in run_items]
+            full_run_narration = " ".join(n for n in run_narrations if n)
+            run_query = extract_keyword(full_run_narration) or "documentary shot"
+
+            first_seg_id = run_items[0][1].get("segment_id", run_items[0][0] + 1)
+            first_shot_id = f"{first_seg_id}a"
+
+            for pos, (i, seg) in enumerate(run_items):
+                seg_id = seg.get("segment_id", i + 1)
+                narration = seg.get("narration", "") or ""
+                old_shots = seg.get("shots") or []
+                template = old_shots[0] if old_shots else {}
+                treatment = template.get("treatment") or {"filter": "vignette", "grade": None}
+
+                shot_id = f"{seg_id}a"
+                is_first = (pos == 0)
+
+                shot = {
+                    "shot_id": shot_id,
+                    "duration": None,
+                    "source": "library",
+                    "query": run_query,
+                    "pin": None,
+                    "min_score": template.get("min_score", 0.26),
+                    "motion": {"kind": "ken_burns", "effect": _MOTION_CYCLE[pos % len(_MOTION_CYCLE)]},
+                    "treatment": dict(treatment),
+                    "scene": narration,
+                    "share_with": None if is_first else first_shot_id,
+                    "run_index": run_idx,
+                    "run_position": pos,
+                }
+
+                if old_shots and old_shots[0].get("pin"):
+                    for k in ("source", "pin", "resolved", "resolved_score"):
+                        if k in old_shots[0]:
+                            shot[k] = old_shots[0][k]
+
+                seg["shots"] = [shot]
+
+        return {
+            "images_before": before,
+            "images_after": _count_distinct_images(segments),
+            "segments": S,
+            "shared_runs": len(runs),
+        }
 
 
 def _normalise_title(value: str) -> str:
