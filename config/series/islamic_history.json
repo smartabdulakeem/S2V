@@ -13,10 +13,26 @@
   "style_block": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted earth palette of ochre sand, dust grey and deep indigo shadow, fine film grain, historically accurate 7th century Arabian Peninsula, early Islamic era.",
   "negative_block": "No modern objects, no firearms, no curved scimitars, no Ottoman or Persian costume, no plate armour, no European castles, no text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin.",
   "style_presets": {
-    "vintage_documentary": "Shot on 35mm film, cinematic documentary photography, natural directional light, shallow depth of field, muted earth palette of ochre sand, dust grey and deep indigo shadow, fine film grain.",
-    "documentary": "Cinematic documentary photography, natural lighting, high dynamic range, crisp details, historical accuracy.",
-    "illustration": "Detailed historical book illustration, fine pen line art, watercolor wash, warm parchment background.",
-    "silhouette": "High contrast dramatic silhouette, golden hour backlighting, rim lighting, atmospheric dust haze."
+    "manuscript_illumination": {
+      "prompt": "Illuminated manuscript panel, gold leaf, lapis and vermilion, geometric border.",
+      "treatment": "illustration"
+    },
+    "architectural_plate": {
+      "prompt": "Architectural photograph of courtyard, arcade and muqarnas, raking desert light.",
+      "treatment": "documentary"
+    },
+    "geometric_pattern": {
+      "prompt": "Tessellated girih pattern in glazed tile, deep blue and turquoise.",
+      "treatment": "illustration"
+    },
+    "caravan_silhouette": {
+      "prompt": "Caravan silhouetted on a dune ridge at dusk.",
+      "treatment": "silhouette"
+    },
+    "parchment_archive": {
+      "prompt": "Aged parchment leaves, tooled leather binding, pressed wax seals.",
+      "treatment": "vox_collage"
+    }
   },
   "calibration": {
     "min_score": 0.2796,

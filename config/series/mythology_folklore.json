@@ -13,10 +13,26 @@
   "style_block": "Cinematic painterly fantasy documentary style, volumetric misty light shafts, rich elemental color palette, subtle golden glow, fine painterly texture.",
   "negative_block": "No modern technology, no plastic surfaces, no sci-fi neon lasers, no text, no watermark, no signature, no logo.",
   "style_presets": {
-    "vintage_documentary": "Muted earth and gold palette, antique oil painting texture, dramatic atmospheric lighting.",
-    "documentary": "High cinematic detail, volumetric atmospheric mist, realistic historical legend art.",
-    "illustration": "Classical myth illustration, fine line work with rich watercolor wash.",
-    "silhouette": "Mythic silhouette against glowing sunrise or mystical moonlight."
+    "oil_myth": {
+      "prompt": "Romantic-era mythological oil painting, dramatic chiaroscuro, heroic scale.",
+      "treatment": "illustration"
+    },
+    "woodcut": {
+      "prompt": "Folk woodcut print, heavy black line, flat ochre and madder inks.",
+      "treatment": "illustration"
+    },
+    "misted_landscape": {
+      "prompt": "Mist-wrapped ancient landscape, standing stones, low blue light.",
+      "treatment": "vignette"
+    },
+    "firelit_silhouette": {
+      "prompt": "Storyteller and listeners silhouetted around firelight.",
+      "treatment": "silhouette"
+    },
+    "tapestry": {
+      "prompt": "Woven medieval tapestry panel, faded wool, millefleurs ground.",
+      "treatment": "vox_collage"
+    }
   },
   "calibration": {
     "min_score": null,

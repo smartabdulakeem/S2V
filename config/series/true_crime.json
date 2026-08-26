@@ -13,10 +13,26 @@
   "style_block": "Cinematic crime documentary photography, moody high contrast chiaroscuro lighting, deep shadow tones, desaturated color palette, subtle lens grain.",
   "negative_block": "No cartoon elements, no exaggerated gore, no bright tropical colors, no text, no watermark, no signature, no logo.",
   "style_presets": {
-    "vintage_documentary": "35mm grain, moody cold-case archival photograph, low key lighting.",
-    "documentary": "Cinematic investigative documentary photography, sharp foreground focus, shadowy atmosphere.",
-    "illustration": "Courtroom sketch art style, charcoal line work on textured paper.",
-    "silhouette": "High contrast silhouette in dark hallway, single light source."
+    "evidence_photo": {
+      "prompt": "Flash-lit evidence photograph, flat frontal light, scale marker, clinical framing.",
+      "treatment": "documentary"
+    },
+    "surveillance_still": {
+      "prompt": "Grainy surveillance still, low resolution, high-contrast monochrome.",
+      "treatment": "vignette"
+    },
+    "newspaper_archive": {
+      "prompt": "Clipped newspaper archive fragments layered on a case file folder.",
+      "treatment": "vox_collage"
+    },
+    "courtroom_sketch": {
+      "prompt": "Courtroom sketch in coloured pencil and pastel, loose confident line.",
+      "treatment": "illustration"
+    },
+    "night_exterior": {
+      "prompt": "Figure silhouetted under a sodium streetlight on a wet night street.",
+      "treatment": "silhouette"
+    }
   },
   "calibration": {
     "min_score": null,

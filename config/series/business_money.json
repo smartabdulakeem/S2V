@@ -13,10 +13,26 @@
   "style_block": "Cinematic editorial photography, crisp modern lighting, sleek architectural lines, rich navy and emerald color palette, subtle polished texture.",
   "negative_block": "No cartoon elements, no sci-fi fantasy, no cluttered garbage, no text, no watermark, no signature, no logo, no plastic skin.",
   "style_presets": {
-    "vintage_documentary": "35mm financial archive photo, editorial lighting, classic newspaper print aesthetic.",
-    "documentary": "Modern executive photography, sharp glass reflection, high dynamic range.",
-    "illustration": "Financial newspaper editorial illustration, woodcut or engraving style.",
-    "silhouette": "Sleek skyscraper skyline silhouette against sunrise financial district."
+    "boardroom_reportage": {
+      "prompt": "Corporate reportage photograph, glass and steel, available light, shallow depth of field.",
+      "treatment": "documentary"
+    },
+    "ledger_macro": {
+      "prompt": "Macro of a ledger, banknotes or ticker tape, raking light, fine paper fibre detail.",
+      "treatment": "vignette"
+    },
+    "editorial_isometric": {
+      "prompt": "Editorial isometric illustration of commerce, restrained two-colour palette, clean geometry.",
+      "treatment": "illustration"
+    },
+    "trading_floor_silhouette": {
+      "prompt": "Silhouetted figures against a bank of glowing market screens.",
+      "treatment": "silhouette"
+    },
+    "vintage_industry": {
+      "prompt": "Mid-century industrial archive photograph, warm monochrome, factory or trading hall.",
+      "treatment": "documentary"
+    }
   },
   "calibration": {
     "min_score": null,

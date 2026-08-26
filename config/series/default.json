@@ -13,10 +13,26 @@
   "style_block": "Shot on 35mm film, neutral documentary photography, balanced natural lighting, fine film grain.",
   "negative_block": "No text, no watermark, no signature, no logo, no lens flare, no plastic-looking skin.",
   "style_presets": {
-    "vintage_documentary": "Shot on 35mm film, documentary photography, muted tones, fine film grain.",
-    "documentary": "Cinematic documentary photography, natural lighting, crisp details.",
-    "illustration": "Detailed book illustration, fine line art, warm background.",
-    "silhouette": "High contrast silhouette, dramatic backlighting."
+    "documentary_photo": {
+      "prompt": "Cinematic documentary photograph, natural directional light, muted palette, fine grain.",
+      "treatment": "documentary"
+    },
+    "cinematic_still": {
+      "prompt": "Anamorphic cinematic still, shallow focus, atmospheric haze.",
+      "treatment": "vignette"
+    },
+    "editorial_illustration": {
+      "prompt": "Editorial illustration, confident line, limited palette, flat colour fields.",
+      "treatment": "illustration"
+    },
+    "graphic_silhouette": {
+      "prompt": "Strong graphic silhouette against a bright gradient sky.",
+      "treatment": "silhouette"
+    },
+    "paper_collage": {
+      "prompt": "Cut-paper collage on textured board, layered edges and shadow.",
+      "treatment": "vox_collage"
+    }
   },
   "calibration": {
     "min_score": null,

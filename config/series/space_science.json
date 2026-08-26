@@ -13,10 +13,26 @@
   "style_block": "Shot on 70mm Hasselblad film, crisp high contrast lighting against deep black space, 1970s NASA documentary archive photography, vibrant earth reflections, fine optical grain.",
   "negative_block": "No cartoon elements, no sci-fi fantasy laser beams, no fake CGI glow, no text, no watermark, no signature, no logo, no lens flare artifact.",
   "style_presets": {
-    "vintage_documentary": "Shot on 70mm Hasselblad film, 1970s NASA documentary archive photography, high contrast lighting, fine optical film grain.",
-    "documentary": "High resolution space agency archival photograph, natural star field, crisp optical clarity.",
-    "illustration": "Detailed astronomical technical illustration, retro 1960s space concept art.",
-    "silhouette": "Dramatic silhouette of spacecraft against bright planetary limb or glowing nebula."
+    "telescope_plate": {
+      "prompt": "Deep-field telescope plate, nebula filament detail, narrowband colour.",
+      "treatment": "documentary"
+    },
+    "mission_archival": {
+      "prompt": "Archival mission photograph, hard unfiltered sunlight, matte spacecraft surfaces.",
+      "treatment": "documentary"
+    },
+    "technical_cutaway": {
+      "prompt": "Precise technical cutaway, thin clean linework, unannotated.",
+      "treatment": "illustration"
+    },
+    "lab_reportage": {
+      "prompt": "Clean-room or laboratory reportage, cool fluorescent light, instrument detail.",
+      "treatment": "documentary"
+    },
+    "horizon_silhouette": {
+      "prompt": "Figure or antenna silhouetted against a planetary horizon.",
+      "treatment": "silhouette"
+    }
   },
   "calibration": {
     "min_score": null,

@@ -13,10 +13,26 @@
   "style_block": "Shot on telephoto 600mm lens, National Geographic natural history photography, vibrant natural light, crystal clear depth of field, rich natural colors.",
   "negative_block": "No artificial cages, no human buildings, no domestic pets, no text, no watermark, no signature, no logo, no plastic skin.",
   "style_presets": {
-    "vintage_documentary": "Natural history film stock, warm golden sunlight, subtle organic grain.",
-    "documentary": "High resolution telephoto wildlife photography, vibrant crisp detail, natural habitat environment.",
-    "illustration": "Detailed botanical and zoological field book illustration.",
-    "silhouette": "Dramatic silhouette of wild animal against golden savannah sunset."
+    "wildlife_telephoto": {
+      "prompt": "Telephoto wildlife photograph, animal sharp against compressed bokeh, early light.",
+      "treatment": "documentary"
+    },
+    "macro_detail": {
+      "prompt": "Extreme macro of feather, scale or leaf vein, dew, razor-thin focal plane.",
+      "treatment": "vignette"
+    },
+    "aerial_landscape": {
+      "prompt": "High aerial of terrain, river braid or migrating herd, natural colour, midday clarity.",
+      "treatment": "documentary"
+    },
+    "naturalist_plate": {
+      "prompt": "Victorian naturalist field-guide plate, watercolour and ink, specimen on cream ground.",
+      "treatment": "illustration"
+    },
+    "dusk_silhouette": {
+      "prompt": "Animal silhouetted on a ridge against a burning dusk sky.",
+      "treatment": "silhouette"
+    }
   },
   "calibration": {
     "min_score": null,

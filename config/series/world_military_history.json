@@ -13,10 +13,26 @@
   "style_block": "Shot on 35mm film, documentary battleground photography, dramatic smoke haze, muted brass and earth tones, gritty fine film grain.",
   "negative_block": "No modern objects, no fantasy weapons, no bright neon colors, no text, no watermark, no signature, no logo, no plastic-looking skin.",
   "style_presets": {
-    "vintage_documentary": "Shot on 35mm film, historical war archive photography, muted earth tones, gritty film grain.",
-    "documentary": "High resolution battlefield documentary photo, atmospheric smoke and natural lighting.",
-    "illustration": "Detailed military tactical map and archival lithograph illustration.",
-    "silhouette": "Dramatic silhouette of soldiers against battlefield smoke and setting sun."
+    "combat_reportage": {
+      "prompt": "Combat reportage, pushed monochrome film, heavy grain, motion at the frame edges.",
+      "treatment": "documentary"
+    },
+    "archival_colour": {
+      "prompt": "Early colour archival transparency, muted dyes, period materiel detail.",
+      "treatment": "documentary"
+    },
+    "campaign_plate": {
+      "prompt": "Hand-drawn campaign plate, contour hatching, ink and wash.",
+      "treatment": "illustration"
+    },
+    "trench_silhouette": {
+      "prompt": "Soldiers silhouetted on a trench parapet against flare light.",
+      "treatment": "silhouette"
+    },
+    "propaganda_poster": {
+      "prompt": "Period poster illustration, bold flat colour, heavy litho texture.",
+      "treatment": "illustration"
+    }
   },
   "calibration": {
     "min_score": null,

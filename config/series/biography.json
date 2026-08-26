@@ -13,10 +13,26 @@
   "style_block": "Shot on medium format camera, portrait photography with shallow depth of field, directional window light, rich tonal contrast, refined classic grain.",
   "negative_block": "No cartoon elements, no exaggerated plastic face smoothing, no sci-fi neon, no text, no watermark, no signature, no logo.",
   "style_presets": {
-    "vintage_documentary": "Medium format portrait archive photo, warm window lighting, classic silver halide film grain.",
-    "documentary": "Refined portrait photograph, soft Rembrandt lighting, expressive human detail.",
-    "illustration": "Classical oil portrait or engraved charcoal biography portrait.",
-    "silhouette": "Thoughtful silhouette of figure by tall window looking outside."
+    "portrait_archive": {
+      "prompt": "Medium format archival portrait, warm window light, silver halide grain, sitter turned slightly off-camera.",
+      "treatment": "documentary"
+    },
+    "family_album": {
+      "prompt": "Aged family album page, overlapping deckle-edged snapshots on black card.",
+      "treatment": "vox_collage"
+    },
+    "oil_portrait": {
+      "prompt": "Classical oil portrait, visible brushwork, dark umber ground, museum lighting.",
+      "treatment": "illustration"
+    },
+    "study_silhouette": {
+      "prompt": "Figure silhouetted at a tall study window, dust suspended in the light shaft.",
+      "treatment": "silhouette"
+    },
+    "newsprint_profile": {
+      "prompt": "Halftone newspaper profile photograph, coarse dot screen, feature-page crop.",
+      "treatment": "documentary"
+    }
   },
   "calibration": {
     "min_score": null,
