@@ -84,3 +84,68 @@ def test_every_table_is_pairs_of_pattern_and_phrase():
         for pattern, phrase in table:
             assert isinstance(pattern, str) and pattern
             assert isinstance(phrase, str) and phrase
+
+
+from pipeline.library import compose_gap_prompt
+
+CTX = ("Khalid ibn al-Walid rode through the night with the advance guard, reaching the "
+       "Jordan valley before dawn. The ground at Fahl had been flooded deliberately, and "
+       "the horses sank to the knee in churned mire.")
+
+
+def _prompt(**kw):
+    base = dict(shot_query="Khalid ibn al-Walid leading cavalry",
+                script_context=CTX, series_slug="islamic_history")
+    base.update(kw)
+    return compose_gap_prompt(**base)
+
+
+def test_the_world_anchor_appears_exactly_once():
+    out = _prompt(visual_type="architectural_plate")
+    assert out.lower().count("7th century arabian peninsula") == 1
+
+
+def test_the_prompt_does_not_end_mid_phrase():
+    out = _prompt(visual_type="architectural_plate")
+    assert not out.rstrip().endswith("churned,")
+    assert not out.rstrip().endswith(",")
+
+
+def test_narration_is_not_quoted_verbatim():
+    out = _prompt(visual_type="architectural_plate")
+    assert "reaching the Jordan valley" not in out
+
+
+def test_the_picked_preset_supplies_the_medium():
+    out = _prompt(visual_type="architectural_plate")
+    assert "muqarnas" in out
+
+
+def test_no_visual_type_falls_back_to_style_block():
+    out = _prompt(visual_type=None)
+    assert "35mm film" in out
+
+
+def test_light_and_ground_slots_are_present():
+    out = _prompt(visual_type="architectural_plate")
+    assert "pre-dawn" in out
+    assert "waterlogged" in out
+
+
+def test_a_bare_shot_with_no_context_still_composes():
+    out = compose_gap_prompt(shot_query="a walled city", script_context="",
+                             series_slug="islamic_history",
+                             visual_type="architectural_plate")
+    assert out.endswith(".")
+    assert "wide establishing shot" in out
+    assert "a walled city" in out
+
+
+def test_the_brief_opens_the_prompt():
+    out = _prompt(visual_type="architectural_plate", project_brief="Documentary still from a film")
+    assert out.startswith("Documentary still from a film")
+
+
+def test_no_negative_block_is_emitted_by_default():
+    out = _prompt(visual_type="architectural_plate")
+    assert "Negative prompt" not in out

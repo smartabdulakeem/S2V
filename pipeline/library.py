@@ -1359,58 +1359,69 @@ def compose_gap_prompt(
     series_slug: str = None,
     project_title: str = None,
     include_negative: bool = None,
+    visual_type: str = None,
+    project_brief: str = None,
 ) -> str:
     """
-    A ready-to-use image prompt for one shot.
+    A ready-to-use image prompt for one shot, built from named slots.
 
-    Built from the shot's subject, the scene as the narration describes it, the
-    series world anchor, any character descriptions that apply, and the series
-    style. The project title never appears — it is metadata, not a picture.
+    Slots, in order: project brief, framing, subject, motion, ground,
+    atmosphere, setting, character bible, medium. A slot that matches nothing
+    is omitted rather than emitting filler. Narration is never quoted
+    verbatim, which is what stops the old 34-word cut chopping prompts
+    mid-phrase, and the setting is suppressed when the medium text already
+    carries it, which is what stops the world anchor appearing twice.
     """
+    from pipeline.prompt_slots import (
+        match_slot, PROMPT_FRAMING, PROMPT_MOTION, PROMPT_GROUND,
+        PROMPT_ATMOSPHERE, PROMPT_LIGHT, DEFAULT_FRAMING,
+    )
+
     series_cfg = get_series_config(series_slug=series_slug, project_title=project_title)
+    blob = f"{shot_query or ''} {script_context or ''}"
+
+    preset = resolve_style_preset(series_cfg, visual_type)
+    medium = preset["prompt"] if preset else (series_cfg.get("style_block") or "")
+
     parts = []
 
-    # Framing bias toward wide/silhouette/detail rather than mid-distance faces
-    framing_bias = ""
-    query_lower = shot_query.lower()
-    if not any(f in query_lower for f in ["wide", "silhouette", "detail", "close", "aerial", "extreme wide"]):
-        if any(term in query_lower for term in ["man", "woman", "soldier", "rider", "warrior", "leader", "elder", "people", "crowd", "figure"]):
-            framing_bias = "wide establishing shot of "
+    if project_brief:
+        parts.append(project_brief.rstrip(" ,."))
 
-    parts.append(f"{framing_bias}{shot_query}")
+    parts.append(match_slot(PROMPT_FRAMING, shot_query or "", default=DEFAULT_FRAMING))
+    parts.append((shot_query or "").strip())
 
-    # What the narration says is happening. This is what makes the prompt match
-    # the script instead of three extracted keywords.
-    scene = scene_from_narration(script_context)
-    if scene:
-        parts.append(scene)
+    for table in (PROMPT_MOTION, PROMPT_GROUND, PROMPT_ATMOSPHERE):
+        phrase = match_slot(table, blob)
+        if phrase:
+            parts.append(phrase)
 
-    anchor = world_anchor or series_cfg.get("world_anchor")
-    if anchor:
+    anchor = world_anchor or series_cfg.get("world_anchor") or ""
+    if anchor and anchor.lower() not in medium.lower():
         parts.append(anchor)
 
-    # Character bible matching using script_context / shot_query
+    light = match_slot(PROMPT_LIGHT, blob)
+    if light:
+        parts.append(light)
+
     if character_bible:
         for char_name, char_desc in character_bible.items():
             pattern = r'\b' + re.escape(char_name) + r'\b'
-            if re.search(pattern, shot_query, re.IGNORECASE) or (script_context and re.search(pattern, script_context, re.IGNORECASE)):
+            if re.search(pattern, shot_query or "", re.IGNORECASE) or \
+               (script_context and re.search(pattern, script_context, re.IGNORECASE)):
                 parts.append(f"featuring: {char_desc}")
 
-    style_block = series_cfg.get("style_block")
-    negative_block = series_cfg.get("negative_block")
+    if medium:
+        parts.append(medium.rstrip(" ."))
 
-    if style_block:
-        parts.append(style_block)
-
-    # Negative prompts are off by default now. Most image tools the user works in
-    # take a single prompt box, so the negative text was pasted in as if it were
-    # part of the description — asking for the very things it meant to forbid.
     if include_negative is None:
         include_negative = bool(_setting("include_negative_prompt", False))
-    if include_negative and negative_block:
-        parts.append(f"Negative prompt: {negative_block}")
+    if include_negative:
+        negative_block = series_cfg.get("negative_block")
+        if negative_block:
+            parts.append(f"Negative prompt: {negative_block}")
 
-    return ", ".join(parts)
+    return ", ".join(p for p in parts if p).rstrip(" ,") + "."
 
 
 # ── 5. Coverage & Plan Shots ───────────────────────────────────────────────────

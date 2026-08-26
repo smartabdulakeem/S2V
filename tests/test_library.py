@@ -197,14 +197,21 @@ def test_the_prompt_describes_the_scene_from_the_script():
     """
     The subject used to be the extracted keyword alone, so an image generated
     from the prompt had no relationship to what was being narrated.
+
+    The script still reaches the prompt, but as image direction rather than as
+    quoted narration: what the movement, the ground and the light look like.
+    Quoting the sentence was what used to chop prompts off mid-phrase.
     """
     composed = library.compose_gap_prompt(
         shot_query="Prophet Bai'ah Bakr",
         series_slug="islamic_history",
-        script_context="The Prophet was buried. Abu Bakr al-Siddiq was the Caliph of Islam.",
+        script_context="They rode before dawn, and the horses sank into the churned mire.",
     )
-    assert "Abu Bakr al-Siddiq was the Caliph" in composed
     assert "Prophet Bai'ah Bakr" in composed
+    assert "mid-movement" in composed
+    assert "waterlogged" in composed
+    assert "pre-dawn" in composed
+    assert "They rode before dawn" not in composed
 
 
 def test_presenter_asides_are_kept_out_of_the_prompt():
@@ -216,7 +223,7 @@ def test_presenter_asides_are_kept_out_of_the_prompt():
                        "The mountain is dry.",
     )
     assert "subscribe" not in composed.lower()
-    assert "The water is gone" in composed
+    assert "the flood" in composed
 
 
 def test_space_series_prompt_composition():
