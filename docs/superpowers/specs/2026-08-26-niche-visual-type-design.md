@@ -45,9 +45,12 @@ Three further defects were measured in a real composed prompt (`islamic_history`
 
 Two smaller defects surfaced while mapping this:
 
-- The niche dropdown is a **hardcoded JavaScript array** (`frontend/app.js:262`) listing 10
-  niches when 11 packs exist on disk. **`motivational` cannot be selected at all** — and it
-  is the one pack whose preset set differs from the others.
+- **Selecting the Motivational niche crashes the planner.** `get_series_packs` (`app.py:106`)
+  lists every pack on disk without validating it, so Motivational appears in the dropdown; but
+  `config/series/motivational.json` carries **0 `real_queries` and 0 `fake_queries`** where
+  `validate_series_pack` requires 10 of each, and `get_series_config` re-raises rather than
+  falling back (`pipeline/library.py:183`). Planning with it raises `ValueError`. The hardcoded
+  array in `frontend/app.js:262` is only a web-mode fallback and is not the cause.
 - The prompt and the post-processing treatment are chosen by two unrelated mechanisms, so
   they can disagree.
 
@@ -73,6 +76,7 @@ the prompts flowing through it simply get better.
 |---|---|---|
 | Scope | Wire up the presets **and** expand each niche's set | Wire up the existing near-identical four as-is |
 | Granularity | **Project-level** — one visual type per film | Per-shot override; per-shot always |
+| Prompt init | **Per-project brief, auto-drafted then editable, always first** | A per-niche constant (would not distinguish two films in the same niche) |
 | Scene text | **Structured slots, offline** | An LLM pass rewriting narration into image direction (better prose, but an API call per shot and non-reproducible output) |
 | Negative prompts | **None emitted** (already the default) | Re-enabling them |
 | Prompt shape | Preset **replaces** `style_block` | Append both (risks telling the generator "medium format camera" and "oil portrait" at once) |
@@ -208,9 +212,9 @@ It is load-bearing now, so a malformed pack must fail loudly rather than silentl
 `visual_type` joins `series_slug` on the project.
 
 - The niche dropdown (`#pt-series-slug`) is populated from a new `list_series_packs()` API
-  that reads `config/series/*.json` from disk, returning `series_slug` and `display_name`.
-  The hardcoded array at `frontend/app.js:262` is deleted. This is what makes `motivational`
-  selectable again and stops the list drifting a second time.
+  `get_series_packs()` (`app.py:106`), which already reads `config/series/*.json` from disk.
+  No change is needed there. The stale fallback array at `frontend/app.js:262` is refreshed so
+  web mode matches, but it is not on the desktop path.
 - `#pt-style` stops being free prose. Choosing a niche repopulates it from that pack's
   `style_presets`, labels title-cased.
 - Default selection is the pack's first preset in declaration order.
@@ -232,6 +236,7 @@ fixed order. A slot that resolves to nothing is omitted, never left empty.
 
 | Slot | Source | Example |
 |---|---|---|
+| **Project brief** | per-project, auto-drafted then editable; **always first, always present** | `Documentary still from a film on the early Muslim campaigns in the Levant, consistent cast of Arab commanders in period dress` |
 | Framing | keyword match on shot query, else "wide establishing" | `wide establishing shot, subject small in the frame` |
 | Subject | the shot query, unchanged | `Khalid ibn al-Walid leading cavalry` |
 | Motion | verb match on query + narration | `bodies and animals mid-movement, motion blur at the frame edges` |
@@ -246,6 +251,34 @@ so the vocabulary is editable in one place without touching logic.
 
 **Measured result** on the shot above: 84 words of mixed narration and duplication become 60
 words in which every phrase is image direction.
+
+### 3e. The project brief (prompt init)
+
+Every prompt for a given script opens with the same block, so a folder of images generated
+across several sessions still reads as one film. Without it, shot 3 and shot 40 can come back
+in visibly different worlds and need hand-editing before use.
+
+**Field:** `project_brief`, stored on the project beside `series_slug` and `visual_type`.
+
+**Drafted automatically** the first time a script is planned, from four inputs:
+
+1. the picked visual type's medium word, which opens the sentence and is conditioned on the
+   treatment: documentary -> "Documentary still from", illustration -> "Illustration plate from",
+   silhouette -> "Silhouette study from", vox_collage -> "Collage panel from",
+   vignette -> "Cinematic still from"
+2. the project title, reduced to its subject (the title itself is never emitted verbatim; it is
+   metadata, not a picture)
+3. the pack's `world_anchor` for era and region
+4. recurring proper nouns across the script, which become the consistent-cast clause
+
+**Editable.** The drafted text appears in a field on the planning board and can be rewritten.
+Once edited it is never re-drafted, so a hand-tuned brief survives re-planning.
+
+**Length is capped at 30 words.** Image generators weight early tokens heavily; an unbounded
+brief would out-argue the shot's own subject. The cap is enforced at draft time and on save.
+
+**Always emitted, even with no visual type picked** -- it falls back to the medium word for
+`style_block`. This is what makes the opening consistent across every prompt in a script.
 
 ### 3b. Truncation
 
@@ -296,14 +329,18 @@ No changes. See "What is already working" above.
   is not, and when the key is unknown.
 - `treatment_for_style` resolves correctly from all three paths: object `treatment`, bare key,
   and prose fallback.
-- The niche list served by `list_series_packs()` contains every pack on disk — this is the
-  regression lock for `motivational`.
+- Every pack on disk resolves through `get_series_config` without raising — the regression
+  lock for the Motivational crash.
 - Every authored preset's `treatment` is a key of `SINGLE_IMAGE_TREATMENTS`.
 - No composed prompt contains `world_anchor` twice: the regression lock for the duplication.
 - No composed prompt ends mid-phrase; the 34-word verbatim cut is gone.
 - Each slot table resolves its documented example, and a shot matching no optional slot still
   produces a valid prompt from Framing + Subject + Setting + Medium alone.
 - `include_negative` stays False by default, so no prompt carries a negative block.
+- Every prompt in one script opens with the identical `project_brief` block.
+- The brief's opening word tracks the picked visual type's treatment.
+- An edited brief survives a re-plan and is not overwritten by a fresh draft.
+- A drafted brief never exceeds 30 words, and the project title never appears verbatim.
 
 ## Out of scope
 
