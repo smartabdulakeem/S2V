@@ -187,14 +187,23 @@ def _add_ambient_bed(narration_path: str, segment_dict: dict, duration: float,
         return narration_path
 
 
-def treatment_for_style(visual_style: str) -> str | None:
+def treatment_for_style(visual_style: str, preset: dict = None,
+                        visual_type: str = None) -> str | None:
     """
-    Map the project's visual style onto a treatment.
+    Map the project's look onto a post-processing treatment.
 
-    The Script screen offers a style and the planner stores it, but nothing ever
-    read it back — "Vox paper-collage" produced exactly the same picture as any
-    other choice. Matching is loose because the styles are written as prose.
+    Order matters: a preset that names its own treatment is authoritative, then
+    a preset key that is itself a treatment name, and only then the loose prose
+    match that was here before. This is what finally makes the prompt and the
+    picture agree - picking courtroom_sketch now yields an illustration prompt
+    *and* the illustration treatment.
     """
+    if preset and preset.get("treatment") in SINGLE_IMAGE_TREATMENTS:
+        return preset["treatment"]
+
+    if visual_type and visual_type in SINGLE_IMAGE_TREATMENTS:
+        return visual_type
+
     if not visual_style:
         return None
     s = visual_style.lower()

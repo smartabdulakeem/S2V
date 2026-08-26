@@ -149,3 +149,23 @@ def test_the_brief_opens_the_prompt():
 def test_no_negative_block_is_emitted_by_default():
     out = _prompt(visual_type="architectural_plate")
     assert "Negative prompt" not in out
+
+
+from pipeline.composer import treatment_for_style
+
+
+def test_preset_object_treatment_wins():
+    preset = {"prompt": "x", "treatment": "documentary"}
+    assert treatment_for_style("anything", preset=preset) == "documentary"
+
+
+def test_preset_key_that_is_itself_a_treatment_is_used():
+    assert treatment_for_style("", preset=None, visual_type="illustration") == "illustration"
+
+
+def test_prose_substring_match_still_works():
+    assert treatment_for_style("Vox paper-collage") == "vox_collage"
+
+
+def test_nothing_to_go_on_returns_none():
+    assert treatment_for_style("") is None

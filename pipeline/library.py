@@ -1443,6 +1443,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
         weak_band = get_calibrated_weak_band(series_slug=series_slug)
 
     world_anchor = project_info.get("world_anchor") or project_info.get("visual_style")
+    visual_type = project_info.get("visual_type") or ""
     character_bible = project_info.get("character_bible") or {}
 
     # A project can restrict itself to one folder of images. Curating twenty
@@ -1644,6 +1645,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     script_context=s["narration"],
                     series_slug=series_slug,
                     project_title=title,
+                    visual_type=visual_type,
                 ),
             })
             pinned_count += 1
@@ -1676,6 +1678,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     script_context=s["narration"],
                     series_slug=series_slug,
                     project_title=title,
+                    visual_type=visual_type,
                 ),
             })
             continue
@@ -1721,7 +1724,8 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             character_bible=character_bible,
             script_context=s["narration"],
             series_slug=series_slug,
-            project_title=title
+            project_title=title,
+            visual_type=visual_type,
         )
 
         # Remember the prompt on the shot itself. The board shows it, the user
