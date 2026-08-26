@@ -1416,6 +1416,58 @@ def ensure_project_brief(project_info: dict, script_text: str = "") -> str:
     )
 
 
+#: Looks that suit any niche. A true-crime film and a wildlife film can both
+#: want photoreal or cartoon; only the niche-specific entries in each pack need
+#: to differ. A pack may override any of these by using the same key.
+UNIVERSAL_STYLE_PRESETS = {
+    "photoreal": {
+        "prompt": "Photorealistic image, natural light, true-to-life colour and "
+                  "texture, sharp focus, no stylisation.",
+        "treatment": "documentary",
+    },
+    "cinematic": {
+        "prompt": "Cinematic film still, anamorphic framing, shallow depth of "
+                  "field, graded colour, subtle halation.",
+        "treatment": "vignette",
+    },
+    "black_and_white": {
+        "prompt": "Black and white photograph, deep blacks, controlled "
+                  "highlights, visible silver grain.",
+        "treatment": "documentary",
+    },
+    "stylised_illustration": {
+        "prompt": "Stylised illustration, confident inked line, limited palette, "
+                  "flat colour fields.",
+        "treatment": "illustration",
+    },
+    "cartoon": {
+        "prompt": "Clean cartoon illustration, bold outlines, flat cel shading, "
+                  "simplified expressive shapes.",
+        "treatment": "illustration",
+    },
+    "three_d_render": {
+        "prompt": "3D render, soft global illumination, physically based "
+                  "materials, shallow depth of field.",
+        "treatment": "vignette",
+    },
+}
+
+
+def style_presets_for(series_cfg: dict) -> dict:
+    """
+    Every visual type this niche offers: its own first, then the universal ones.
+
+    A pack wins any key collision, so a niche can give "cartoon" its own wording
+    without losing the rest of the shared set.
+    """
+    merged = {}
+    for key, entry in ((series_cfg or {}).get("style_presets") or {}).items():
+        merged[key] = entry
+    for key, entry in UNIVERSAL_STYLE_PRESETS.items():
+        merged.setdefault(key, entry)
+    return merged
+
+
 def resolve_style_preset(series_cfg: dict, visual_type: str) -> dict | None:
     """
     The picked visual type, as {"prompt": str, "treatment": str | None}.
@@ -1428,8 +1480,7 @@ def resolve_style_preset(series_cfg: dict, visual_type: str) -> dict | None:
     """
     if not visual_type:
         return None
-    presets = (series_cfg or {}).get("style_presets") or {}
-    entry = presets.get(visual_type)
+    entry = style_presets_for(series_cfg).get(visual_type)
     if isinstance(entry, str) and entry.strip():
         return {"prompt": entry.strip(), "treatment": None}
     if isinstance(entry, dict):

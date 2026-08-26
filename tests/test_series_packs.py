@@ -17,7 +17,11 @@ PACK_SLUGS = [os.path.basename(p)[:-5] for p in PACK_PATHS]
 
 
 def test_there_are_packs_to_check():
-    assert len(PACK_PATHS) >= 11, f"expected at least 11 packs, found {len(PACK_PATHS)}"
+    # A guard against this file silently testing nothing if the glob breaks.
+    # The count is not pinned - packs come and go - but "default" must exist,
+    # because get_series_config falls back to it for projects with no slug.
+    assert len(PACK_PATHS) >= 5, f"expected several packs, found {len(PACK_PATHS)}"
+    assert "default" in PACK_SLUGS, PACK_SLUGS
 
 
 @pytest.mark.parametrize("path", PACK_PATHS, ids=PACK_SLUGS)

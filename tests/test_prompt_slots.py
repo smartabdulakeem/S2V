@@ -226,7 +226,7 @@ def test_a_preset_key_never_leaks_into_the_prompt():
 def test_framing_is_not_stated_twice():
     out = compose_gap_prompt(
         shot_query="wide establishing shot of a muddy riverbank at dawn",
-        series_slug="civil_war", visual_type="wet_plate",
+        series_slug="world_military_history", visual_type="combat_reportage",
     )
     assert out.count("wide establishing shot") == 1, out
 

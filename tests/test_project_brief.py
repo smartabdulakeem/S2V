@@ -37,13 +37,14 @@ def test_brief_names_the_subject_not_the_medium():
 
 
 def test_brief_carries_no_medium_language_from_the_pack():
-    # civil_war's world_anchor ends "Matthew Brady tintype archival photograph".
-    # Opening every prompt with that fought the picked visual type: ask for a
-    # lithograph and the prompt also demanded a tintype photograph.
+    # A pack's world_anchor carries medium language ("... documentary archive",
+    # "... tintype archival photograph"). Opening every prompt with that fought
+    # the picked visual type: ask for an illustration and the prompt also
+    # demanded a photograph. brief_subject carries subject only.
     from pipeline.library import get_series_config
-    cfg = get_series_config(series_slug="civil_war")
+    cfg = get_series_config(series_slug="world_military_history")
     brief = draft_project_brief("X", cfg, SCRIPT, "illustration")
-    assert "tintype" not in brief.lower(), brief
+    assert "archive" not in brief.lower(), brief
     assert "photograph" not in brief.lower(), brief
 
 

@@ -24,13 +24,6 @@ PRESETS = {
         ("trading_floor_silhouette", "silhouette", "Silhouetted figures against a bank of glowing market screens."),
         ("vintage_industry", "documentary", "Mid-century industrial archive photograph, warm monochrome, factory or trading hall."),
     ],
-    "civil_war": [
-        ("wet_plate", "documentary", "Wet-plate collodion field photograph, shallow tonal range, edge vignetting, period uniform detail."),
-        ("battlefield_reportage", "documentary", "Restrained battlefield reportage, overcast light, mud and smoke, no heroic posing."),
-        ("lithograph", "illustration", "Period lithograph or steel engraving, cross-hatched shading, muted ink wash."),
-        ("campfire_silhouette", "silhouette", "Silhouetted figures around a campfire against a dusk treeline."),
-        ("letters_collage", "vox_collage", "Collage of folded letters, ration tickets and tintypes on worn linen."),
-    ],
     "default": [
         ("documentary_photo", "documentary", "Cinematic documentary photograph, natural directional light, muted palette, fine grain."),
         ("cinematic_still", "vignette", "Anamorphic cinematic still, shallow focus, atmospheric haze."),

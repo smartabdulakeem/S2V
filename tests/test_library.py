@@ -264,7 +264,7 @@ def test_no_composed_prompt_contains_title_or_narration():
     composed = library.compose_gap_prompt(
         shot_query="soldiers marching through rain",
         script_context=narration,
-        series_slug="civil_war",
+        series_slug="world_military_history",
         project_title=title
     )
     assert title not in composed

@@ -121,6 +121,12 @@ class Api:
                         pass
         return packs
 
+    #: Keys whose title-cased form reads badly ("Three D Render").
+    STYLE_LABEL_OVERRIDES = {
+        "three_d_render": "3D Render",
+        "black_and_white": "Black & White",
+    }
+
     def get_style_presets(self, series_slug: str = None) -> list:
         """The visual types one niche offers, for the planning board dropdown."""
         try:
@@ -128,13 +134,19 @@ class Api:
             cfg = get_series_config(series_slug=series_slug)
         except Exception:
             return []
+        from pipeline.library import style_presets_for, UNIVERSAL_STYLE_PRESETS
+        own = set((cfg.get("style_presets") or {}).keys())
         out = []
-        for key, entry in (cfg.get("style_presets") or {}).items():
+        for key, entry in style_presets_for(cfg).items():
             prompt = entry if isinstance(entry, str) else (entry or {}).get("prompt", "")
             out.append({
                 "key": key,
-                "label": key.replace("_", " ").title(),
+                "label": self.STYLE_LABEL_OVERRIDES.get(
+                    key, key.replace("_", " ").title()),
                 "prompt": prompt,
+                # Universal looks are grouped separately on the board so it is
+                # clear which are written for this niche and which suit any.
+                "universal": key in UNIVERSAL_STYLE_PRESETS and key not in own,
             })
         return out
 
@@ -300,6 +312,24 @@ class Api:
     #: Choices the Script screen should still be showing next time.
     #: `shot_rhythm` held a slider position under a mapping that has since been
     #: corrected, so it is stored as seconds now and the old key is not read.
+    def draft_brief_preview(self, series_slug: str = None, visual_type: str = "") -> dict:
+        """
+        The opening line these two choices would produce, for the board to show.
+
+        No script is involved, so the recurring-cast clause is absent: that is
+        added when the storyboard is planned and the narration is known.
+        """
+        try:
+            from pipeline.library import (get_series_config, resolve_style_preset,
+                                          draft_project_brief)
+            cfg = get_series_config(series_slug=series_slug)
+            preset = resolve_style_preset(cfg, visual_type)
+            treatment = preset.get("treatment") if preset else None
+            return {"success": True,
+                    "brief": draft_project_brief("", cfg, "", treatment)}
+        except Exception as e:
+            return {"success": False, "error": str(e), "brief": ""}
+
     UI_DEFAULT_KEYS = ("voice", "series_slug", "tone", "visual_style", "visual_type",
                        "captions_enabled", "shot_rhythm_seconds", "formats")
 

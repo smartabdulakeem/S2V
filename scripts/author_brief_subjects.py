@@ -19,7 +19,6 @@ from collections import OrderedDict
 SUBJECTS = {
     "biography": "a historical biography film",
     "business_money": "a documentary on business and finance",
-    "civil_war": "a documentary on the American Civil War of the 1860s",
     "default": "a documentary film",
     "islamic_history": "a documentary on seventh century Arabia and early Islamic history",
     "motivational": "a contemporary motivational film",

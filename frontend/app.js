@@ -274,7 +274,6 @@ async function loadSeriesPacks() {
   if (!seriesPacks || seriesPacks.length === 0) {
     seriesPacks = [
       { series_slug: "islamic_history", display_name: "Islamic History" },
-      { series_slug: "civil_war", display_name: "American Civil War" },
       { series_slug: "space_science", display_name: "Space Science" },
       { series_slug: "world_military_history", display_name: "World Military History" },
       { series_slug: "true_crime", display_name: "True Crime" },
@@ -293,9 +292,42 @@ async function loadSeriesPacks() {
     select.appendChild(opt);
   });
 
-  select.addEventListener("change", loadStylePresets);
+  select.addEventListener("change", async () => {
+    await loadStylePresets();
+    await refreshBriefPreview();
+  });
   await loadStylePresets();
+  wireBriefBox();
 }
+
+// ── Prompt opening ───────────────────────────────────────────────────────────
+// Blank until the niche or the visual type is changed, then it follows them.
+// Once the user types their own wording it is never overwritten.
+let briefEdited = false;
+
+async function refreshBriefPreview() {
+  const box = document.getElementById("pt-brief");
+  if (!box || briefEdited || isWebMode) return;
+  const slug = (document.getElementById("pt-series-slug") || {}).value || "";
+  const type = (document.getElementById("pt-style") || {}).value || "";
+  if (!slug || !type) { box.value = ""; return; }
+  try {
+    const res = await window.pywebview.api.draft_brief_preview(slug, type);
+    box.value = (res && res.brief) || "";
+  } catch (e) {
+    console.error("Could not draft the prompt opening:", e);
+  }
+}
+
+function wireBriefBox() {
+  const box = document.getElementById("pt-brief");
+  if (!box || box.dataset.wired) return;
+  box.dataset.wired = "1";
+  box.addEventListener("input", () => { briefEdited = box.value.trim().length > 0; });
+  const style = document.getElementById("pt-style");
+  if (style) style.addEventListener("change", refreshBriefPreview);
+}
+window.refreshBriefPreview = refreshBriefPreview;
 
 // ── Visual Types ─────────────────────────────────────────────────────────────
 async function loadStylePresets() {
@@ -757,14 +789,15 @@ async function refreshStoryboardCoverage() {
         coverageReport = res.report;
         rememberResolvedImages();
 
+        // The box is deliberately NOT filled from here. Doing so made a reopened
+        // project show an opening line nobody asked for, and one that then did
+        // not follow the niche the user picked next. The box tracks the current
+        // choices instead (refreshBriefPreview); an empty box means "draft one
+        // for me when the storyboard is planned".
         const drafted = (res.report && res.report.project_brief) || "";
         if (drafted && currentScriptData) {
           currentScriptData.project = currentScriptData.project || {};
           currentScriptData.project.project_brief = drafted;
-        }
-        const briefBox = document.getElementById("pt-brief");
-        if (briefBox && !briefBox.value.trim() && drafted) {
-          briefBox.value = drafted;
         }
       } else if (res.error) {
         console.error("Coverage calculation failed:", res.error);

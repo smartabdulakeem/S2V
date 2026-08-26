@@ -1,7 +1,7 @@
 {
   "project": {
     "title": "American Civil War Intro Sample",
-    "series_slug": "civil_war",
+    "series_slug": "world_military_history",
     "output_filename": "civil_war_intro.mp4",
     "voice": "edge:en-US-BrianNeural",
     "voice_rate": "+0%",
@@ -27,14 +27,47 @@
       "magick_filter": "none",
       "ken_burns": "zoom_in",
       "use_base_image": "civil_war_map.jpg",
-      "crop": {"x": 0.0, "y": 0.0, "w": 0.8, "h": 0.8},
-      "level1_overlay": {
-        "highlights": [{"x": 700, "y": 480, "radius": 25, "color": "red"}],
-        "labels": [{"text": "Fort Sumter", "x": 700, "y": 440, "color": "yellow", "size": 32}],
-        "arrows": [],
-        "sprites": [{"image": "soldier_union.png", "x": 300, "y": 300, "scale": 0.8, "motion": "slide_in_left"}]
+      "crop": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.8,
+        "h": 0.8
       },
-      "sfx": [{"name": "whoosh", "offset_ms": 0}],
+      "level1_overlay": {
+        "highlights": [
+          {
+            "x": 700,
+            "y": 480,
+            "radius": 25,
+            "color": "red"
+          }
+        ],
+        "labels": [
+          {
+            "text": "Fort Sumter",
+            "x": 700,
+            "y": 440,
+            "color": "yellow",
+            "size": 32
+          }
+        ],
+        "arrows": [],
+        "sprites": [
+          {
+            "image": "soldier_union.png",
+            "x": 300,
+            "y": 300,
+            "scale": 0.8,
+            "motion": "slide_in_left"
+          }
+        ]
+      },
+      "sfx": [
+        {
+          "name": "whoosh",
+          "offset_ms": 0
+        }
+      ],
       "text_overlay": null,
       "voice_rate": "+0%",
       "voice_pitch": "+0Hz",
@@ -53,11 +86,40 @@
       "crop": null,
       "level1_overlay": {
         "highlights": [],
-        "labels": [{"text": "Union March", "x": 620, "y": 180, "color": "white", "size": 32}],
-        "arrows": [{"x1": 660, "y1": 240, "x2": 640, "y2": 320, "color": "blue"}],
-        "sprites": [{"image": "soldier_union.png", "x": 640, "y": 360, "scale": 0.8, "motion": "bounce"}]
+        "labels": [
+          {
+            "text": "Union March",
+            "x": 620,
+            "y": 180,
+            "color": "white",
+            "size": 32
+          }
+        ],
+        "arrows": [
+          {
+            "x1": 660,
+            "y1": 240,
+            "x2": 640,
+            "y2": 320,
+            "color": "blue"
+          }
+        ],
+        "sprites": [
+          {
+            "image": "soldier_union.png",
+            "x": 640,
+            "y": 360,
+            "scale": 0.8,
+            "motion": "bounce"
+          }
+        ]
       },
-      "sfx": [{"name": "pop", "offset_ms": 500}],
+      "sfx": [
+        {
+          "name": "pop",
+          "offset_ms": 500
+        }
+      ],
       "text_overlay": null,
       "voice_rate": "+0%",
       "voice_pitch": "+0Hz",
@@ -76,10 +138,23 @@
       "crop": null,
       "level1_overlay": {
         "highlights": [],
-        "labels": [{"text": "Abraham Lincoln", "x": 640, "y": 620, "color": "yellow", "size": 36}],
+        "labels": [
+          {
+            "text": "Abraham Lincoln",
+            "x": 640,
+            "y": 620,
+            "color": "yellow",
+            "size": 36
+          }
+        ],
         "arrows": []
       },
-      "sfx": [{"name": "whoosh", "offset_ms": 0}],
+      "sfx": [
+        {
+          "name": "whoosh",
+          "offset_ms": 0
+        }
+      ],
       "text_overlay": null,
       "voice_rate": "+0%",
       "voice_pitch": "+0Hz",
@@ -97,12 +172,49 @@
       "use_base_image": "civil_war_map.jpg",
       "crop": null,
       "level1_overlay": {
-        "highlights": [{"x": 640, "y": 320, "radius": 30, "color": "blue", "fill": true}],
-        "labels": [{"text": "Richmond Captured", "x": 640, "y": 380, "color": "white", "size": 32}],
-        "arrows": [{"x1": 660, "y1": 240, "x2": 640, "y2": 320, "color": "blue"}],
-        "sprites": [{"image": "soldier_confed.png", "x": 640, "y": 320, "scale": 0.8, "motion": "slide_in_left_bounce"}]
+        "highlights": [
+          {
+            "x": 640,
+            "y": 320,
+            "radius": 30,
+            "color": "blue",
+            "fill": true
+          }
+        ],
+        "labels": [
+          {
+            "text": "Richmond Captured",
+            "x": 640,
+            "y": 380,
+            "color": "white",
+            "size": 32
+          }
+        ],
+        "arrows": [
+          {
+            "x1": 660,
+            "y1": 240,
+            "x2": 640,
+            "y2": 320,
+            "color": "blue"
+          }
+        ],
+        "sprites": [
+          {
+            "image": "soldier_confed.png",
+            "x": 640,
+            "y": 320,
+            "scale": 0.8,
+            "motion": "slide_in_left_bounce"
+          }
+        ]
       },
-      "sfx": [{"name": "cannon", "offset_ms": 1000}],
+      "sfx": [
+        {
+          "name": "cannon",
+          "offset_ms": 1000
+        }
+      ],
       "text_overlay": null,
       "voice_rate": "+0%",
       "voice_pitch": "+0Hz",
