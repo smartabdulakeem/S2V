@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pipeline.validator import validate_file
 from pipeline.voiceover import generate_voiceover, stitch_master_audio
 from pipeline.captions import generate_captions
+from pipeline.library import project_world_anchor
 from pipeline.visuals import fetch_visual, _get_dimensions, segment_keyword, segment_pin
 from pipeline.composer import compose_segment, _find_ffprobe
 from pipeline.stitcher import stitch_segments
@@ -409,6 +410,7 @@ class RenderOrchestrator:
                     # visual_type above already means the image SOURCE.
                     style_preset=proj.get("visual_type", ""),
                     project_brief=proj.get("project_brief", ""),
+                    world_anchor=project_world_anchor(proj),
                     visual_description=(seg.get("shots") and seg["shots"][0].get("visual_description")) or seg.get("visual_description"),
                 )
                 with self._lock:

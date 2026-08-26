@@ -1082,7 +1082,12 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
             "background_music": None,
             "music_volume_db": -20,
             "visual_style": visual_style,
-            "world_anchor": series_cfg.get("world_anchor", ""),
+            # The pack's world_anchor is deliberately NOT copied here. An anchor
+            # stored on the project is honoured over the pack's, so freezing it
+            # at parse time meant the niche a script was first planned under
+            # followed it forever - every later niche still demanded seventh
+            # century Arabia. The pack supplies it live at prompt time instead;
+            # this key is now reserved for a genuine override typed by the user.
             "character_bible": {},
             "budget": {"max_generated_clips": 0, "max_spend_usd": 0.0}
         },

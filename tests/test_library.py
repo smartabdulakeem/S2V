@@ -158,7 +158,11 @@ def test_gap_detection_thresholds(tmp_path, monkeypatch):
     assert shot_1b["state"] == "gap"
     composed = shot_1b["composed_prompt"]
     assert "cyberpunk neon robot battles space dragons" in composed
-    assert "historical documentary" in composed
+    # visual_style is NOT the setting. The planning board sends the label of the
+    # picked look here ("Stylised Illustration"), so reading it as a world anchor
+    # printed the style's own name into the setting slot, immediately before the
+    # style block said it again. The pack supplies the setting now.
+    assert "historical documentary" not in composed
     assert "cinematic documentary photography" in composed or "film" in composed
     # Negative blocks are off by default: the image tools this is pasted into take
     # one prompt box, so "Negative prompt: no firearms" was read as a request for

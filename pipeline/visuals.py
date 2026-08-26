@@ -550,6 +550,9 @@ def fetch_visual(
     style_preset: str = "",
     project_brief: str = "",
     visual_description: str = None,
+    #: The project's own world anchor, or None to let the series pack supply
+    #: it. Never visual_style - that is the label of the picked look.
+    world_anchor: str = None,
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
@@ -641,7 +644,7 @@ def fetch_visual(
             if visual_type == "ai_image":
                 prompt_a = library.compose_gap_prompt(
                     shot_query=f"{keyword} (Left part)",
-                    world_anchor=visual_style,
+                    world_anchor=world_anchor,
                     character_bible=character_bible,
                     script_context=narration,
                     series_slug=series_slug,
@@ -667,7 +670,7 @@ def fetch_visual(
             if visual_type == "ai_image":
                 prompt_b = library.compose_gap_prompt(
                     shot_query=f"{keyword} (Right part)",
-                    world_anchor=visual_style,
+                    world_anchor=world_anchor,
                     character_bible=character_bible,
                     script_context=narration,
                     series_slug=series_slug,
@@ -749,7 +752,7 @@ def fetch_visual(
             if not os.path.exists(manual_path):
                 composed_prompt = library.compose_gap_prompt(
                     shot_query=keyword,
-                    world_anchor=visual_style,
+                    world_anchor=world_anchor,
                     character_bible=character_bible,
                     script_context=narration,
                     series_slug=series_slug,
@@ -854,7 +857,7 @@ def fetch_visual(
     prompts_file = os.path.join(project_dir, "image_prompts.txt")
     prompt_desc = library.compose_gap_prompt(
         shot_query=keyword,
-        world_anchor=visual_style,
+        world_anchor=world_anchor,
         character_bible=character_bible,
         script_context=narration,
         series_slug=series_slug,
@@ -899,6 +902,10 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     title = proj.get("title", "My Video")
     aspect_ratio = proj.get("aspect_ratio", "16:9")
     visual_style = proj.get("visual_style", "")
+    # visual_style is the label of the picked look, never a setting. Passing it
+    # as the anchor printed the style name into the prompt's setting slot.
+    from pipeline.library import project_world_anchor
+    world_anchor = project_world_anchor(proj)
     character_bible = proj.get("character_bible", {})
     
     project_slug = slugify_title(title)
@@ -953,7 +960,7 @@ def initialize_project_sourcing(script_dict: dict) -> str:
         series_slug = proj.get("series_slug")
         prompt_desc = library.compose_gap_prompt(
             shot_query=keyword,
-            world_anchor=visual_style,
+            world_anchor=world_anchor,
             character_bible=character_bible,
             script_context=narration,
             series_slug=series_slug,

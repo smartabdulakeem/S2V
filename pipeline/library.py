@@ -1523,6 +1523,55 @@ def resolve_style_preset(series_cfg: dict, visual_type: str) -> dict | None:
     return None
 
 
+_PACK_ANCHORS_CACHE = None
+
+
+def _pack_world_anchors() -> set:
+    """Every series pack's world_anchor, lowercased, for recognising a stale copy."""
+    global _PACK_ANCHORS_CACHE
+    if _PACK_ANCHORS_CACHE is None:
+        found = set()
+        try:
+            for name in os.listdir(SERIES_CONFIG_DIR):
+                if not name.endswith(".json"):
+                    continue
+                try:
+                    with open(os.path.join(SERIES_CONFIG_DIR, name), "r", encoding="utf-8") as f:
+                        anchor = (json.load(f).get("world_anchor") or "").strip().lower()
+                except Exception:
+                    continue
+                if anchor:
+                    found.add(anchor)
+        except Exception:
+            pass
+        _PACK_ANCHORS_CACHE = found
+    return _PACK_ANCHORS_CACHE
+
+
+def project_world_anchor(project_info: dict) -> str:
+    """
+    The project's own world anchor, or None to let the current pack speak.
+
+    The pack's anchor used to be copied into the project when the script was
+    first parsed, and compose_gap_prompt always honours an explicit anchor over
+    the pack's own. So whichever niche a script was first planned under followed
+    it for the rest of its life: a wildlife film built from an Islamic-history
+    draft still demanded seventh century Arabia in every prompt, and the era was
+    stated twice over because the brief said it too.
+
+    An anchor matching a pack verbatim is that stale copy, not the user's words,
+    so it defers to the pack. Anything else is a deliberate override and stands.
+
+    visual_style is never an anchor. It holds the label of the picked visual
+    type ("Stylised Illustration"), and reading it here put the name of a style
+    into the setting slot.
+    """
+    raw = ((project_info or {}).get("world_anchor") or "").strip()
+    if not raw or raw.lower() in _pack_world_anchors():
+        return None
+    return raw
+
+
 def compose_gap_prompt(
     shot_query: str,
     world_anchor: str = None,
@@ -1639,7 +1688,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     if weak_band is None:
         weak_band = get_calibrated_weak_band(series_slug=series_slug)
 
-    world_anchor = project_info.get("world_anchor") or project_info.get("visual_style")
+    world_anchor = project_world_anchor(project_info)
     visual_type = project_info.get("visual_type") or ""
     project_brief = ensure_project_brief(
         project_info,
