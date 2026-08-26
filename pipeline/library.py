@@ -1251,6 +1251,29 @@ def scene_from_narration(narration: str, max_words: int = 34) -> str:
     return re.sub(r'\s+', ' ', scene)
 
 
+def resolve_style_preset(series_cfg: dict, visual_type: str) -> dict | None:
+    """
+    The picked visual type, as {"prompt": str, "treatment": str | None}.
+
+    A pack entry is either prose on its own or an object that also names the
+    post-processing treatment it maps to, because a preset called
+    "evidence_photo" cannot have its treatment inferred from its key.
+    Returns None when nothing usable is defined, and callers fall back to
+    style_block.
+    """
+    if not visual_type:
+        return None
+    presets = (series_cfg or {}).get("style_presets") or {}
+    entry = presets.get(visual_type)
+    if isinstance(entry, str) and entry.strip():
+        return {"prompt": entry.strip(), "treatment": None}
+    if isinstance(entry, dict):
+        prompt = entry.get("prompt")
+        if isinstance(prompt, str) and prompt.strip():
+            return {"prompt": prompt.strip(), "treatment": entry.get("treatment")}
+    return None
+
+
 def compose_gap_prompt(
     shot_query: str,
     world_anchor: str = None,
