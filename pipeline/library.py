@@ -96,6 +96,29 @@ def validate_series_pack(pack_data: dict) -> list[str]:
     if not isinstance(pack_data.get("negative_block"), str):
         errors.append("series_pack.negative_block: string required")
 
+    presets = pack_data.get("style_presets")
+    if not isinstance(presets, dict) or not presets:
+        errors.append("series_pack.style_presets: expected a non-empty dictionary")
+    else:
+        from pipeline.composer import SINGLE_IMAGE_TREATMENTS
+        for key, entry in presets.items():
+            if isinstance(entry, str):
+                if not entry.strip():
+                    errors.append(f"series_pack.style_presets.{key}: empty prompt string")
+                continue
+            if not isinstance(entry, dict):
+                errors.append(f"series_pack.style_presets.{key}: expected string or object")
+                continue
+            prompt = entry.get("prompt")
+            if not isinstance(prompt, str) or not prompt.strip():
+                errors.append(f"series_pack.style_presets.{key}.prompt: required non-empty string")
+            treatment = entry.get("treatment")
+            if treatment is not None and treatment not in SINGLE_IMAGE_TREATMENTS:
+                errors.append(
+                    f"series_pack.style_presets.{key}.treatment: "
+                    f"unknown treatment '{treatment}'"
+                )
+
     voice = pack_data.get("voice")
     if not isinstance(voice, dict) or not isinstance(voice.get("id"), str) or not voice.get("id", "").strip():
         errors.append("series_pack.voice.id: required non-empty string missing")

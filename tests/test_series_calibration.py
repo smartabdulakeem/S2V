@@ -45,6 +45,7 @@ def test_per_pack_calibration_independence(monkeypatch, tmp_path):
         "world_anchor": "7th century Arabian Peninsula",
         "style_block": "35mm film",
         "negative_block": "no modern objects",
+        "style_presets": {"a_look": "35mm film look"},
         "calibration": {
             "min_score": None,
             "weak_band": None,
@@ -63,6 +64,7 @@ def test_per_pack_calibration_independence(monkeypatch, tmp_path):
         "world_anchor": "NASA Space Program",
         "style_block": "70mm Hasselblad film",
         "negative_block": "no cartoon",
+        "style_presets": {"a_look": "70mm Hasselblad film look"},
         "calibration": {
             "min_score": None,
             "weak_band": None,
@@ -119,6 +121,7 @@ def test_uncalibrated_or_under_200_images_status(monkeypatch, tmp_path):
         "world_anchor": "NASA",
         "style_block": "Hasselblad",
         "negative_block": "no cartoon",
+        "style_presets": {"a_look": "Hasselblad look"},
         "calibration": {
             "min_score": 0.28,
             "weak_band": 0.005,
