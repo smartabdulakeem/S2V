@@ -535,8 +535,16 @@ class Api:
             #
             # So the prompt is now description only. The number goes on the file
             # at generation time instead, where no generator can read it.
+            # One prompt per picture, not per shot. A shot carrying share_with
+            # reuses an earlier shot's image, so its prompt asks for a picture
+            # nothing will ever display: a 25-image plan across 44 segments
+            # emitted 44 prompts. Generating all of them wastes the owner's
+            # image budget, and dropping all 44 into the folder hands the
+            # numbered matcher one image per segment, undoing the plan.
             lines = []
             for r in report.get("shot_reports", []):
+                if r.get("share_with"):
+                    continue
                 prompt = " ".join((r.get("composed_prompt") or "").split())
                 if prompt:
                     lines.append(prompt)

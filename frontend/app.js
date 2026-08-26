@@ -953,6 +953,11 @@ function renderStoryboardScreen() {
   const reportMap = {};
   shotReports.forEach(r => {
     reportMap[`${r.segment_id}_${r.shot_id}`] = r;
+    // Count pictures, not shots. Ask for 25 images across 44 segments and 19 of
+    // those shots reuse another shot's image - tallying them said "44" beside a
+    // box reading "How many images? 25", and every number on the board
+    // disagreed with the one the user had just typed.
+    if (r.share_with) return;
     // A pinned shot is one the user has already settled. It counts as covered;
     // counting it as a gap would nag about the very thing they just fixed.
     if (r.state === "matched" || r.state === "pinned") matchedCnt++;
