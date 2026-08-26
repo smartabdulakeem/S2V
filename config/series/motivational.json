@@ -33,7 +33,30 @@
     "min_score": 0.2796,
     "weak_band": 0.0045,
     "calibrated_at": null,
-    "real_queries": []
+    "real_queries": [
+      "lone runner climbing a steep hill road at sunrise",
+      "weathered hands gripping a barbell before a lift",
+      "empty gym at dawn with light through high windows",
+      "climber reaching over a rock ledge against open sky",
+      "person sitting alone on locker room bench after training",
+      "silhouette of a figure walking a long empty road",
+      "close on worn running shoes on wet pavement",
+      "swimmer pausing at the end of a lane, catching breath",
+      "figure standing at a window looking out over a city at dawn",
+      "hands writing in a notebook under a single desk lamp"
+    ],
+    "fake_queries": [
+      "medieval siege catapult launching burning rock at a castle wall",
+      "underwater coral reef with neon sea anemones and sharks",
+      "space shuttle launching into orbit with huge flame plumes",
+      "wild grizzly bear hunting salmon in river rapids",
+      "futuristic cybernetic android walking through a neon rain city",
+      "deep ocean trench with glowing bioluminescent jellyfish",
+      "steam locomotive blowing white smoke in a mountain tunnel",
+      "formula 1 race car making a sharp turn on track asphalt",
+      "alien landscape with two moons over purple crystals",
+      "ornate baroque cathedral ceiling fresco with gold leaf"
+    ]
   },
 
   "seed_queries": [
