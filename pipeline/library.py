@@ -1274,6 +1274,60 @@ def scene_from_narration(narration: str, max_words: int = 34) -> str:
     return re.sub(r'\s+', ' ', scene)
 
 
+#: Generators weight early tokens heavily; an unbounded brief would out-argue
+#: the shot's own subject.
+BRIEF_MAX_WORDS = 30
+
+#: How each treatment names the kind of picture the film is made of.
+BRIEF_OPENERS = {
+    "documentary": "Documentary still from",
+    "illustration": "Illustration plate from",
+    "silhouette": "Silhouette study from",
+    "vox_collage": "Collage panel from",
+    "vignette": "Cinematic still from",
+}
+
+#: Words that start a sentence and are capitalised for that reason alone.
+_BRIEF_STOPWORDS = {
+    "The", "A", "An", "He", "She", "They", "It", "This", "That", "There",
+    "But", "And", "When", "After", "Before", "By", "In", "On", "At", "For",
+    "His", "Her", "Their", "Its", "We", "You", "I", "As", "If", "So",
+}
+
+
+def draft_project_brief(title: str, series_cfg: dict, script_text: str,
+                        treatment: str = None) -> str:
+    """
+    The opening block shared by every prompt in one script.
+
+    The title is never emitted: it is metadata, not a picture. What carries
+    across shots is the kind of picture, the era and region, and the figures
+    who recur often enough to need to look the same in every frame.
+    """
+    opener = BRIEF_OPENERS.get(treatment or "", BRIEF_OPENERS["documentary"])
+
+    anchor = (series_cfg or {}).get("world_anchor") or ""
+    parts = [f"{opener} a film set in {anchor}" if anchor else f"{opener} a documentary film"]
+
+    counts = {}
+    for name in re.findall(r"\b[A-Z][a-z]{2,}(?:\s+(?:ibn|bin|al-|el-)[a-zA-Z-]+)*", script_text or ""):
+        head = name.split()[0]
+        if head in _BRIEF_STOPWORDS:
+            continue
+        counts[name] = counts.get(name, 0) + 1
+
+    recurring = sorted([n for n, c in counts.items() if c >= 2],
+                       key=lambda n: (-counts[n], n))[:3]
+    if recurring:
+        parts.append("consistent depiction of " + ", ".join(recurring))
+
+    brief = ", ".join(parts)
+    words = brief.split()
+    if len(words) > BRIEF_MAX_WORDS:
+        brief = " ".join(words[:BRIEF_MAX_WORDS])
+    return brief.rstrip(" ,")
+
+
 def resolve_style_preset(series_cfg: dict, visual_type: str) -> dict | None:
     """
     The picked visual type, as {"prompt": str, "treatment": str | None}.
