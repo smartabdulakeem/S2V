@@ -405,6 +405,10 @@ class RenderOrchestrator:
                     series_slug=proj.get("series_slug"),
                     auto_generate=auto_generate,
                     on_library_hit=library_hit_cb,
+                    # The project's chosen look. Named style_preset here because
+                    # visual_type above already means the image SOURCE.
+                    style_preset=proj.get("visual_type", ""),
+                    project_brief=proj.get("project_brief", ""),
                 )
                 with self._lock:
                     visual_paths_map[seg_id] = vis_path

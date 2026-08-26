@@ -547,6 +547,8 @@ def fetch_visual(
     exclude_paths: set = None,
     series_slug: str = None,
     on_library_hit=None,
+    style_preset: str = "",
+    project_brief: str = "",
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
@@ -642,7 +644,9 @@ def fetch_visual(
                     character_bible=character_bible,
                     script_context=narration,
                     series_slug=series_slug,
-                    project_title=video_title
+                    project_title=video_title,
+                    visual_type=style_preset,
+                    project_brief=project_brief
                 )
                 success = False
                 if google_api_key:
@@ -665,7 +669,9 @@ def fetch_visual(
                     character_bible=character_bible,
                     script_context=narration,
                     series_slug=series_slug,
-                    project_title=video_title
+                    project_title=video_title,
+                    visual_type=style_preset,
+                    project_brief=project_brief
                 )
                 success = False
                 if google_api_key:
@@ -744,7 +750,9 @@ def fetch_visual(
                     character_bible=character_bible,
                     script_context=narration,
                     series_slug=series_slug,
-                    project_title=video_title
+                    project_title=video_title,
+                    visual_type=style_preset,
+                    project_brief=project_brief
                 )
                 if not auto_generate:
                     raise ValueError(
@@ -846,7 +854,9 @@ def fetch_visual(
         character_bible=character_bible,
         script_context=narration,
         series_slug=series_slug,
-        project_title=video_title
+        project_title=video_title,
+        visual_type=style_preset,
+        project_brief=project_brief
     )
     
     existing_lines = {}
@@ -939,7 +949,9 @@ def initialize_project_sourcing(script_dict: dict) -> str:
             character_bible=character_bible,
             script_context=narration,
             series_slug=series_slug,
-            project_title=title
+            project_title=title,
+            visual_type=proj.get("visual_type", ""),
+            project_brief=proj.get("project_brief", "")
         )
         lines.append(f"Segment {segment_id}: {prompt_desc}")
         

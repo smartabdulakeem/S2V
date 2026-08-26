@@ -126,11 +126,25 @@ async function applyUiDefaults() {
   try {
     const res = await window.pywebview.api.get_ui_defaults();
     const d = (res && res.ui_defaults) || {};
+
+    // Order matters. Setting .value in code fires no "change" event, so the
+    // visual-type list would still hold the first pack's presets while the
+    // niche dropdown showed the remembered one. The saved visual_type then
+    // failed to restore and the whole feature fell back to style_block with
+    // nothing on screen to say so. Restore the niche, repopulate, then the type.
     for (const [key, id] of Object.entries(UI_FIELDS)) {
+      if (key === "visual_type") continue;
       const el = document.getElementById(id);
       if (!el || !d[key]) continue;
-      // Only restore a choice the dropdown still offers.
       if ([...el.options].some(o => o.value === d[key])) el.value = d[key];
+    }
+
+    await loadStylePresets();
+
+    const styleEl = document.getElementById("pt-style");
+    if (styleEl && d.visual_type
+        && [...styleEl.options].some(o => o.value === d.visual_type)) {
+      styleEl.value = d.visual_type;
     }
     if (typeof d.captions_enabled === "boolean" && d.captions_enabled !== captionsEnabled()) {
       toggleCaptionsMaster();
@@ -616,7 +630,12 @@ async function planStoryboard() {
   const text = document.getElementById("pt-text").value;
   const seriesSlug = document.getElementById("pt-series-slug").value;
   const voice = document.getElementById("pt-voice").value;
-  const style = document.getElementById("pt-style").value;
+  const styleSel = document.getElementById("pt-style");
+  // The backend still treats visual_style as prose - it feeds the LLM planner and
+  // the world-anchor fallback. Send the label, never the snake_case key.
+  const style = styleSel.selectedIndex >= 0
+    ? styleSel.options[styleSel.selectedIndex].textContent.trim()
+    : "";
   const tone = document.getElementById("pt-tone").value;
 
   if (!text.trim()) {
@@ -738,10 +757,14 @@ async function refreshStoryboardCoverage() {
         coverageReport = res.report;
         rememberResolvedImages();
 
+        const drafted = (res.report && res.report.project_brief) || "";
+        if (drafted && currentScriptData) {
+          currentScriptData.project = currentScriptData.project || {};
+          currentScriptData.project.project_brief = drafted;
+        }
         const briefBox = document.getElementById("pt-brief");
-        if (briefBox && !briefBox.value.trim() && currentScriptData && currentScriptData.project
-            && currentScriptData.project.project_brief) {
-          briefBox.value = currentScriptData.project.project_brief;
+        if (briefBox && !briefBox.value.trim() && drafted) {
+          briefBox.value = drafted;
         }
       } else if (res.error) {
         console.error("Coverage calculation failed:", res.error);

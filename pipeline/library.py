@@ -1287,11 +1287,35 @@ BRIEF_OPENERS = {
     "vignette": "Cinematic still from",
 }
 
+#: A capitalised name, allowing hyphenated forms (Jean-Baptiste) and the Arabic
+#: nasab, where the particle and the name are separated by a space ("Khalid ibn
+#: al-Walid"). The previous pattern required them contiguous, so it split that
+#: name into "Khalid" and "Walid" - one man read as two characters.
+_NAME_RE = re.compile(
+    r"\b[A-Z][a-z]{2,}(?:-[A-Z][a-z]+)*"
+    r"(?:"
+    r"\s+(?:ibn|bin|bint|al-|el-|de|van|von)\s*[A-Z]?[a-z][a-zA-Z-]*"
+    r"|\s+[A-Z][a-z]+(?:-[A-Z][a-z]+)*"
+    r")*"
+)
+
 #: Words that start a sentence and are capitalised for that reason alone.
 _BRIEF_STOPWORDS = {
-    "The", "A", "An", "He", "She", "They", "It", "This", "That", "There",
-    "But", "And", "When", "After", "Before", "By", "In", "On", "At", "For",
-    "His", "Her", "Their", "Its", "We", "You", "I", "As", "If", "So",
+    # Only words of three or more letters can match, so single letters and
+    # two-letter words are deliberately absent - they could never match anyway.
+    "The", "And", "But", "For", "Nor", "Yet", "This", "That", "These", "Those",
+    "There", "Then", "Than", "They", "Their", "Them", "She", "His", "Her",
+    "Hers", "Its", "You", "Your", "Our", "Ours", "Who", "Whom", "Whose",
+    "When", "Where", "What", "Why", "How", "Which", "While", "With", "Within",
+    "Without", "After", "Before", "During", "Under", "Over", "Above", "Below",
+    "Between", "Because", "Since", "Until", "Unless", "Although", "Though",
+    "Once", "Now", "Soon", "Later", "Never", "Always", "Often", "Sometimes",
+    "Suddenly", "Finally", "Meanwhile", "Instead", "However", "Therefore",
+    "Every", "Each", "Both", "Many", "Most", "Some", "Such", "One", "Two",
+    "Three", "Four", "Five", "Not", "Only", "Even", "Still", "Just", "Here",
+    "From", "Into", "Onto", "Upon", "About", "Against", "Among", "Through",
+    "Toward", "Towards", "Behind", "Beyond", "Across", "Along", "Around",
+    "Bring", "Come", "Take", "Give", "Look", "See", "Say", "Said", "Let",
 }
 
 
@@ -1306,25 +1330,57 @@ def draft_project_brief(title: str, series_cfg: dict, script_text: str,
     """
     opener = BRIEF_OPENERS.get(treatment or "", BRIEF_OPENERS["documentary"])
 
-    anchor = (series_cfg or {}).get("world_anchor") or ""
-    parts = [f"{opener} a film set in {anchor}" if anchor else f"{opener} a documentary film"]
+    # world_anchor is not a place in most packs - it carries medium language
+    # too ("Matthew Brady tintype archival photograph"), which fights the picked
+    # visual type. brief_subject names the subject and nothing else.
+    # A pack that predates brief_subject still has to contribute its setting,
+    # because the setting slot now stays quiet whenever a brief is present.
+    # Falling back to world_anchor keeps custom packs working; it is only the
+    # authored packs that get medium-free wording.
+    subject = ((series_cfg or {}).get("brief_subject")
+               or (series_cfg or {}).get("world_anchor")
+               or "a film")
+    parts = [f"{opener} {subject}"]
 
+    # Count by first name, keep the fullest form. A script that says "Khalid ibn
+    # al-Walid" once and "Khalid" thereafter is describing one man twice, not two
+    # men once each - counting the exact strings separately left both below the
+    # threshold and dropped the protagonist from the brief.
     counts = {}
-    for name in re.findall(r"\b[A-Z][a-z]{2,}(?:\s+(?:ibn|bin|al-|el-)[a-zA-Z-]+)*", script_text or ""):
+    fullest = {}
+    for m in _NAME_RE.finditer(script_text or ""):
+        name = m.group(0).strip()
         head = name.split()[0]
         if head in _BRIEF_STOPWORDS:
             continue
-        counts[name] = counts.get(name, 0) + 1
+        counts[head] = counts.get(head, 0) + 1
+        if len(name) > len(fullest.get(head, "")):
+            fullest[head] = name
 
-    recurring = sorted([n for n, c in counts.items() if c >= 2],
-                       key=lambda n: (-counts[n], n))[:3]
+    recurring = [fullest[h] for h in
+                 sorted([h for h, c in counts.items() if c >= 2],
+                        key=lambda h: (-counts[h], h))[:3]]
     if recurring:
         parts.append("consistent depiction of " + ", ".join(recurring))
 
-    brief = ", ".join(parts)
+    return cap_project_brief(", ".join(parts))
+
+
+def cap_project_brief(brief: str) -> str:
+    """
+    Trim a brief to BRIEF_MAX_WORDS without leaving a dangling clause.
+
+    Applied to hand-edited briefs too, not only drafted ones: generators weight
+    early tokens heavily, so an unbounded opening would out-argue the shot's own
+    subject in every prompt of the film.
+    """
+    brief = (brief or "").strip()
     words = brief.split()
     if len(words) > BRIEF_MAX_WORDS:
-        brief = " ".join(words[:BRIEF_MAX_WORDS])
+        cut = " ".join(words[:BRIEF_MAX_WORDS])
+        if "," in cut:
+            cut = cut[:cut.rindex(",")]
+        brief = cut
     return brief.rstrip(" ,")
 
 
@@ -1337,7 +1393,7 @@ def ensure_project_brief(project_info: dict, script_text: str = "") -> str:
     """
     existing = (project_info or {}).get("project_brief") or ""
     if existing.strip():
-        return existing.strip()
+        return cap_project_brief(existing)
 
     slug = (project_info or {}).get("series_slug")
     cfg = {}
@@ -1420,7 +1476,11 @@ def compose_gap_prompt(
     if project_brief:
         parts.append(project_brief.rstrip(" ,."))
 
-    parts.append(match_slot(PROMPT_FRAMING, shot_query or "", default=DEFAULT_FRAMING))
+    # Only supply framing the query does not already state, or the same phrase
+    # lands twice: "wide establishing shot, ..., wide establishing shot of a
+    # muddy riverbank at dawn".
+    if match_slot(PROMPT_FRAMING, shot_query or "") is None:
+        parts.append(DEFAULT_FRAMING)
     parts.append((shot_query or "").strip())
 
     for table in (PROMPT_MOTION, PROMPT_GROUND, PROMPT_ATMOSPHERE):
@@ -1430,10 +1490,24 @@ def compose_gap_prompt(
 
     # The brief opens with the era and region too, so checking only the medium
     # let the anchor through twice in every real prompt.
-    anchor = world_anchor or series_cfg.get("world_anchor") or ""
+    # Two different things arrive here. An explicit world_anchor is the
+    # project's own words and is always honoured. The pack's world_anchor is
+    # not so clean - in most packs it ends with a medium ("Matthew Brady
+    # tintype archival photograph"), which fights the picked visual type - so
+    # it defers to the brief, which states the setting in medium-free language.
+    explicit = (world_anchor or "").strip()
+    # A bare snake_case token is a preset key that reached us by mistake, never
+    # a place; emitting it puts "courtroom_sketch" into the prompt verbatim.
+    if explicit and " " not in explicit and "_" in explicit:
+        explicit = ""
     already_said = f"{medium} {project_brief or ''}".lower()
-    if anchor and anchor.lower() not in already_said:
-        parts.append(anchor)
+    if explicit:
+        if explicit.lower() not in already_said:
+            parts.append(explicit)
+    elif not project_brief:
+        anchor = series_cfg.get("world_anchor") or ""
+        if anchor and anchor.lower() not in already_said:
+            parts.append(anchor)
 
     light = match_slot(PROMPT_LIGHT, blob)
     if light:
@@ -1852,6 +1926,10 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
         "gaps": gap_count,
         "pinned": pinned_count,
         "shot_reports": shot_reports,
+        # The board needs this back: plan_shots writes the drafted brief onto a
+        # bridge-deserialised copy of project_info, so mutating it there never
+        # reaches the UI.
+        "project_brief": project_brief,
         "ranked_weak": ranked_weak,
         "ranked_gaps": ranked_gaps,
         "used_images": list(script_used_images)

@@ -13,9 +13,10 @@ import re
 
 #: Camera distance and how the subject sits in the frame.
 PROMPT_FRAMING = [
-    (r"\b(close|detail|macro|tight)\b", "tight detail shot, shallow plane of focus"),
     (r"\b(aerial|overhead|bird's eye)\b", "high aerial shot looking down"),
     (r"\b(wide|establishing|vista|panorama)\b", "wide establishing shot, subject small in the frame"),
+    (r"\b(close[- ]?up|macro|extreme close|tight (?:shot|crop|framing)|detail (?:of|shot))\b",
+     "tight detail shot, shallow plane of focus"),
 ]
 
 #: Used when the shot names no framing of its own.
@@ -35,7 +36,9 @@ PROMPT_GROUND = [
      "churned waterlogged ground, standing water breaking the surface"),
     (r"\b(dune|dunes|sand|desert|arid)\b",
      "wind-scoured sand, drifting grain across the foreground"),
-    (r"\b(snow|ice|frozen|frost)\b",
+    (r"\b(snow|snowfall|frost|frostbite|glacier|permafrost)\b"
+     r"|\bice(?:[- ](?:sheet|field|floe))?\b"
+     r"|\bfrozen (?:ground|earth|river|lake|sea|mud|field|road)\b",
      "snow and frozen ground, breath visible in the cold"),
     (r"\b(rubble|ruins|debris|wreckage)\b",
      "broken rubble underfoot, dust settling between stones"),
@@ -43,7 +46,8 @@ PROMPT_GROUND = [
 
 #: What hangs in the air.
 PROMPT_ATMOSPHERE = [
-    (r"\b(dust|smoke|smouldering|burning|fire|flame)\b",
+    (r"\b(dust|dusty|smoke|smoky|smouldering|ablaze|bonfire|wildfire)\b"
+     r"|\bburning (?:village|city|town|building|ship|field|forest|wreck)\b",
      "hanging dust and smoke catching the light"),
     (r"\b(rain|storm|downpour|torrent)\b",
      "rain streaking the air, wet reflective surfaces"),
@@ -52,9 +56,9 @@ PROMPT_ATMOSPHERE = [
 
 #: Time of day expressed as light a camera would see.
 PROMPT_LIGHT = [
-    (r"\b(dawn|daybreak|first light|sunrise|before dawn)\b",
+    (r"\b(daybreak|first light|sunrise)\b|\bdawn\b(?! of\b)",
      "cold blue pre-dawn light, sun still below the ridge, long low shadows"),
-    (r"\b(dusk|sunset|nightfall|evening|twilight)\b",
+    (r"\b(dusk|sunset|nightfall|evening)\b|\btwilight\b(?! of\b)",
      "low golden dusk light, long raking shadows, warm highlights against cool shade"),
     (r"\b(night|midnight|moonlit|after dark|nocturnal)\b",
      "deep night, moonlight and torch flame the only sources, deep unlit shadow"),

@@ -237,12 +237,12 @@ fixed order. A slot that resolves to nothing is omitted, never left empty.
 | Slot | Source | Example |
 |---|---|---|
 | **Project brief** | per-project, auto-drafted then editable; **always first, always present** | `Documentary still from a film on the early Muslim campaigns in the Levant, consistent cast of Arab commanders in period dress` |
-| Framing | keyword match on shot query, else "wide establishing" | `wide establishing shot, subject small in the frame` |
+| Framing | **only when the query does not already state one**, else "wide establishing" | `wide establishing shot, subject small in the frame` |
 | Subject | the shot query, unchanged | `Khalid ibn al-Walid leading cavalry` |
 | Motion | verb match on query + narration | `bodies and animals mid-movement, motion blur at the frame edges` |
 | Ground | terrain match on query + narration | `churned waterlogged ground, standing water breaking the surface` |
 | Atmosphere | dust / smoke / rain / mist match | `hanging dust and smoke catching the light` |
-| Setting | `world_anchor`, **emitted only if absent from the style text** | `7th century Arabian Peninsula, early Islamic era` |
+| Setting | `world_anchor`, **only when there is no project brief** - the brief states the setting in medium-free language, `world_anchor` does not | `7th century Arabian Peninsula, early Islamic era` |
 | Time & light | time-of-day match on narration | `cold blue pre-dawn light, sun still below the ridge, long low shadows` |
 | Medium | the picked preset, else `style_block` | `Wet-plate era field photograph, restrained tonal range` |
 
@@ -268,7 +268,11 @@ in visibly different worlds and need hand-editing before use.
    vignette -> "Cinematic still from"
 2. the project title, reduced to its subject (the title itself is never emitted verbatim; it is
    metadata, not a picture)
-3. the pack's `world_anchor` for era and region
+3. the pack's **`brief_subject`** - a noun phrase naming what the film is about and
+   nothing else. `world_anchor` was used for this first and is wrong for it: in 10 of the
+   11 packs it carries medium language as well as subject ("1860s American Civil War,
+   Matthew Brady tintype archival photograph"), so opening every prompt with it fought the
+   picked visual type - a lithograph prompt also demanded a tintype photograph
 4. recurring proper nouns across the script, which become the consistent-cast clause
 
 **Editable.** The drafted text appears in a field on the planning board and can be rewritten.

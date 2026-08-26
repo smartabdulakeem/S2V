@@ -177,9 +177,18 @@ def test_the_anchor_is_not_repeated_when_the_brief_already_carries_it():
     assert out.lower().count("7th century arabian peninsula") == 1, out
 
 
-def test_the_anchor_still_appears_when_the_brief_omits_it():
-    out = _prompt(visual_type="architectural_plate", project_brief="Documentary still from a film")
+def test_the_setting_slot_speaks_when_there_is_no_brief():
+    # With no brief, nothing else states the setting, so the slot must fire.
+    out = _prompt(visual_type="architectural_plate")
     assert out.lower().count("7th century arabian peninsula") == 1, out
+
+
+def test_the_setting_slot_stays_quiet_when_a_brief_is_present():
+    # The brief states the setting in medium-free language. world_anchor does
+    # not - in most packs it ends with a medium, which fights the visual type.
+    out = _prompt(visual_type="architectural_plate",
+                  project_brief="Documentary still from a documentary on seventh century Arabia")
+    assert out.lower().count("7th century arabian peninsula") == 0, out
 
 
 from pipeline.composer import resolve_default_treatment
@@ -201,3 +210,46 @@ def test_default_treatment_falls_back_to_prose_when_no_visual_type():
 
 def test_default_treatment_survives_an_unknown_pack():
     assert resolve_default_treatment("", "whatever", "no_such_pack") is None
+
+
+def test_a_preset_key_never_leaks_into_the_prompt():
+    # visual_style used to receive the snake_case key from the UI, and it is
+    # consumed as the world-anchor fallback, so the key was emitted verbatim.
+    out = compose_gap_prompt(
+        shot_query="a case file on a desk", world_anchor="courtroom_sketch",
+        script_context="The detective worked at night.",
+        series_slug="true_crime", visual_type="courtroom_sketch",
+    )
+    assert "courtroom_sketch" not in out, out
+
+
+def test_framing_is_not_stated_twice():
+    out = compose_gap_prompt(
+        shot_query="wide establishing shot of a muddy riverbank at dawn",
+        series_slug="civil_war", visual_type="wet_plate",
+    )
+    assert out.count("wide establishing shot") == 1, out
+
+
+def test_figurative_language_does_not_become_weather():
+    out = compose_gap_prompt(
+        shot_query="a woman at her desk",
+        script_context="She felt a burning desire to succeed, frozen with fear "
+                       "before the interview, at the dawn of a new industry.",
+        series_slug="motivational", visual_type="training_reportage",
+    )
+    assert "snow" not in out, out
+    assert "smoke" not in out, out
+    assert "pre-dawn" not in out, out
+
+
+def test_literal_weather_still_reaches_the_prompt():
+    out = compose_gap_prompt(
+        shot_query="the column on the road",
+        script_context="They marched before dawn through snow, smoke still "
+                       "hanging over the burning village.",
+        series_slug="world_military_history", visual_type="combat_reportage",
+    )
+    assert "pre-dawn" in out, out
+    assert "snow" in out, out
+    assert "smoke" in out, out
