@@ -1328,6 +1328,36 @@ def draft_project_brief(title: str, series_cfg: dict, script_text: str,
     return brief.rstrip(" ,")
 
 
+def ensure_project_brief(project_info: dict, script_text: str = "") -> str:
+    """
+    The project's brief, drafted on first use and never overwritten after.
+
+    A hand-edited brief has to survive re-planning, or the owner would lose
+    their wording every time they adjusted the shot rhythm.
+    """
+    existing = (project_info or {}).get("project_brief") or ""
+    if existing.strip():
+        return existing.strip()
+
+    slug = (project_info or {}).get("series_slug")
+    try:
+        cfg = get_series_config(series_slug=slug)
+    except Exception:
+        cfg = {}
+
+    visual_type = (project_info or {}).get("visual_type") or ""
+    preset = resolve_style_preset(cfg, visual_type)
+    treatment = preset.get("treatment") if preset else None
+    if not treatment and visual_type:
+        from pipeline.composer import SINGLE_IMAGE_TREATMENTS
+        if visual_type in SINGLE_IMAGE_TREATMENTS:
+            treatment = visual_type
+
+    return draft_project_brief(
+        (project_info or {}).get("title", ""), cfg, script_text, treatment
+    )
+
+
 def resolve_style_preset(series_cfg: dict, visual_type: str) -> dict | None:
     """
     The picked visual type, as {"prompt": str, "treatment": str | None}.
@@ -1444,6 +1474,11 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
 
     world_anchor = project_info.get("world_anchor") or project_info.get("visual_style")
     visual_type = project_info.get("visual_type") or ""
+    project_brief = ensure_project_brief(
+        project_info,
+        " ".join(seg.get("narration", "") for seg in script_data.get("segments", [])),
+    )
+    project_info["project_brief"] = project_brief
     character_bible = project_info.get("character_bible") or {}
 
     # A project can restrict itself to one folder of images. Curating twenty
@@ -1646,6 +1681,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     series_slug=series_slug,
                     project_title=title,
                     visual_type=visual_type,
+                    project_brief=project_brief,
                 ),
             })
             pinned_count += 1
@@ -1679,6 +1715,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     series_slug=series_slug,
                     project_title=title,
                     visual_type=visual_type,
+                    project_brief=project_brief,
                 ),
             })
             continue
@@ -1726,6 +1763,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             series_slug=series_slug,
             project_title=title,
             visual_type=visual_type,
+            project_brief=project_brief,
         )
 
         # Remember the prompt on the shot itself. The board shows it, the user

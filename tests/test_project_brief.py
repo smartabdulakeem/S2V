@@ -59,3 +59,26 @@ def test_brief_is_stable_for_the_same_inputs():
     a = draft_project_brief("X", CFG, SCRIPT, "documentary")
     b = draft_project_brief("X", CFG, SCRIPT, "documentary")
     assert a == b
+
+
+from pipeline.library import ensure_project_brief
+
+
+def test_a_missing_brief_is_drafted():
+    info = {"title": "The Battle of the Mud", "series_slug": "islamic_history",
+            "visual_type": "architectural_plate"}
+    out = ensure_project_brief(info, SCRIPT)
+    assert out.startswith("Documentary still from")
+
+
+def test_an_existing_brief_is_left_alone():
+    info = {"title": "X", "series_slug": "islamic_history",
+            "visual_type": "architectural_plate",
+            "project_brief": "My own wording, untouched"}
+    assert ensure_project_brief(info, SCRIPT) == "My own wording, untouched"
+
+
+def test_a_blank_brief_is_treated_as_missing():
+    info = {"title": "X", "series_slug": "islamic_history",
+            "visual_type": "architectural_plate", "project_brief": "   "}
+    assert ensure_project_brief(info, SCRIPT).startswith("Documentary still from")
