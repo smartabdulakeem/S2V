@@ -65,6 +65,10 @@
         <textarea id="pt-text" placeholder="Paste your script here. Leave a blank line between paragraphs — each one becomes a scene."></textarea>
       </label>
 
+      <label class="f" style="flex:1 1 100%">Prompt opening (shared by every image in this film)
+        <input type="text" id="pt-brief" placeholder="Drafted automatically when you plan — edit to lock the look across every shot.">
+      </label>
+
       <!-- FORMAT PICKER -->
       <div class="card">
         <div class="row" style="justify-content:space-between">
@@ -116,11 +120,9 @@
               <option value="Urgent">Urgent</option>
             </select>
           </label>
-          <label class="f">Visual style
+          <label class="f">Visual type
             <select id="pt-style">
-              <option value="Vintage documentary">Vintage documentary</option>
-              <option value="Vox paper-collage">Vox paper-collage</option>
-              <option value="Vector editorial">Vector editorial</option>
+              <!-- Populated from the picked niche's style_presets -->
             </select>
           </label>
         </div>

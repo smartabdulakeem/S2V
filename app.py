@@ -121,6 +121,23 @@ class Api:
                         pass
         return packs
 
+    def get_style_presets(self, series_slug: str = None) -> list:
+        """The visual types one niche offers, for the planning board dropdown."""
+        try:
+            from pipeline.library import get_series_config
+            cfg = get_series_config(series_slug=series_slug)
+        except Exception:
+            return []
+        out = []
+        for key, entry in (cfg.get("style_presets") or {}).items():
+            prompt = entry if isinstance(entry, str) else (entry or {}).get("prompt", "")
+            out.append({
+                "key": key,
+                "label": key.replace("_", " ").title(),
+                "prompt": prompt,
+            })
+        return out
+
     def get_voice_catalogue(self) -> list:
         """Return the voice catalogue from config/voices.json."""
         v_path = os.path.join(BASE_DIR, "config", "voices.json")
@@ -283,7 +300,7 @@ class Api:
     #: Choices the Script screen should still be showing next time.
     #: `shot_rhythm` held a slider position under a mapping that has since been
     #: corrected, so it is stored as seconds now and the old key is not read.
-    UI_DEFAULT_KEYS = ("voice", "series_slug", "tone", "visual_style",
+    UI_DEFAULT_KEYS = ("voice", "series_slug", "tone", "visual_style", "visual_type",
                        "captions_enabled", "shot_rhythm_seconds", "formats")
 
     def save_ui_defaults(self, defaults: dict) -> dict:

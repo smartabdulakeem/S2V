@@ -102,7 +102,7 @@ async function initApp() {
 
 const UI_FIELDS = {
   voice: "pt-voice", series_slug: "pt-series-slug",
-  tone: "pt-tone", visual_style: "pt-style",
+  tone: "pt-tone", visual_type: "pt-style",
 };
 
 async function rememberUiChoices() {
@@ -277,6 +277,36 @@ async function loadSeriesPacks() {
     opt.value = p.series_slug;
     opt.textContent = p.display_name;
     select.appendChild(opt);
+  });
+
+  select.addEventListener("change", loadStylePresets);
+  await loadStylePresets();
+}
+
+// ── Visual Types ─────────────────────────────────────────────────────────────
+async function loadStylePresets() {
+  const sel = document.getElementById("pt-style");
+  const slugEl = document.getElementById("pt-series-slug");
+  if (!sel || !slugEl) return;
+
+  let presets = [];
+  if (!isWebMode && window.pywebview.api.get_style_presets) {
+    try {
+      presets = await window.pywebview.api.get_style_presets(slugEl.value);
+    } catch (e) {
+      console.error("Failed to load style presets:", e);
+    }
+  }
+
+  sel.innerHTML = "";
+  if (!presets.length) {
+    sel.appendChild(new Option("Pack default", ""));
+    return;
+  }
+  presets.forEach(p => {
+    const opt = new Option(p.label, p.key);
+    opt.title = p.prompt;
+    sel.appendChild(opt);
   });
 }
 
@@ -651,6 +681,15 @@ window.onParseComplete = async function(result) {
   if (result.success) {
     currentScriptPath = result.path;
     currentScriptData = result.script_data;
+    // The planner does not know about these two, so attach them here, before the
+    // draft is saved and before coverage is planned — plan_shots reads them off
+    // project and every prompt in this script then opens the same way.
+    currentScriptData.project = currentScriptData.project || {};
+    currentScriptData.project.visual_type = document.getElementById("pt-style").value || "";
+    const briefEl = document.getElementById("pt-brief");
+    if (briefEl && briefEl.value.trim()) {
+      currentScriptData.project.project_brief = briefEl.value.trim();
+    }
     applyCaptionSetting();
     await saveDraftScript(true);
 
@@ -698,6 +737,12 @@ async function refreshStoryboardCoverage() {
       if (res.success) {
         coverageReport = res.report;
         rememberResolvedImages();
+
+        const briefBox = document.getElementById("pt-brief");
+        if (briefBox && !briefBox.value.trim() && currentScriptData && currentScriptData.project
+            && currentScriptData.project.project_brief) {
+          briefBox.value = currentScriptData.project.project_brief;
+        }
       } else if (res.error) {
         console.error("Coverage calculation failed:", res.error);
         setBoardBusy(true, `Coverage failed: ${res.error}`);
