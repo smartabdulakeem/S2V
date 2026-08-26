@@ -218,6 +218,28 @@ def treatment_for_style(visual_style: str, preset: dict = None,
     return None
 
 
+def resolve_default_treatment(visual_style: str, visual_type: str = "",
+                              series_slug: str = None) -> str | None:
+    """
+    The treatment a render should fall back to, given the project's choices.
+
+    Looks the picked visual type up in its series pack so the preset's declared
+    treatment wins, then defers to treatment_for_style for the older prose
+    match. Import is function-local because pipeline.library is heavy and the
+    compositor is imported by processes that never need it.
+    """
+    preset = None
+    if visual_type:
+        try:
+            from pipeline.library import get_series_config, resolve_style_preset
+            preset = resolve_style_preset(
+                get_series_config(series_slug=series_slug), visual_type
+            )
+        except Exception:
+            preset = None
+    return treatment_for_style(visual_style, preset=preset, visual_type=visual_type)
+
+
 def _apply_treatment(shot: dict, visual_path: str, output_mp4_path: str,
                      width: int, height: int, on_progress=None,
                      default_filter: str | None = None) -> str:
@@ -287,7 +309,8 @@ def _resolve_pin_path(pin_file: str, project_dir: str, root: str = None) -> str:
     return None
 
 
-def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height: int, fps: int = 30) -> str:
+def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height: int, fps: int = 30,
+                        default_treatment: str = None) -> str:
     """Generate a SHA-1 hash for shot content cache lookup."""
     query_or_pin = str(shot.get("pin") or shot.get("query") or "")
     motion = json.dumps(shot.get("motion", {}), sort_keys=True)
@@ -299,7 +322,9 @@ def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height
     # clip from the old behaviour is served back and the fix looks like a no-op.
     # v2: motion effect is honoured (shots used to render as fixed frames) and
     #     treatments are applied to the image.
-    raw = f"v2|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}"
+    # v3: default_treatment (from the resolved visual type/preset) is part of
+    #     the key, so changing the picked visual type invalidates the cache.
+    raw = f"v3|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|{default_treatment or ''}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -733,6 +758,8 @@ def compose_segment(
     level1_overlay: dict = None,
     segment_dict: dict = None,
     visual_style: str = "",
+    visual_type: str = "",
+    series_slug: str = None,
 ) -> str:
     """
     Compose a single segment into an MP4 of resolution width x height.
@@ -797,11 +824,14 @@ def compose_segment(
     # Resolve shot durations
     resolved_durations = resolve_shot_durations(shots, total_audio_duration)
 
+    # Resolved once per segment, not once per shot: it hits the series pack.
+    default_treatment = resolve_default_treatment(visual_style, visual_type, series_slug)
+
     # Render each shot clip
     shot_clip_paths = []
     for i, shot in enumerate(shots):
         dur = resolved_durations[i]
-        cache_key = _get_shot_cache_key(shot, dur, width, height, FPS)
+        cache_key = _get_shot_cache_key(shot, dur, width, height, FPS, default_treatment=default_treatment)
         shot_mp4 = os.path.join(cache_dir, f"shot_{cache_key}.mp4")
 
         # Determine visual path for shot
@@ -832,7 +862,7 @@ def compose_segment(
                 srt_path=shot_srt,
                 fps=FPS,
                 on_progress=on_progress,
-                default_treatment=treatment_for_style(visual_style),
+                default_treatment=default_treatment,
             )
 
         shot_clip_paths.append(shot_mp4)

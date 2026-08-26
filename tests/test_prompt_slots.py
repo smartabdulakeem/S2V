@@ -180,3 +180,24 @@ def test_the_anchor_is_not_repeated_when_the_brief_already_carries_it():
 def test_the_anchor_still_appears_when_the_brief_omits_it():
     out = _prompt(visual_type="architectural_plate", project_brief="Documentary still from a film")
     assert out.lower().count("7th century arabian peninsula") == 1, out
+
+
+from pipeline.composer import resolve_default_treatment
+
+
+def test_default_treatment_comes_from_the_pack_preset():
+    # true_crime's courtroom_sketch declares treatment "illustration"
+    assert resolve_default_treatment("", "courtroom_sketch", "true_crime") == "illustration"
+
+
+def test_default_treatment_prefers_the_preset_over_the_prose():
+    assert resolve_default_treatment("Vintage documentary", "courtroom_sketch", "true_crime") \
+        == "illustration"
+
+
+def test_default_treatment_falls_back_to_prose_when_no_visual_type():
+    assert resolve_default_treatment("Vox paper-collage", "", None) == "vox_collage"
+
+
+def test_default_treatment_survives_an_unknown_pack():
+    assert resolve_default_treatment("", "whatever", "no_such_pack") is None

@@ -456,6 +456,8 @@ class RenderOrchestrator:
                     level1_overlay=seg.get("level1_overlay"),
                     segment_dict=seg,
                     visual_style=visual_style,
+                    visual_type=proj.get("visual_type", ""),
+                    series_slug=proj.get("series_slug"),
                 )
                 with self._lock:
                     segment_videos_map[seg_id] = seg_video
