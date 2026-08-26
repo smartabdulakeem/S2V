@@ -169,3 +169,14 @@ def test_prose_substring_match_still_works():
 
 def test_nothing_to_go_on_returns_none():
     assert treatment_for_style("") is None
+
+
+def test_the_anchor_is_not_repeated_when_the_brief_already_carries_it():
+    brief = "Documentary still from a film set in 7th century Arabian Peninsula, early Islamic era"
+    out = _prompt(visual_type="architectural_plate", project_brief=brief)
+    assert out.lower().count("7th century arabian peninsula") == 1, out
+
+
+def test_the_anchor_still_appears_when_the_brief_omits_it():
+    out = _prompt(visual_type="architectural_plate", project_brief="Documentary still from a film")
+    assert out.lower().count("7th century arabian peninsula") == 1, out

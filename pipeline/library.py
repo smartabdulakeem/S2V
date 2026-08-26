@@ -1340,10 +1340,12 @@ def ensure_project_brief(project_info: dict, script_text: str = "") -> str:
         return existing.strip()
 
     slug = (project_info or {}).get("series_slug")
-    try:
-        cfg = get_series_config(series_slug=slug)
-    except Exception:
-        cfg = {}
+    cfg = {}
+    if slug:
+        try:
+            cfg = get_series_config(series_slug=slug)
+        except Exception:
+            cfg = {}
 
     visual_type = (project_info or {}).get("visual_type") or ""
     preset = resolve_style_preset(cfg, visual_type)
@@ -1426,8 +1428,11 @@ def compose_gap_prompt(
         if phrase:
             parts.append(phrase)
 
+    # The brief opens with the era and region too, so checking only the medium
+    # let the anchor through twice in every real prompt.
     anchor = world_anchor or series_cfg.get("world_anchor") or ""
-    if anchor and anchor.lower() not in medium.lower():
+    already_said = f"{medium} {project_brief or ''}".lower()
+    if anchor and anchor.lower() not in already_said:
         parts.append(anchor)
 
     light = match_slot(PROMPT_LIGHT, blob)
