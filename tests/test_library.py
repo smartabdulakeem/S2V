@@ -160,13 +160,16 @@ def test_gap_detection_thresholds(tmp_path, monkeypatch):
     assert "cyberpunk neon robot battles space dragons" in composed
     assert "historical documentary" in composed
     assert "cinematic documentary photography" in composed or "film" in composed
-    assert "Negative prompt:" in composed
+    # Negative blocks are off by default: the image tools this is pasted into take
+    # one prompt box, so "Negative prompt: no firearms" was read as a request for
+    # firearms. Still available behind the flag — see the tests below.
+    assert "Negative prompt:" not in composed
 
 
 # ── Adversarial Regression Tests ─────────────────────────────────────────────
 
 def test_islamic_series_prompt_composition():
-    """Script with series_slug 'islamic_history' must include 7th century anchor & scimitar negative block."""
+    """The pack's world anchor reaches the prompt; its negative block stays out."""
     cfg = library.get_series_config(series_slug="islamic_history")
     assert "7th century" in cfg["world_anchor"].lower()
     assert "scimitar" in cfg["negative_block"].lower()
@@ -176,7 +179,44 @@ def test_islamic_series_prompt_composition():
         series_slug="islamic_history"
     )
     assert "7th century" in composed.lower()
+    assert "scimitar" not in composed.lower()
+
+
+def test_negative_block_is_still_available_when_asked_for():
+    """Turning it off by default must not quietly delete the capability."""
+    composed = library.compose_gap_prompt(
+        shot_query="desert caravan",
+        series_slug="islamic_history",
+        include_negative=True,
+    )
+    assert "Negative prompt:" in composed
     assert "scimitar" in composed.lower()
+
+
+def test_the_prompt_describes_the_scene_from_the_script():
+    """
+    The subject used to be the extracted keyword alone, so an image generated
+    from the prompt had no relationship to what was being narrated.
+    """
+    composed = library.compose_gap_prompt(
+        shot_query="Prophet Bai'ah Bakr",
+        series_slug="islamic_history",
+        script_context="The Prophet was buried. Abu Bakr al-Siddiq was the Caliph of Islam.",
+    )
+    assert "Abu Bakr al-Siddiq was the Caliph" in composed
+    assert "Prophet Bai'ah Bakr" in composed
+
+
+def test_presenter_asides_are_kept_out_of_the_prompt():
+    """"Hit subscribe" is something said, not something a picture can show."""
+    composed = library.compose_gap_prompt(
+        shot_query="the flood",
+        series_slug="islamic_history",
+        script_context="The water is gone. Hit subscribe so you are here for the next one. "
+                       "The mountain is dry.",
+    )
+    assert "subscribe" not in composed.lower()
+    assert "The water is gone" in composed
 
 
 def test_space_series_prompt_composition():

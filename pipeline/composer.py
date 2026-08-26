@@ -92,6 +92,192 @@ def _get_font(size: int):
     return ImageFont.load_default()
 
 
+#: Single-image treatments, mapped to their magick_processor implementation.
+SINGLE_IMAGE_TREATMENTS = {
+    "vignette": "process_vignette",
+    "vox_collage": "process_vox_collage",
+    "documentary": "process_documentary",
+    "illustration": "process_illustration",
+    "silhouette": "process_silhouette",
+}
+
+
+#: What zoompan can actually perform.
+MOTION_EFFECTS = ("zoom_in", "zoom_out", "pan_left", "pan_right")
+
+
+def resolve_motion_effect(motion) -> str:
+    """
+    Work out which camera move a shot wants.
+
+    The schema splits this in two: `kind` is ken_burns | static | generative, and
+    `effect` is zoom_in | zoom_out | pan_left | pan_right. The compositor used to
+    compare `kind` against the effect names — values it can never hold — so every
+    Ken Burns shot fell through to a fixed z=1.0 frame. Every film this app has
+    produced was a slideshow of still images, and no test caught it because the
+    tests passed {"kind": "zoom_in"}, a shape nothing in the app ever writes.
+
+    Accepts a plain string too, for schema-v1 segments that stored the effect
+    directly in `ken_burns`.
+    """
+    if isinstance(motion, str):
+        return motion if motion in MOTION_EFFECTS else "static"
+    if not isinstance(motion, dict):
+        return "zoom_in"
+
+    kind = (motion.get("kind") or "ken_burns").strip().lower()
+    if kind in ("static", "none"):
+        return "static"
+    if kind in MOTION_EFFECTS:
+        # Tolerated: some callers put the effect straight into `kind`.
+        return kind
+    if kind == "generative":
+        return "static"
+
+    effect = (motion.get("effect") or "zoom_in").strip().lower()
+    return effect if effect in MOTION_EFFECTS else "zoom_in"
+
+
+def _add_ambient_bed(narration_path: str, segment_dict: dict, duration: float,
+                     cache_dir: str, segment_id, on_progress=None) -> str:
+    """
+    Lay an ambient bed under this segment's narration, if one suits it.
+
+    Silence is the correct answer when nothing matches — an unrelated bed is worse
+    than none. Controlled by config/settings.json → ambient_beds (default on).
+    Any failure returns the narration untouched.
+    """
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        settings_file = os.path.join(root, "config", "settings.json")
+        try:
+            with open(settings_file, "r", encoding="utf-8") as f:
+                if not json.load(f).get("ambient_beds", True):
+                    return narration_path
+        except Exception:
+            pass
+
+        from pipeline import sound
+
+        beds = sound.load_beds()
+        if not beds:
+            return narration_path
+
+        seg = segment_dict or {}
+        shots = seg.get("shots") or []
+        scene_text = " ".join(
+            [seg.get("narration", "")] + [str(s.get("query", "")) for s in shots]
+        )
+        bed = sound.pick_bed(scene_text, beds)
+        if not bed:
+            return narration_path
+
+        ffmpeg = _find_ffmpeg()
+        bed_track = os.path.join(cache_dir, f"segment_{segment_id}_bed.wav")
+        sound.build_bed_track(bed["abs_path"], duration, bed_track, ffmpeg)
+
+        mixed = os.path.join(cache_dir, f"segment_{segment_id}_with_bed.mp3")
+        result = sound.mix_bed_under_narration(narration_path, bed_track, mixed, ffmpeg)
+        if result != narration_path and on_progress:
+            on_progress(f"Segment {segment_id} — ambient bed: {os.path.basename(bed['path'])}")
+        return result
+    except Exception as e:
+        if on_progress:
+            on_progress(f"Segment {segment_id} — no ambient bed ({e})")
+        return narration_path
+
+
+def treatment_for_style(visual_style: str) -> str | None:
+    """
+    Map the project's visual style onto a treatment.
+
+    The Script screen offers a style and the planner stores it, but nothing ever
+    read it back — "Vox paper-collage" produced exactly the same picture as any
+    other choice. Matching is loose because the styles are written as prose.
+    """
+    if not visual_style:
+        return None
+    s = visual_style.lower()
+    for key, name in (
+        ("vox", "vox_collage"), ("collage", "vox_collage"), ("paper", "vox_collage"),
+        ("silhouette", "silhouette"),
+        ("illustrat", "illustration"), ("drawn", "illustration"), ("painted", "illustration"),
+        ("documentary", "documentary"), ("archival", "documentary"), ("vintage", "documentary"),
+    ):
+        if key in s:
+            return name
+    return None
+
+
+def _apply_treatment(shot: dict, visual_path: str, output_mp4_path: str,
+                     width: int, height: int, on_progress=None,
+                     default_filter: str | None = None) -> str:
+    """
+    Render the shot's treatment onto a copy of the image and return its path.
+
+    Falls back to the untreated image on any failure — a look is never worth
+    losing the shot over. The treated file is cached beside the shot clip, so the
+    Pillow work happens once per shot rather than once per render.
+    """
+    treatment = shot.get("treatment") or {}
+    if not isinstance(treatment, dict):
+        return visual_path
+    name = (treatment.get("filter") or "none").strip().lower()
+
+    # "vignette" is what the upconverter writes when nobody chose anything, so a
+    # project style is allowed to override it. A deliberately chosen treatment
+    # still wins.
+    if default_filter and name in ("none", "vignette"):
+        name = default_filter
+
+    func_name = SINGLE_IMAGE_TREATMENTS.get(name)
+    if not func_name or not visual_path or not os.path.exists(visual_path):
+        return visual_path
+
+    treated = f"{os.path.splitext(output_mp4_path)[0]}_{name}.jpg"
+    if os.path.exists(treated) and os.path.getsize(treated) > 0:
+        return treated
+
+    try:
+        from pipeline import magick_processor
+        getattr(magick_processor, func_name)(visual_path, treated, width, height)
+        if os.path.exists(treated) and os.path.getsize(treated) > 0:
+            if on_progress:
+                on_progress(f"Applied {name} treatment")
+            return treated
+    except Exception as e:
+        if on_progress:
+            on_progress(f"Treatment '{name}' failed ({e}); using the untreated image")
+    return visual_path
+
+
+def _resolve_pin_path(pin_file: str, project_dir: str, root: str = None) -> str:
+    """
+    Resolve a shot's pin to a real file, or None.
+
+    Pins come from two places and are written differently. The storyboard writes
+    library-relative paths ("library/images/x.jpg"); the schema-v1 fallback writes
+    project-local names ("1.jpg"). Only the project-local form used to be tried, so
+    an image chosen on the board silently lost to the retrieved one at render time.
+    """
+    if not pin_file or not isinstance(pin_file, str):
+        return None
+    cleaned = pin_file.strip().replace("\\", "/")
+    if not cleaned:
+        return None
+
+    if os.path.isabs(cleaned) and os.path.exists(cleaned):
+        return os.path.normpath(cleaned)
+
+    if root is None:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    for candidate in (os.path.join(project_dir, cleaned), os.path.join(root, cleaned)):
+        if os.path.exists(candidate):
+            return os.path.normpath(candidate)
+    return None
+
+
 def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height: int, fps: int = 30) -> str:
     """Generate a SHA-1 hash for shot content cache lookup."""
     query_or_pin = str(shot.get("pin") or shot.get("query") or "")
@@ -100,7 +286,11 @@ def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height
     dur_str = f"{resolved_duration:.3f}"
     res_str = f"{width}x{height}"
     
-    raw = f"{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}"
+    # Bump when the rendered result changes for identical inputs, or every cached
+    # clip from the old behaviour is served back and the fix looks like a no-op.
+    # v2: motion effect is honoured (shots used to render as fixed frames) and
+    #     treatments are applied to the image.
+    raw = f"v2|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -310,6 +500,7 @@ def render_shot_clip(
     audio_path: str | None = None,
     fps: int = 30,
     on_progress=None,
+    default_treatment: str | None = None,
 ) -> str:
     """
     Render a single shot into an MP4 clip using an FFmpeg filtergraph.
@@ -321,8 +512,7 @@ def render_shot_clip(
     if num_frames < 1:
         num_frames = 1
 
-    motion = shot.get("motion", {})
-    motion_kind = motion.get("kind", "zoom_in") if isinstance(motion, dict) else (motion or "zoom_in")
+    motion_kind = resolve_motion_effect(shot.get("motion"))
     text_overlay = shot.get("text_overlay")
     transition_in = shot.get("transition_in", "cut")
     transition_out = shot.get("transition_out", "cut")
@@ -331,17 +521,34 @@ def render_shot_clip(
     # Base scale & zoompan
     pad_w = int(width * 1.25)
     pad_h = int(height * 1.25)
+
+    # Treatment (the "grade" look). magick_processor has implemented vignette,
+    # vox_collage, documentary, illustration and silhouette all along, but the
+    # compositor only ever used `treatment` to build a cache key and rendered the
+    # raw image — so every shot in every film came out untreated.
+    visual_path = _apply_treatment(shot, visual_path, output_mp4_path, pad_w, pad_h,
+                                   on_progress, default_treatment)
+
     filters = [f"scale={pad_w}:{pad_h}"]
 
-    # Motion (Ken Burns)
+    # Motion (Ken Burns).
+    #
+    # The travel used to be a flat 15% however long the shot ran. Over a 3s shot
+    # that reads as a push; over the ~19s segments this app now produces it is
+    # 0.8% per second — indistinguishable from a still frame. Scale the travel
+    # with duration so the *rate* stays constant, and cap it so the crop stays
+    # inside the 1.25x padding.
+    travel = max(0.06, min(0.24, 0.05 * duration))
+    pan_zoom = 1.0 + travel
+
     if motion_kind == "zoom_in":
-        filters.append(f"zoompan=z='1.0+0.15*(on/{num_frames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={num_frames}:s={width}x{height}:fps={fps}")
+        filters.append(f"zoompan=z='1.0+{travel:.4f}*(on/{num_frames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={num_frames}:s={width}x{height}:fps={fps}")
     elif motion_kind == "zoom_out":
-        filters.append(f"zoompan=z='1.15-0.15*(on/{num_frames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={num_frames}:s={width}x{height}:fps={fps}")
+        filters.append(f"zoompan=z='{1.0 + travel:.4f}-{travel:.4f}*(on/{num_frames})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={num_frames}:s={width}x{height}:fps={fps}")
     elif motion_kind == "pan_right":
-        filters.append(f"zoompan=z='1.1':x='(iw-iw/zoom)*(on/{num_frames})':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
+        filters.append(f"zoompan=z='{pan_zoom:.4f}':x='(iw-iw/zoom)*(on/{num_frames})':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
     elif motion_kind == "pan_left":
-        filters.append(f"zoompan=z='1.1':x='(iw-iw/zoom)*(1-on/{num_frames})':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
+        filters.append(f"zoompan=z='{pan_zoom:.4f}':x='(iw-iw/zoom)*(1-on/{num_frames})':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
     else:
         filters.append(f"zoompan=z='1.0':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
 
@@ -516,6 +723,7 @@ def compose_segment(
     sfx: list = None,
     level1_overlay: dict = None,
     segment_dict: dict = None,
+    visual_style: str = "",
 ) -> str:
     """
     Compose a single segment into an MP4 of resolution width x height.
@@ -552,6 +760,11 @@ def compose_segment(
     except ValueError as e:
         raise RuntimeError(f"ffprobe returned non-numeric audio duration '{dur_res.stdout.strip()}' for '{final_audio_path}'") from e
 
+    final_audio_path = _add_ambient_bed(
+        final_audio_path, segment_dict, total_audio_duration,
+        cache_dir, segment_id, on_progress,
+    )
+
     # Extract shot list from segment_dict (Schema v2) or build single shot (Schema v1)
     shots = []
     if segment_dict and "shots" in segment_dict and segment_dict["shots"]:
@@ -585,11 +798,14 @@ def compose_segment(
         # Determine visual path for shot
         shot_visual = visual_path
         if shot.get("pin"):
-            pin_file = shot["pin"]
-            project_dir = os.path.dirname(visual_path)
-            cand1 = os.path.join(project_dir, pin_file)
-            if os.path.exists(cand1):
-                shot_visual = cand1
+            resolved_pin = _resolve_pin_path(shot["pin"], os.path.dirname(visual_path))
+            if resolved_pin:
+                shot_visual = resolved_pin
+            elif on_progress:
+                on_progress(
+                    f"Segment {segment_id} — pinned image not found: {shot['pin']} "
+                    f"(falling back to the retrieved image)"
+                )
 
         # Burn subtitles only on first shot of segment if SRT present
         shot_srt = srt_path if i == 0 else None
@@ -607,6 +823,7 @@ def compose_segment(
                 srt_path=shot_srt,
                 fps=FPS,
                 on_progress=on_progress,
+                default_treatment=treatment_for_style(visual_style),
             )
 
         shot_clip_paths.append(shot_mp4)

@@ -9,6 +9,9 @@ vendor/
 # ── User settings / API keys ─────────────────────────────────────────────────
 config/settings.json
 
+# ── Machine-specific UI state (absolute paths, changes every session) ────────
+config/last_project.json
+
 # ── Python bytecode ───────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
@@ -41,3 +44,17 @@ library/render_usage.json
 projects/
 temp_animated_drawings/
 test_cache/
+
+# ── TTS model weights (764MB, re-downloadable, exceed GitHub's 100MB limit) ──
+config/kokoro/
+config/kokoro_models/
+
+# ── Generated library thumbnails ─────────────────────────────────────────────
+library/_thumbnails/
+
+# ── Pre-refactor backups ─────────────────────────────────────────────────────
+*.pre-voicestudio
+
+# ── Google Drive sync scratch ────────────────────────────────────────────────
+.tmp.driveupload/
+

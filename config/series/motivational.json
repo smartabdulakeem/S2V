@@ -1,0 +1,56 @@
+{
+  "series_slug": "motivational",
+  "display_name": "Motivational / Faceless Speech",
+
+  "_note": "Added 2026-08-15. This pack is NOT calibrated: min_score and weak_band are inherited from config/library_config.json defaults, not measured against real motivational imagery, because the library holds almost none yet. Generate the MO tier of library/PROMPT_PACK.md first, then re-run calibration. Until then retrieval will be conservative and leave gaps, which is the correct failure.",
+
+  "voice": {
+    "id": "en-US-GuyNeural",
+    "steering": "Speak with steady conviction, unhurried, building. Long pauses between statements.",
+    "tone": "Direct Motivational Address"
+  },
+
+  "grade": "documentary",
+  "caption_style": "bottom_center",
+
+  "_shot_rhythm_note": "Motivational faceless video holds one image, or a slow moving background, for a long time. 30s is the intent. It CANNOT be honoured yet: apply_shot_rhythm floors at one shot per segment, so a 47-segment script still yields 47 images however this is set. See ROADMAP.md C1 and tests/test_shot_count_floor.py.",
+  "shot_rhythm_seconds": 30.0,
+
+  "world_anchor": "contemporary, no fixed period or place",
+
+  "style_block": "Cinematic film still, anamorphic lens, dramatic directional light, deep contrast, muted desaturated colour grade, shallow depth of field, fine film grain, wide negative space for caption text.",
+
+  "negative_block": "No text, no watermark, no signature, no logo, no caption, no title card, no motivational slogans rendered in the image, no stock-photo smiling, no plastic-looking skin, no duplicated limbs, no distorted hands, no recognisable celebrity likeness, no brand marks.",
+
+  "style_presets": {
+    "documentary": "Cinematic documentary photography, natural lighting, high dynamic range, muted colour, shallow depth of field.",
+    "silhouette": "High contrast silhouette against a bright ground, subject fully dark, no facial detail, strong graphic shape.",
+    "illustration": "Painted editorial illustration, visible brushwork, limited palette, strong shapes, no photographic detail.",
+    "cinematic": "Cinematic film still, anamorphic lens, dramatic directional light, deep contrast, muted colour grade, fine grain."
+  },
+
+  "calibration": {
+    "min_score": 0.2796,
+    "weak_band": 0.0045,
+    "calibrated_at": null,
+    "real_queries": []
+  },
+
+  "seed_queries": [
+    "lone figure walking a long empty road at first light",
+    "a runner climbing stadium steps alone before sunrise",
+    "hands gripping a barbell on a chalked floor",
+    "a person standing at a window looking out over a waking city",
+    "an empty gym in low light before anyone arrives",
+    "a single desk lamp burning in a dark room late at night",
+    "a mountain path disappearing into cloud",
+    "a figure seen from behind facing open water",
+    "worn training shoes set by a door before dawn",
+    "a hand writing in a notebook by lamplight",
+    "a crowd blurred while one still figure stands sharp",
+    "sunlight breaking over a city skyline",
+    "a closed door with light showing beneath it",
+    "a long staircase climbing out of frame",
+    "a person alone at the edge of a wide open field"
+  ]
+}

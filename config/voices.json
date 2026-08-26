@@ -9,7 +9,7 @@
         "lang": "en-GB",
         "captions": "fast",
         "timings": true,
-        "enabled": true
+        "enabled": false
       },
       {
         "id": "google:en-US-Neural2-F",
@@ -18,7 +18,7 @@
         "lang": "en-US",
         "captions": "fast",
         "timings": true,
-        "enabled": true
+        "enabled": false
       },
       {
         "id": "google:en-US-Wavenet-D",
@@ -27,7 +27,7 @@
         "lang": "en-US",
         "captions": "fast",
         "timings": true,
-        "enabled": false
+        "enabled": true
       },
       {
         "id": "google:en-US-Journey-F",
@@ -36,7 +36,7 @@
         "lang": "en-US",
         "captions": "slow",
         "timings": false,
-        "enabled": true
+        "enabled": false
       },
       {
         "id": "google:en-US-Studio-Q",
@@ -45,7 +45,7 @@
         "lang": "en-US",
         "captions": "slow",
         "timings": false,
-        "enabled": false
+        "enabled": true
       },
       {
         "id": "google:ar-XA-Wavenet-B",
@@ -194,7 +194,7 @@
         "lang": "multi",
         "captions": "fast",
         "timings": true,
-        "enabled": true
+        "enabled": false
       },
       {
         "id": "google:gemini-3.1-flash-tts-preview:Puck",
@@ -235,11 +235,38 @@
     ]
   },
   {
-    "engine": "Kokoro",
+    "engine": "Kokoro (Offline AI)",
     "voices": [
       {
         "id": "local:kokoro-af_heart",
-        "label": "af_heart (female)",
+        "label": "Heart (US Female - Flagship)",
+        "gender": "female",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:kokoro-af_bella",
+        "label": "Bella (US Female - Warm)",
+        "gender": "female",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "local:kokoro-af_sarah",
+        "label": "Sarah (US Female - Expressive)",
+        "gender": "female",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "local:kokoro-af_sky",
+        "label": "Sky (US Female - Dynamic)",
         "gender": "female",
         "lang": "en-US",
         "captions": "slow",
@@ -248,7 +275,16 @@
       },
       {
         "id": "local:kokoro-am_michael",
-        "label": "am_michael (male)",
+        "label": "Michael (US Male - Narrative)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:kokoro-am_adam",
+        "label": "Adam (US Male - Deep/Direct)",
         "gender": "male",
         "lang": "en-US",
         "captions": "slow",
@@ -256,9 +292,45 @@
         "enabled": true
       },
       {
+        "id": "local:kokoro-am_onyx",
+        "label": "Onyx (US Male - Authoritative)",
+        "gender": "male",
+        "lang": "en-US",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
         "id": "local:kokoro-bf_emma",
-        "label": "bf_emma (female)",
+        "label": "Emma (British Female - Crisp)",
         "gender": "female",
+        "lang": "en-GB",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:kokoro-bf_isabella",
+        "label": "Isabella (British Female - Elegant)",
+        "gender": "female",
+        "lang": "en-GB",
+        "captions": "slow",
+        "timings": false,
+        "enabled": false
+      },
+      {
+        "id": "local:kokoro-bm_george",
+        "label": "George (British Male - Classic)",
+        "gender": "male",
+        "lang": "en-GB",
+        "captions": "slow",
+        "timings": false,
+        "enabled": true
+      },
+      {
+        "id": "local:kokoro-bm_lewis",
+        "label": "Lewis (British Male - Storyteller)",
+        "gender": "male",
         "lang": "en-GB",
         "captions": "slow",
         "timings": false,
@@ -285,7 +357,7 @@
         "lang": "en + ar",
         "captions": "slow",
         "timings": false,
-        "enabled": true
+        "enabled": false
       },
       {
         "id": "local:supertonic-m2",
@@ -294,7 +366,7 @@
         "lang": "en + ar",
         "captions": "slow",
         "timings": false,
-        "enabled": false
+        "enabled": true
       },
       {
         "id": "local:supertonic-m3",
@@ -357,7 +429,7 @@
         "lang": "en + ar",
         "captions": "slow",
         "timings": false,
-        "enabled": false
+        "enabled": true
       }
     ]
   },
@@ -371,7 +443,7 @@
         "lang": "en-US",
         "captions": "slow",
         "timings": false,
-        "enabled": false
+        "enabled": true
       },
       {
         "id": "edge:en-US-AriaNeural",
@@ -407,7 +479,7 @@
         "lang": "en-AU",
         "captions": "slow",
         "timings": false,
-        "enabled": false
+        "enabled": true
       },
       {
         "id": "edge:en-AU-NatashaNeural",

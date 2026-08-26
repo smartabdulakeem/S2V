@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 import urllib.error
 import urllib.request
 from typing import Optional, Dict, Any, List
@@ -63,6 +64,222 @@ def sanitize_output_filename(filename: str) -> str:
 
 # ── Sentence / paragraph splitter ──────────────────────────────────────────────
 
+def _split_long_paragraph(paragraph: str, max_words: int) -> list:
+    """Break one over-long paragraph at sentence boundaries, keeping every word."""
+    raw_sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+    sentences = [s.strip() for s in raw_sentences if s.strip()]
+    if not sentences:
+        return [paragraph]
+
+    chunks = []
+    current, count = [], 0
+    for sentence in sentences:
+        wc = len(sentence.split())
+        if count + wc > max_words and current:
+            chunks.append(" ".join(current))
+            current, count = [sentence], wc
+        else:
+            current.append(sentence)
+            count += wc
+    if current:
+        chunks.append(" ".join(current))
+
+    # Text with no sentence punctuation at all leaves one enormous "sentence".
+    # A hard word-boundary split is ugly, but far better than a segment that
+    # holds a single image for minutes.
+    final = []
+    for chunk in chunks:
+        words = chunk.split()
+        if len(words) > max_words * 1.5:
+            for i in range(0, len(words), max_words):
+                final.append(" ".join(words[i:i + max_words]))
+        else:
+            final.append(chunk)
+    return final
+
+
+def _cap_segment_length(segments: list, max_words: int) -> list:
+    """
+    Keep the writer's paragraph boundaries, but never let one run unwatchably long.
+
+    The paragraph strategies used to return whatever they were given, applying
+    max_words only in the unformatted-text fallback. A script pasted as one solid
+    block after its title became a single 5,414-word segment — one shot held for
+    the length of the film. Paragraph breaks still decide where segments start;
+    this only subdivides a paragraph that is too long to be a scene.
+    """
+    capped = []
+    for seg in segments:
+        if len(seg.split()) > max_words:
+            capped.extend(_split_long_paragraph(seg, max_words))
+        else:
+            capped.append(seg)
+    return capped
+
+
+#: Measured on this machine: Supertonic reads ~2.6 words per second.
+WORDS_PER_SECOND = 2.6
+
+#: Consecutive shots should not repeat a move, or the cut reads as a glitch.
+_MOTION_CYCLE = ("zoom_in", "pan_left", "zoom_out", "pan_right")
+
+
+def split_narration_for_shots(narration: str, n: int) -> list:
+    """Split one segment's narration into n runs of whole sentences."""
+    if n <= 1:
+        return [narration]
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', narration) if s.strip()]
+
+    # A shot boundary is visual only — the narration is one continuous take and
+    # shot durations are split evenly across it. So when a segment has fewer
+    # sentences than shots wanted, splitting mid-sentence costs nothing and is the
+    # difference between a 12-second hold and a 5-second one.
+    if len(sentences) < n:
+        words = narration.split()
+        if len(words) < n * 3:
+            return [narration] if len(sentences) <= 1 else sentences
+        size = max(3, len(words) // n)
+        chunks = [" ".join(words[i:i + size]) for i in range(0, len(words), size)]
+        while len(chunks) > n:
+            chunks[-2] = chunks[-2] + " " + chunks[-1]
+            chunks.pop()
+        return chunks
+
+    total = sum(len(s.split()) for s in sentences)
+    target = total / n
+    chunks, current, count = [], [], 0
+    for sentence in sentences:
+        current.append(sentence)
+        count += len(sentence.split())
+        if count >= target and len(chunks) < n - 1:
+            chunks.append(" ".join(current))
+            current, count = [], 0
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
+
+
+def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
+    """
+    Cut each segment into several shots so the picture changes on a rhythm.
+
+    A segment holds one image for its whole span. At the ~19s segments this app
+    produces that is a slideshow, however good the Ken Burns move is — broadcast
+    documentary cuts every 4-6 seconds. Splitting the narration into runs of whole
+    sentences gives each shot its own search query, so the library supplies a
+    different image per shot and diversity keeps them distinct.
+
+    Existing pins are carried over positionally: a deliberate choice for the first
+    shot survives a rhythm change, later ones are re-planned.
+
+    Returns {"shots_before": int, "shots_after": int, "segments": int}.
+    """
+    seconds_per_shot = max(2.0, float(seconds_per_shot or 7.0))
+    before = after = 0
+
+    for seg in script_data.get("segments", []):
+        seg_id = seg.get("segment_id", 1)
+        narration = seg.get("narration", "") or ""
+        old_shots = seg.get("shots") or []
+        before += len(old_shots)
+
+        words = len(narration.split())
+        est_seconds = words / WORDS_PER_SECOND if words else 0.0
+        wanted = max(1, int(round(est_seconds / seconds_per_shot))) if est_seconds else 1
+
+        chunks = split_narration_for_shots(narration, wanted)
+
+        # Carry over whatever the user had already settled, in order.
+        carried = [
+            {k: s[k] for k in ("source", "pin", "resolved", "resolved_score") if k in s}
+            for s in old_shots
+        ]
+        template = old_shots[0] if old_shots else {}
+        treatment = template.get("treatment") or {"filter": "vignette", "grade": None}
+
+        new_shots = []
+        for i, chunk in enumerate(chunks):
+            shot = {
+                "shot_id": f"{seg_id}{chr(97 + i)}",
+                "duration": None,
+                "source": "library",
+                "query": extract_keyword(chunk) or extract_keyword(narration) or "documentary shot",
+                "pin": None,
+                "min_score": template.get("min_score", 0.26),
+                "motion": {"kind": "ken_burns", "effect": _MOTION_CYCLE[i % len(_MOTION_CYCLE)]},
+                "treatment": dict(treatment),
+                # The slice of narration this shot covers. Without it every shot
+                # in a segment shares one description and gets the same prompt.
+                "scene": chunk,
+            }
+            if i < len(carried) and carried[i].get("pin"):
+                shot.update(carried[i])
+            new_shots.append(shot)
+
+        seg["shots"] = new_shots
+        after += len(new_shots)
+
+    return {
+        "shots_before": before,
+        "shots_after": after,
+        "segments": len(script_data.get("segments", [])),
+    }
+
+
+def _normalise_title(value: str) -> str:
+    """Lowercase, strip punctuation and collapse whitespace, for title comparison."""
+    cleaned = unicodedata.normalize("NFKD", value or "").lower()
+    cleaned = re.sub(r"[^\w\s]", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def drop_title_segment(segments: list, title: str) -> list:
+    """
+    Remove a leading segment that is just the episode title.
+
+    NOT USED BY THE PIPELINE. Everything in the script box is narrated, including
+    a title line the writer chose to leave there — silently deleting a line of
+    their script is worse than narrating a heading. The Title *field* never
+    produced a segment in the first place; the segment came from the pasted text.
+
+    Kept because the behaviour is still wanted for imported scripts that repeat
+    their heading, and because the matching rules below were expensive to get
+    right. Call it explicitly if you want it.
+    """
+    if not segments or len(segments) < 2 or not title:
+        return segments
+
+    first = _normalise_title(segments[0])
+    wanted = _normalise_title(title)
+    if not first or not wanted:
+        return segments
+
+    # A genuine opening paragraph is longer than a heading.
+    if len(segments[0].split()) > 40:
+        return segments
+
+    if first == wanted:
+        return segments[1:]
+
+    # Prose that merely opens with the title phrase is still prose, and dropping
+    # it would silently delete the first scene. A heading does not end in a full
+    # stop; narration does. That is what separates
+    #   "S1E2 — The House of Wisdom After the Flood: Nimrod, the Tower"   (heading)
+    # from
+    #   "The House of Wisdom was not built in a day, and the story ... down."
+    if segments[0].rstrip().endswith((".", "!", "?")):
+        return segments
+
+    if first in wanted or wanted in first:
+        return segments[1:]
+
+    first_tokens, wanted_tokens = set(first.split()), set(wanted.split())
+    if wanted_tokens and len(first_tokens & wanted_tokens) / len(wanted_tokens) >= 0.8:
+        return segments[1:]
+
+    return segments
+
+
 def split_into_segments(text: str, max_words: int = 60) -> list:
     """
     Split a plain-text script into a list of narration strings.
@@ -103,7 +320,7 @@ def split_into_segments(text: str, max_words: int = 60) -> list:
                 buf = p
         if buf:
             merged.append(buf)
-        return merged
+        return _cap_segment_length(merged, max_words)
 
     # ── Strategy 2: single-line paragraph split ───────────────────────────────
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
@@ -122,7 +339,7 @@ def split_into_segments(text: str, max_words: int = 60) -> list:
                 buf = ln
         if buf:
             merged.append(buf)
-        return merged
+        return _cap_segment_length(merged, max_words)
 
     # ── Strategy 3: sentence-group fallback ───────────────────────────────────
     raw_sentences = re.split(r'(?<=[.!?])\s+', text)
@@ -404,8 +621,14 @@ def _http_request_with_backoff(req, timeout=90, max_retries=3):
                 raise err
 
 
+# Bump when segmentation changes shape, so cached plans built by the old rules are
+# not served back. Without this, re-planning the same script returns the stale plan
+# and a segmentation fix looks like it did nothing.
+PLANNER_VERSION = 2
+
+
 def _get_planning_cache_key(text: str, title: str, voice: str, visual_style: str, ai_guideline: str, voice_dialect: str, narrative_tone: str, speaker_mode: str) -> str:
-    raw = f"{text}:{title}:{voice}:{visual_style}:{ai_guideline}:{voice_dialect}:{narrative_tone}:{speaker_mode}"
+    raw = f"v{PLANNER_VERSION}:{text}:{title}:{voice}:{visual_style}:{ai_guideline}:{voice_dialect}:{narrative_tone}:{speaker_mode}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 

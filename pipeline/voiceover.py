@@ -98,6 +98,59 @@ def _transcode_to_mp3(input_bytes: bytes, output_path: str, is_raw_pcm: bool = F
         except OSError:
             pass
 
+#: Broadcast mastering chain for local TTS.
+#
+# Offline engines output a raw, unmastered signal: even, quiet, and centred, with
+# no presence lift and no dynamics. That is what "flat" means here — it is not the
+# model's expressiveness, it is the absence of the processing every broadcast
+# voice gets. Costs nothing and needs no download.
+#
+#   highpass   drop rumble below the voice
+#   equalizer  cut boxiness at 300Hz, lift presence at 3.2kHz, add air at 9kHz
+#   compand    gentle compression so quiet syllables come forward
+#   loudnorm   EBU R128 to a consistent broadcast level
+MASTERING_CHAIN = (
+    "highpass=f=85,"
+    "equalizer=f=300:t=q:w=1.2:g=-2,"
+    "equalizer=f=3200:t=q:w=1.4:g=3.5,"
+    "equalizer=f=9000:t=q:w=1.0:g=2,"
+    "compand=attacks=0.02:decays=0.25:points=-60/-60|-32/-20|-18/-12|-6/-7|0/-6:soft-knee=4:gain=2,"
+    "loudnorm=I=-16:TP=-1.5:LRA=11"
+)
+
+
+def master_audio(input_path: str, output_path: str = None, chain: str = None) -> str:
+    """
+    Apply the mastering chain to a narration file, in place by default.
+
+    Returns the path written. On any failure the original file is left untouched
+    and its path returned — a render must never be lost to a cosmetic filter.
+    """
+    target = output_path or input_path
+    ffmpeg = _find_ffmpeg()
+    tmp_out = target + ".mastered.mp3"
+    cmd = [
+        ffmpeg, "-y", "-i", input_path,
+        "-af", chain or MASTERING_CHAIN,
+        "-codec:a", "libmp3lame", "-q:a", "2",
+        tmp_out,
+    ]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0 and os.path.exists(tmp_out) and os.path.getsize(tmp_out) > 1000:
+            os.replace(tmp_out, target)
+            return target
+    except Exception:
+        pass
+    finally:
+        if os.path.exists(tmp_out):
+            try:
+                os.remove(tmp_out)
+            except OSError:
+                pass
+    return input_path
+
+
 def _sanitize_text(text: str) -> str:
     if not text:
         return ""
@@ -378,6 +431,142 @@ def _generate_with_local_supertonic(
             except OSError:
                 pass
 
+# ── Kokoro Offline TTS ────────────────────────────────────────────────────────
+
+_kokoro_instance = None
+_kokoro_lock = threading.Lock()
+
+def _get_kokoro_instance():
+    global _kokoro_instance
+    with _kokoro_lock:
+        if _kokoro_instance is None:
+            from kokoro_onnx import Kokoro
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+            candidates = [
+                (
+                    os.path.join(base_dir, "config", "kokoro_models", "kokoro-v1.0.onnx"),
+                    os.path.join(base_dir, "config", "kokoro_models", "voices-v1.0.bin")
+                ),
+                (
+                    os.path.join(base_dir, "config", "kokoro", "kokoro-v1.0.onnx"),
+                    os.path.join(base_dir, "config", "kokoro", "voices-v1.0.bin")
+                ),
+            ]
+            
+            model_path, voices_path = None, None
+            for mp, vp in candidates:
+                if os.path.exists(mp) and os.path.exists(vp):
+                    model_path, voices_path = mp, vp
+                    break
+                    
+            if not model_path:
+                model_path, voices_path = candidates[0]
+                
+            # kokoro-onnx builds its own InferenceSession with NO SessionOptions,
+            # so the SessionOptions monkeypatch above never fires for it and the
+            # SUPERTONIC_* env vars do not apply either. Left alone it takes every
+            # core. Hand it a session we configured instead.
+            _kokoro_instance = _build_kokoro(Kokoro, model_path, voices_path)
+        return _kokoro_instance
+
+
+def _build_kokoro(Kokoro, model_path, voices_path):
+    """Kokoro on a thread-capped CPU session, so synthesis cannot peg the machine."""
+    try:
+        import onnxruntime as ort
+        opts = ort.SessionOptions()
+        opts.intra_op_num_threads = int(os.environ.get("KOKORO_INTRA_OP_THREADS", "2"))
+        opts.inter_op_num_threads = int(os.environ.get("KOKORO_INTER_OP_THREADS", "1"))
+        opts.enable_cpu_mem_arena = False
+        session = ort.InferenceSession(
+            model_path, sess_options=opts, providers=["CPUExecutionProvider"]
+        )
+        return Kokoro.from_session(session, voices_path)
+    except (AttributeError, ImportError):
+        # Older kokoro-onnx has no from_session; uncapped is better than broken.
+        return Kokoro(model_path, voices_path)
+
+
+def _generate_with_local_kokoro(
+    narration: str,
+    voice: str,
+    voice_rate: str,
+    output_path: str,
+    on_progress=None,
+    segment_id: int = 0
+):
+    """Generate audio offline using local Kokoro-ONNX synthesis."""
+    import soundfile as sf
+    narration = _sanitize_text(narration)
+    if not narration:
+        if on_progress:
+            on_progress(f"Segment {segment_id} — Narration is empty after sanitization")
+        _transcode_to_mp3(b"\x00" * 3200, output_path, is_raw_pcm=True)
+        return
+
+    # Extract voice name (e.g. "local:kokoro-af_heart" -> "af_heart")
+    voice_name = "af_heart"
+    v_clean = voice.lower()
+    if "kokoro-" in v_clean:
+        voice_name = v_clean.split("kokoro-", 1)[1].strip()
+    elif ":" in v_clean:
+        voice_name = v_clean.split(":", 1)[1].strip()
+
+    # Map speed rate
+    speed = 1.0
+    if voice_rate:
+        voice_rate = voice_rate.strip()
+        if voice_rate.endswith("%"):
+            try:
+                val = float(voice_rate[:-1])
+                speed = round(1.0 + (val / 100.0), 2)
+                speed = max(0.5, min(2.0, speed))
+            except ValueError:
+                pass
+
+    if on_progress:
+        on_progress(f"Segment {segment_id} — Generating offline voiceover via Kokoro ({voice_name})")
+
+    kokoro = _get_kokoro_instance()
+    
+    # Map language
+    lang = "en-us"
+    if voice_name.startswith("b"):
+        lang = "en-gb"
+    elif voice_name.startswith("j"):
+        lang = "ja"
+    elif voice_name.startswith("z"):
+        lang = "zh"
+    elif voice_name.startswith("e"):
+        lang = "es"
+    elif voice_name.startswith("f"):
+        lang = "fr"
+    elif voice_name.startswith("h"):
+        lang = "hi"
+    elif voice_name.startswith("i"):
+        lang = "it"
+    elif voice_name.startswith("p"):
+        lang = "pt-br"
+
+    samples, sr = kokoro.create(narration, voice=voice_name, speed=speed, lang=lang)
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        temp_wav = tmp.name
+
+    try:
+        sf.write(temp_wav, samples, sr)
+        if not os.path.exists(temp_wav) or os.path.getsize(temp_wav) < 1000:
+            raise RuntimeError("Kokoro generated an empty or invalid WAV file.")
+            
+        with open(temp_wav, "rb") as f:
+            wav_bytes = f.read()
+        _transcode_to_mp3(wav_bytes, output_path)
+    finally:
+        try:
+            os.unlink(temp_wav)
+        except OSError:
+            pass
 
 
 # ── Microsoft Edge TTS ────────────────────────────────────────────────────────
@@ -769,6 +958,16 @@ def generate_voiceover(
             cache_dir=cache_dir
         )
 
+    elif voice_lower.startswith("local:kokoro") or voice_lower.startswith("kokoro:"):
+        _generate_with_local_kokoro(
+            narration=tts_text,
+            voice=voice,
+            voice_rate=voice_rate,
+            output_path=output_path,
+            on_progress=on_progress,
+            segment_id=segment_id
+        )
+
     else:
         # Fallback to Microsoft Edge neural voices
         clean_voice = voice
@@ -790,7 +989,22 @@ def generate_voiceover(
             "Check network connection or API status and try again."
         )
 
+    if _mastering_enabled():
+        if on_progress:
+            on_progress(f"Segment {segment_id} — mastering narration audio")
+        master_audio(output_path)
+
     return output_path
+
+
+def _mastering_enabled() -> bool:
+    """config/settings.json → master_narration_audio (default on)."""
+    try:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(base, "config", "settings.json"), "r", encoding="utf-8") as f:
+            return bool(json.load(f).get("master_narration_audio", True))
+    except Exception:
+        return True
 
 
 def get_audio_duration(mp3_path: str) -> float:

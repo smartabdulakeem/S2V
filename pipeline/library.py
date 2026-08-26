@@ -237,12 +237,241 @@ def _load_clip():
     return _MODEL, _PREPROCESS, _TOKENIZER
 
 
+#: Indexes for folders outside the library live here, one file per folder.
+FOLDER_INDEX_DIR = os.path.join(ROOT, "cache", "folder_index")
+
+
+def _folder_index_path(folder_abs: str) -> str:
+    import hashlib
+    key = os.path.abspath(folder_abs).lower().encode("utf-8")
+    return os.path.join(FOLDER_INDEX_DIR, hashlib.sha1(key).hexdigest()[:12] + ".npz")
+
+
+def folder_image_files(folder_abs: str) -> list:
+    """Images directly inside a working folder, sorted."""
+    if not folder_abs or not os.path.isdir(folder_abs):
+        return []
+    exts = (".jpg", ".jpeg", ".png", ".webp")
+    return sorted(
+        os.path.join(folder_abs, n) for n in os.listdir(folder_abs)
+        if n.lower().endswith(exts)
+    )
+
+
+def index_folder(folder_abs: str, on_progress=None):
+    """
+    Index any folder on this machine so a project can work from it directly.
+
+    A working folder is a handful of pictures chosen for one video, kept wherever
+    the user keeps them — a desktop folder, a Drive folder. Paths are stored
+    absolute, because this folder is not inside the library and may never be.
+    Embeddings are reused exactly as the main index does, so re-running after
+    adding one picture costs one picture.
+
+    Returns (image_count, elapsed_seconds).
+    """
+    t0 = time.time()
+    images = folder_image_files(folder_abs)
+    index_path = _folder_index_path(folder_abs)
+    os.makedirs(FOLDER_INDEX_DIR, exist_ok=True)
+
+    if not images:
+        np.savez(index_path, embeddings=np.empty((0, 512), dtype=np.float32),
+                 paths=np.array([], dtype=str))
+        return 0, time.time() - t0
+
+    existing, index_mtime = {}, 0.0
+    if os.path.exists(index_path):
+        index_mtime = os.path.getmtime(index_path)
+        try:
+            data = np.load(index_path)
+            emb = data.get("embeddings") if "embeddings" in data else data.get("emb")
+            old = [str(p).replace("\\", "/") for p in data["paths"]]
+            if emb is not None and len(old) == len(emb):
+                existing = {p: emb[i] for i, p in enumerate(old)}
+        except Exception:
+            existing = {}
+
+    keys = [to_portable_path(p) for p in images]
+    to_embed = [
+        (i, p) for i, (p, key) in enumerate(zip(images, keys))
+        if key not in existing or os.path.getmtime(p) > index_mtime
+    ]
+    if on_progress:
+        on_progress(f"Indexing {len(to_embed)} of {len(images)} image(s) in this folder")
+
+    dim = len(next(iter(existing.values()))) if existing else 512
+    out = np.zeros((len(images), dim), dtype=np.float32)
+    for i, key in enumerate(keys):
+        if key in existing:
+            out[i] = existing[key]
+
+    if to_embed:
+        import torch
+        model, preprocess, _ = _load_clip()
+        for start in range(0, len(to_embed), 64):
+            batch = to_embed[start:start + 64]
+            tensors = []
+            for _, p in batch:
+                try:
+                    tensors.append(preprocess(Image.open(p).convert("RGB")))
+                except Exception:
+                    tensors.append(preprocess(Image.new("RGB", (224, 224), (0, 0, 0))))
+            with torch.no_grad():
+                feats = model.encode_image(torch.tensor(np.stack(tensors)))
+                feats /= feats.norm(dim=-1, keepdim=True)
+                feats = feats.cpu().numpy().astype(np.float32)
+            for (idx, _), vec in zip(batch, feats):
+                out[idx] = vec
+
+    np.savez(index_path, embeddings=out, paths=np.array(keys))
+    return len(images), time.time() - t0
+
+
+def load_folder_index(folder_abs: str):
+    """(embeddings, absolute paths) for a working folder, indexing it if needed."""
+    index_path = _folder_index_path(folder_abs)
+    images = folder_image_files(folder_abs)
+    stale = not os.path.exists(index_path)
+    if not stale:
+        try:
+            data = np.load(index_path)
+            stale = len(data["paths"]) != len(images) or any(
+                os.path.getmtime(p) > os.path.getmtime(index_path) for p in images
+            )
+        except Exception:
+            stale = True
+    if stale:
+        index_folder(folder_abs)
+    data = np.load(_folder_index_path(folder_abs))
+    emb = data.get("embeddings") if "embeddings" in data else data.get("emb")
+    return emb, [str(p).replace("\\", "/") for p in data["paths"]]
+
+
+def _setting(name: str, default=None):
+    """Read one value from config/settings.json, falling back to a default."""
+    try:
+        with open(os.path.join(ROOT, "config", "settings.json"), "r", encoding="utf-8") as f:
+            return json.load(f).get(name, default)
+    except Exception:
+        return default
+
+
 def get_image_files():
+    """
+    Every indexable image, including subfolders.
+
+    Subfolders are how a project keeps its own small set of images: pointing a
+    video at library/images/motivation means retrieval only ever sees those,
+    which is far faster to curate than steering a search across 1,200 pictures.
+    Folders beginning with "_" are workspaces (_inbox, _retired) and stay out.
+    """
     if not os.path.exists(IMAGES_DIR):
         return []
     exts = (".jpg", ".jpeg", ".png", ".webp")
-    files = [os.path.join(IMAGES_DIR, f) for f in os.listdir(IMAGES_DIR) if f.lower().endswith(exts)]
+    files = []
+    for root, dirs, names in os.walk(IMAGES_DIR):
+        dirs[:] = [d for d in dirs if not d.startswith("_")]
+        files.extend(
+            os.path.join(root, n) for n in names if n.lower().endswith(exts)
+        )
     return sorted(files)
+
+
+def list_image_folders() -> list:
+    """Subfolders of library/images that hold images, with their counts."""
+    folders = []
+    if not os.path.exists(IMAGES_DIR):
+        return folders
+    exts = (".jpg", ".jpeg", ".png", ".webp")
+    for entry in sorted(os.listdir(IMAGES_DIR)):
+        full = os.path.join(IMAGES_DIR, entry)
+        if not os.path.isdir(full) or entry.startswith("_"):
+            continue
+        count = sum(
+            1 for root, dirs, names in os.walk(full)
+            for n in names if n.lower().endswith(exts)
+        )
+        if count:
+            folders.append({"name": entry, "count": count})
+    return folders
+
+
+def to_portable_path(path: str) -> str:
+    """
+    Store a path relative to the project when it lives inside it.
+
+    A working folder is often a folder of the project itself, and a script that
+    names its images absolutely stops being portable and trips the validator's
+    "stay inside the project" rule. Only genuinely external folders — a desktop
+    folder, a Drive folder — keep an absolute path.
+    """
+    if not path:
+        return ""
+    absolute = os.path.abspath(str(path))
+    try:
+        rel = os.path.relpath(absolute, ROOT)
+    except ValueError:          # different drive on Windows
+        return absolute.replace("\\", "/")
+    if not rel.startswith(".."):
+        return rel.replace("\\", "/")
+    return absolute.replace("\\", "/")
+
+
+def _path_in_scope(path: str, folder: str) -> bool:
+    """
+    Is this image part of the source the project is currently drawing on?
+
+    With no folder set, the whole library counts. With a working folder, only
+    images inside it do — anything else is left over from a previous choice and
+    must be re-planned rather than silently kept.
+    """
+    if not folder:
+        return True
+    if not path:
+        return False
+    # Compare as absolute paths, because a stored path may be project-relative
+    # while the folder is given absolutely, or the other way round.
+    resolved = os.path.abspath(path if os.path.isabs(path) else os.path.join(ROOT, path))
+    base = os.path.abspath(folder if os.path.isabs(str(folder))
+                           else os.path.join(IMAGES_DIR, str(folder)))
+    return (resolved.replace("\\", "/").lower()
+            .startswith(base.replace("\\", "/").lower().rstrip("/") + "/"))
+
+
+def clear_out_of_scope_choices(script_data: dict, folder: str) -> dict:
+    """
+    Drop image choices that no longer belong to the chosen source.
+
+    Choosing a working folder means "use these pictures". Any pin or remembered
+    match pointing outside it is left over from a previous decision, and keeping
+    it makes the new folder look like it did nothing. Reported rather than done
+    quietly, because some of those pins were deliberate.
+
+    Returns {"pins": n, "resolved": n}.
+    """
+    cleared = {"pins": 0, "resolved": 0}
+    for seg in (script_data or {}).get("segments", []):
+        for shot in seg.get("shots") or []:
+            pin = shot.get("pin")
+            if pin and not _path_in_scope(pin, folder):
+                shot.pop("pin", None)
+                shot["source"] = "library"
+                cleared["pins"] += 1
+            resolved = shot.get("resolved")
+            if resolved and not _path_in_scope(resolved, folder):
+                shot.pop("resolved", None)
+                shot.pop("resolved_score", None)
+                cleared["resolved"] += 1
+    return cleared
+
+
+def _folder_prefix(folder: str) -> str:
+    """Repo-relative path prefix for a project folder, or '' for the whole library."""
+    folder = (folder or "").strip().strip("/\\")
+    if not folder:
+        return ""
+    return f"{os.path.relpath(IMAGES_DIR, ROOT)}/{folder}/".replace("\\", "/")
 
 
 def is_index_current():
@@ -268,50 +497,95 @@ def is_index_current():
     return True
 
 
-def reindex(force=False):
+def _load_existing_embeddings() -> dict:
+    """Embeddings already computed, keyed by repo-relative path."""
+    if not os.path.exists(INDEX_PATH):
+        return {}
+    try:
+        data = np.load(INDEX_PATH)
+        emb = data.get("embeddings") if "embeddings" in data else data.get("emb")
+        paths = [str(p).replace("\\", "/") for p in data["paths"]]
+        if emb is None or len(paths) != len(emb):
+            return {}
+        return {p: emb[i] for i, p in enumerate(paths)}
+    except Exception:
+        return {}
+
+
+def reindex(force=False, on_progress=None):
+    """
+    Bring the CLIP index up to date, embedding only what actually changed.
+
+    This used to re-embed the entire library on any change — adding one image
+    meant 182 seconds of CLIP over 1,176 files, and the storyboard blocked on it
+    with nothing on screen but a spinner. Growing a library one image at a time
+    was the intended workflow and the most expensive thing you could do.
+
+    An image is re-embedded when it is new, or when its file is newer than the
+    index. Everything else keeps the vector it already had.
+
+    Returns (image_count, elapsed_seconds).
+    """
     images = get_image_files()
     if not force and is_index_current():
         data = np.load(INDEX_PATH)
-        emb = data.get("embeddings") if "embeddings" in data else data.get("emb")
         paths = data["paths"]
         return len(paths), 0.0
 
     t0 = time.time()
     if not images:
-        # Save empty index
         np.savez(INDEX_PATH, embeddings=np.empty((0, 512), dtype=np.float32), paths=np.array([], dtype=str))
         return 0, time.time() - t0
 
-    import torch
-    model, preprocess, _ = _load_clip()
+    index_mtime = os.path.getmtime(INDEX_PATH) if os.path.exists(INDEX_PATH) else 0.0
+    existing = {} if force else _load_existing_embeddings()
 
-    batch_size = 64
-    all_embeddings = []
-    
-    for i in range(0, len(images), batch_size):
-        batch_paths = images[i:i + batch_size]
-        batch_tensors = []
-        for p in batch_paths:
-            try:
-                img = Image.open(p).convert("RGB")
-                batch_tensors.append(preprocess(img))
-            except Exception as e:
-                # Fallback black image if corrupt
-                batch_tensors.append(preprocess(Image.new("RGB", (224, 224), (0, 0, 0))))
+    rel_paths = [os.path.relpath(p, ROOT).replace("\\", "/") for p in images]
+    to_embed = [
+        (i, p) for i, (p, rel) in enumerate(zip(images, rel_paths))
+        if rel not in existing or os.path.getmtime(p) > index_mtime
+    ]
 
-        tensor_stack = torch.tensor(np.stack(batch_tensors))
-        with torch.no_grad():
-            features = model.encode_image(tensor_stack)
-            features /= features.norm(dim=-1, keepdim=True)
-            all_embeddings.append(features.cpu().numpy())
+    if on_progress:
+        on_progress(f"Indexing {len(to_embed)} new or changed image(s); "
+                    f"reusing {len(images) - len(to_embed)}")
 
-    embeddings_np = np.vstack(all_embeddings).astype(np.float32)
-    # Store relative normalized forward slash paths for portability and exact matching
-    rel_paths = np.array([os.path.relpath(p, ROOT).replace("\\", "/") for p in images])
+    dim = len(next(iter(existing.values()))) if existing else 512
+    embeddings_np = np.zeros((len(images), dim), dtype=np.float32)
+    for i, rel in enumerate(rel_paths):
+        if rel in existing:
+            embeddings_np[i] = existing[rel]
 
-    np.savez(INDEX_PATH, embeddings=embeddings_np, paths=rel_paths)
-    elapsed = time.time() - t0
-    return len(images), elapsed
+    if to_embed:
+        import torch
+        model, preprocess, _ = _load_clip()
+        batch_size = 64
+        for start in range(0, len(to_embed), batch_size):
+            batch = to_embed[start:start + batch_size]
+            tensors = []
+            for _, p in batch:
+                try:
+                    tensors.append(preprocess(Image.open(p).convert("RGB")))
+                except Exception:
+                    tensors.append(preprocess(Image.new("RGB", (224, 224), (0, 0, 0))))
+            with torch.no_grad():
+                features = model.encode_image(torch.tensor(np.stack(tensors)))
+                features /= features.norm(dim=-1, keepdim=True)
+                features = features.cpu().numpy().astype(np.float32)
+            for (idx, _), vec in zip(batch, features):
+                embeddings_np[idx] = vec
+            if on_progress:
+                on_progress(f"Indexed {min(start + batch_size, len(to_embed))}/{len(to_embed)}")
+
+    # Description vectors are stored with the index so retrieval never has to
+    # embed them at query time.
+    desc_emb = build_description_embeddings(rel_paths, on_progress)
+
+    np.savez(INDEX_PATH, embeddings=embeddings_np, paths=np.array(rel_paths),
+             desc_embeddings=desc_emb)
+    _DESC_INDEX["paths"] = None
+    _DESC_INDEX["embeddings"] = None
+    return len(images), time.time() - t0
 
 
 def load_index():
@@ -323,14 +597,36 @@ def load_index():
     return embeddings, paths
 
 
+#: Encoded queries, kept for the life of the process.
+_QUERY_CACHE = {}
+_QUERY_CACHE_LIMIT = 4000
+
+
 def encode_text_query(query: str):
+    """
+    Embed a piece of text, remembering the result.
+
+    Planning a board encodes each shot's query at least twice — once to score the
+    pictures and once to score their descriptions — and every re-plan encodes the
+    same queries again. At ~70ms each on this CPU that was most of the wait.
+    """
+    key = query or ""
+    cached = _QUERY_CACHE.get(key)
+    if cached is not None:
+        return cached
+
     import torch
     model, _, tokenizer = _load_clip()
-    text_tokens = tokenizer([query])
+    text_tokens = tokenizer([key])
     with torch.no_grad():
         text_features = model.encode_text(text_tokens)
         text_features /= text_features.norm(dim=-1, keepdim=True)
-    return text_features.cpu().numpy()[0]
+    vec = text_features.cpu().numpy()[0]
+
+    if len(_QUERY_CACHE) >= _QUERY_CACHE_LIMIT:
+        _QUERY_CACHE.clear()
+    _QUERY_CACHE[key] = vec
+    return vec
 
 
 # ── 2. Render Usage Counter & Rejection Memory ─────────────────────────────
@@ -406,9 +702,426 @@ def record_rejection(query: str, image_path: str):
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+#: A description has to be close to a paraphrase of the shot query before it can
+#: rescue an image, because CLIP text-to-text similarity has a high floor: any two
+#: short English phrases score 0.6-0.75 whatever they say. Measured on this
+#: library of 1,178 images:
+#:
+#:   threshold  "Prophet Abu Bakr"  "quantum computing data centre"  "sushi kitchen"
+#:   0.62             311 images            315 images                  273 images
+#:   0.85               (top 0.954)           (top 0.797)                 (top 0.726)
+#:
+#: At 0.62 a third of the library "matched" topics it has nothing to do with. Only
+#: a near-paraphrase carries real information, so the bar sits above every score
+#: an unrelated query could reach.
+DESCRIPTION_MIN_SCORE = 0.85
+
+_DESC_CACHE = {}
+#: Description vectors for the currently loaded index, keyed by its path list.
+_DESC_INDEX = {"paths": None, "embeddings": None}
+
+
+def describe_image(rel_path: str, manifest_prompts: dict = None) -> str:
+    """
+    The words that belong to an image: its recorded prompt, else its filename.
+
+    Images generated from a composed prompt are named after that prompt by most
+    tools ("Madinah_outside_borders_7th_century_20260811.jpeg"), which is a real
+    description sitting unused. Retrieval compared the shot query only against the
+    picture, so an image made *for* a shot could still be ranked 833rd for it.
+    """
+    if manifest_prompts:
+        prompt = manifest_prompts.get(rel_path.replace("\\", "/"))
+        if prompt and prompt.strip():
+            return " ".join(prompt.split())[:300]
+
+    stem = os.path.splitext(os.path.basename(rel_path))[0]
+    stem = re.sub(r"\(\d+\)$", "", stem).strip()
+    stem = re.sub(r"[_\-]?\d{8,}.*$", "", stem)        # trailing timestamps
+    stem = re.sub(r"[_\-]+", " ", stem).strip()
+    # A bare content hash carries no meaning; better to admit that than invent one.
+    if not stem or re.fullmatch(r"[0-9a-f]{6,}", stem.replace(" ", "")):
+        return ""
+    return stem
+
+
+def load_manifest_prompts() -> dict:
+    """Recorded prompt per image path, from the library manifest."""
+    prompts = {}
+    if not os.path.exists(MANIFEST_PATH):
+        return prompts
+    try:
+        with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    continue
+                path = (rec.get("path") or "").replace("\\", "/")
+                prompt = rec.get("prompt") or rec.get("query") or ""
+                if path and prompt:
+                    prompts[path] = prompt
+    except Exception:
+        pass
+    return prompts
+
+
+def build_description_embeddings(paths: list, on_progress=None) -> np.ndarray:
+    """Embed each image's description once, aligned with `paths`."""
+    manifest_prompts = load_manifest_prompts()
+    dim = 512
+    out = np.zeros((len(paths), dim), dtype=np.float32)
+    cache = {}
+    total = 0
+    for i, path in enumerate(paths):
+        desc = describe_image(path, manifest_prompts)
+        if not desc:
+            continue
+        vec = cache.get(desc)
+        if vec is None:
+            vec = encode_text_query(desc)
+            cache[desc] = vec
+            total += 1
+        out[i] = vec
+    if on_progress and total:
+        on_progress(f"Embedded {total} image description(s)")
+    return out
+
+
+def description_scores(query: str, paths: list) -> np.ndarray:
+    """
+    Similarity between the shot query and each image's own description.
+
+    These vectors live in the index, computed once when an image is indexed.
+    Computing them on demand meant 73 seconds of CLIP the first time a board was
+    planned, and it made every Replace click pay for a full re-plan — the single
+    biggest reason the app felt slow in manual use.
+    """
+    cached = _DESC_INDEX.get("paths")
+    if cached is not None and cached == list(paths):
+        desc_emb = _DESC_INDEX["embeddings"]
+    else:
+        desc_emb = _load_description_embeddings(paths)
+        _DESC_INDEX["paths"] = list(paths)
+        _DESC_INDEX["embeddings"] = desc_emb
+
+    if desc_emb is None or len(desc_emb) != len(paths):
+        return np.zeros(len(paths), dtype=np.float32)
+    return np.dot(desc_emb, encode_text_query(query)).astype(np.float32)
+
+
+def _load_description_embeddings(paths: list):
+    """Description vectors from the index, or built now if the index predates them."""
+    try:
+        data = np.load(INDEX_PATH)
+        if "desc_embeddings" in data:
+            stored = data["desc_embeddings"]
+            if len(stored) == len(paths):
+                return stored
+    except Exception:
+        pass
+    return build_description_embeddings(paths)
+
+
+#: Openers the prompt composer adds. They describe framing, not subject, and every
+#: prompt starts with one — so they must not be treated as the prompt's identity.
+_PROMPT_OPENERS = (
+    "wide establishing shot of", "low angle shot of", "overhead shot of",
+    "close detail of", "over-the-shoulder view of", "wide shot of",
+    "establishing shot of", "silhouette against", "close up of", "shot of",
+)
+
+_PROMPT_STOPWORDS = {
+    "the", "a", "an", "of", "and", "in", "on", "at", "to", "for", "with", "his",
+    "her", "their", "its", "was", "were", "is", "are", "that", "this", "from",
+}
+
+
+def prompt_head(prompt: str, words: int = 6) -> list:
+    """
+    The first few meaningful words of a prompt — what a filename keeps.
+
+    Image tools name their output after the opening of the prompt, usually three
+    to five words. Those words are the strongest link between a picture and the
+    shot it was made for, and they are exact: no model, no threshold.
+    """
+    if not prompt:
+        return []
+    text = " ".join(str(prompt).split())
+    lowered = text.lower()
+    for opener in _PROMPT_OPENERS:
+        if lowered.startswith(opener):
+            text = text[len(opener):]
+            break
+    # The subject ends at the first comma; everything after is scene and style.
+    subject = text.split(",")[0]
+    tokens = [t for t in re.findall(r"[a-z0-9']+", subject.lower())
+              if t not in _PROMPT_STOPWORDS and len(t) > 1]
+    return tokens[:words]
+
+
+def filename_subject_words(filename: str) -> list:
+    """
+    The subject words left in a filename after the number and framing opener.
+
+    Often there are none. Tools truncate to roughly twenty characters and every
+    prompt starts with a framing phrase, so "12_wide_establishing_sh" carries no
+    subject at all — that was 19 of 47 files in a real folder. Returning an empty
+    list is the honest answer, and the caller must not treat it as a mismatch.
+    """
+    stem = os.path.splitext(os.path.basename(str(filename)))[0]
+    stem = re.sub(r"^\d{1,4}[ _\-.]+", "", stem)
+    lowered = re.sub(r"[_\-]+", " ", stem).strip().lower()
+    for opener in _PROMPT_OPENERS:
+        for cut in range(len(opener), 3, -1):
+            if lowered.startswith(opener[:cut]):
+                lowered = lowered[cut:]
+                break
+        else:
+            continue
+        break
+    words = [w for w in re.findall(r"[a-z0-9']+", lowered)
+             if w not in _PROMPT_STOPWORDS and len(w) > 2]
+    return words
+
+
+def match_shots_by_number(paths: list, shot_count: int, shot_prompts: dict = None) -> dict:
+    """
+    Images named 1_, 2_, 3_… belong to shots 1, 2, 3.
+
+    Generating one image per prompt produces a numbered set, and that number is
+    the user saying exactly which shot the picture is for. Nothing inferred from
+    pixels or filenames can beat it.
+
+    It also rescues the case name matching cannot touch at all: image tools
+    truncate filenames to about twenty characters, so a prompt beginning "wide
+    establishing shot of…" becomes "12_wide_establishing_sh" — nineteen of
+    forty-seven files in a real folder carried no subject words whatsoever.
+
+    Deliberately cautious, because a stray digit must not hijack a library:
+      - the number must be followed by a separator, so 2ab05c49.jpg is not "2"
+      - it must fall within the number of shots
+      - most of the folder has to be numbered, or this is coincidence
+
+    Returns {shot_index: path}, zero-based.
+    """
+    if not paths or shot_count <= 0:
+        return {}
+
+    numbered = {}
+    for path in paths:
+        name = os.path.basename(str(path))
+        # Either a bare number ("12_…") or one carrying a project tag
+        # ("thebat12_…"), which is what Copy all prompts now produces.
+        m = re.match(r"^[a-z]{0,8}(\d{1,4})[ _\-.]", name, re.IGNORECASE)
+        if not m:
+            continue
+        n = int(m.group(1))
+        if 1 <= n <= shot_count and n not in numbered:
+            numbered[n] = str(path).replace("\\", "/")
+
+    if len(numbered) < max(3, int(0.5 * len(paths))):
+        return {}
+
+    out = {}
+    for n, path in numbered.items():
+        idx = n - 1
+
+        # Cross-check the number against the words, when the filename kept any.
+        # Numbers repeat across videos — every set starts at 1 — so once images
+        # from several scripts share a folder the number alone can pair a shot
+        # with a picture from a different film. Words settle it. When the
+        # filename was truncated past its subject there is nothing to check
+        # against, and the number is the only evidence there is.
+        words = filename_subject_words(path)
+        if words and shot_prompts and idx in shot_prompts:
+            prompt_words = set(prompt_head(shot_prompts[idx], words=10))
+            if prompt_words and not (set(words) & prompt_words):
+                continue
+
+        out[idx] = path
+    return out
+
+
+def prompt_name_match(prompt: str, image_path: str, min_words: int = 3) -> int:
+    """
+    How many of a prompt's opening words appear in an image's filename.
+
+    Returns 0 unless at least `min_words` line up, so a single common word never
+    counts as a match. This is checked before any visual scoring: when the user
+    generated a picture from this exact prompt, the filename says so outright and
+    guessing from pixels can only do worse.
+    """
+    head = prompt_head(prompt)
+    if len(head) < min_words:
+        return 0
+    desc = describe_image(image_path)
+    if not desc:
+        return 0
+    # The filename keeps the framing opener the prompt head drops, and tools
+    # truncate names to ~20 characters, so strip it from both sides or a file
+    # called "12_wide_establishing_sh" can never line up with any prompt.
+    lowered = re.sub(r"^\d{1,4}[ _\-.]+", "", desc.lower())
+    for opener in _PROMPT_OPENERS:
+        if lowered.startswith(opener[:len(lowered)]) or lowered.startswith(opener):
+            lowered = lowered[len(opener):]
+            break
+    have = set(re.findall(r"[a-z0-9']+", lowered))
+    hits = sum(1 for t in head if t in have)
+    return hits if hits >= min_words else 0
+
+
+def match_shots_by_prompt_name(shot_prompts: dict, paths: list,
+                               excluded: set = None) -> dict:
+    """
+    Pair shots with images their filenames name, before any visual matching.
+
+    {shot_index: prompt} in, {shot_index: path} out. Each image is claimed once,
+    strongest match first, so two shots with similar prompts cannot both take the
+    same picture.
+    """
+    if not shot_prompts or not paths:
+        return {}
+    taken = {p.replace("\\", "/") for p in (excluded or set())}
+
+    candidates = []
+    for idx, prompt in shot_prompts.items():
+        for path in paths:
+            norm = path.replace("\\", "/")
+            if norm in taken:
+                continue
+            hits = prompt_name_match(prompt, norm)
+            if hits:
+                candidates.append((hits, idx, norm))
+
+    candidates.sort(key=lambda c: -c[0])
+    assigned, used = {}, set()
+    for hits, idx, norm in candidates:
+        if idx in assigned or norm in used:
+            continue
+        assigned[idx] = norm
+        used.add(norm)
+    return assigned
+
+
+def score_matrix(queries: list, paths: list, embeddings, floor: float,
+                 use_descriptions: bool = True):
+    """
+    Every shot scored against every image: rows are queries, columns are images.
+
+    This is the same eligibility score `search` computes, produced for the whole
+    board at once so the assignment can be solved globally instead of shot by
+    shot.
+    """
+    if not queries or len(paths) == 0:
+        return np.zeros((len(queries), len(paths)), dtype=np.float32)
+
+    q_emb = np.stack([encode_text_query(q) for q in queries]).astype(np.float32)
+    scores = np.dot(q_emb, embeddings.T).astype(np.float32)
+
+    if use_descriptions:
+        desc_emb = _load_description_embeddings(paths)
+        if desc_emb is not None and len(desc_emb) == len(paths):
+            desc = np.dot(q_emb, np.asarray(desc_emb, dtype=np.float32).T)
+            lifted = floor + (desc - DESCRIPTION_MIN_SCORE) * 0.05
+            scores = np.where(desc >= DESCRIPTION_MIN_SCORE,
+                              np.maximum(scores, lifted), scores)
+    return scores
+
+
+def optimal_assignment(queries: list, paths: list, embeddings, floor: float,
+                       excluded: set = None, allow_reuse: bool = False,
+                       use_descriptions: bool = True) -> dict:
+    """
+    Choose the best image for every shot at once, rather than one at a time.
+
+    Greedy assignment settles each shot before it has looked at the next, so an
+    early shot takes an image a later shot needed and the loss cascades. With two
+    shots and two images that is the difference between a total of 0.40 and 0.57;
+    across ninety-five shots it is most of why a folder of images generated one
+    per shot came back badly paired.
+
+    Returns {shot_index: (path, score)}. Shots with nothing left are absent —
+    with fewer images than shots and no reuse, some shots must go unfilled.
+    """
+    if not queries or len(paths) == 0:
+        return {}
+
+    scores = score_matrix(queries, paths, embeddings, floor, use_descriptions)
+
+    # Rejections and images already claimed are simply unavailable.
+    rejected = get_rejected_pairs()
+    norm_paths = [p.replace("\\", "/") for p in paths]
+    taken = {p.replace("\\", "/") for p in (excluded or set())}
+    blocked = np.zeros_like(scores, dtype=bool)
+    for j, path in enumerate(norm_paths):
+        if path in taken:
+            blocked[:, j] = True
+    for i, q in enumerate(queries):
+        ql = (q or "").strip().lower()
+        if not rejected:
+            break
+        for j, path in enumerate(norm_paths):
+            if (ql, path) in rejected:
+                blocked[i, j] = True
+
+    usable = np.where(blocked, -np.inf, scores)
+
+    if allow_reuse:
+        # Repeats are permitted, so there is nothing to trade off — each shot
+        # simply takes its own best.
+        out = {}
+        for i in range(len(queries)):
+            j = int(np.argmax(usable[i]))
+            if np.isfinite(usable[i, j]):
+                out[i] = (norm_paths[j], float(scores[i, j]))
+        return out
+
+    try:
+        from scipy.optimize import linear_sum_assignment
+    except Exception:
+        # Without scipy the greedy path still works; it is just worse.
+        return {}
+
+    # linear_sum_assignment minimises, and cannot see -inf.
+    cost = np.where(np.isfinite(usable), -usable, 1e6).astype(np.float64)
+    rows, cols = linear_sum_assignment(cost)
+
+    out = {}
+    for i, j in zip(rows, cols):
+        if np.isfinite(usable[i, j]):
+            out[int(i)] = (norm_paths[int(j)], float(scores[int(i), int(j)]))
+    return out
+
+
+def resolve_library_path(rel_path: str) -> str:
+    """
+    Turn a stored library-relative path ("library/images/x.jpg") into an absolute
+    path, or return None if it does not exist. Pins are stored relative so a
+    project stays portable; every consumer must resolve through here.
+    """
+    if not rel_path or not isinstance(rel_path, str):
+        return None
+    cleaned = rel_path.strip().replace("\\", "/")
+    if not cleaned:
+        return None
+    candidate = cleaned if os.path.isabs(cleaned) else os.path.join(ROOT, cleaned)
+    return candidate if os.path.exists(candidate) else None
+
+
 # ── 3. Diversity Search ────────────────────────────────────────────────────────
 
-def search(query: str, k: int = 5, exclude: set = None, min_score: float = None):
+#: How much an already-used image is penalised when reuse is allowed. Large
+#: enough that a fresh image always wins when one exists, finite so that a folder
+#: holding a single picture can still fill an entire film.
+REUSE_PENALTY = 0.5
+
+
+def search(query: str, k: int = 5, exclude: set = None, min_score: float = None,
+           use_descriptions: bool = True, folder: str = None, allow_reuse: bool = False):
     """
     Returns [(path, score)] ranked by score after applying penalties:
       - 1.0 score penalty for image in exclude set (already used in render)
@@ -422,48 +1135,121 @@ def search(query: str, k: int = 5, exclude: set = None, min_score: float = None)
         exclude = set()
 
     clean_exclude = {p.replace("\\", "/") for p in exclude}
-    embeddings, paths = load_index()
+
+    # A working folder anywhere on this machine gets its own small index; a plain
+    # name still means a subfolder of the library.
+    external = bool(folder) and os.path.isabs(str(folder)) and os.path.isdir(str(folder))
+    if external:
+        embeddings, paths = load_folder_index(str(folder))
+    else:
+        embeddings, paths = load_index()
     if len(paths) == 0:
         return []
 
     q_emb = encode_text_query(query)
     raw_scores = np.dot(embeddings, q_emb)
 
+    # An image made for this very shot can still lose on picture similarity alone:
+    # measured here, images generated from a shot's own composed prompt ranked
+    # between 43rd and 833rd for that shot. Their descriptions matched it at
+    # 0.72-0.80. When the description is a strong match, lift the image to the
+    # floor so it is findable — the picture score still decides the ordering.
+    desc_scores = description_scores(query, [p.replace("\\", "/") for p in paths]) \
+        if use_descriptions else np.zeros(len(paths), dtype=np.float32)
+
     render_usage_counts = get_render_usage_counts()
     rejected_pairs = get_rejected_pairs()
     query_lower = query.strip().lower()
+    prefix = "" if external else _folder_prefix(folder)
+
+    floor = min_score if min_score is not None else get_calibrated_min_score()
 
     adjusted_results = []
     for idx, (path, raw_score) in enumerate(zip(paths, raw_scores)):
         norm_path = path.replace("\\", "/")
 
+        # Only this project's folder, when one is chosen.
+        if prefix and not norm_path.startswith(prefix):
+            continue
+
         # Rejection memory: never return a rejected pairing
         if (query_lower, norm_path) in rejected_pairs:
             continue
 
-        # Diversity: never return an image used in the current render
-        if norm_path in clean_exclude:
+        # Diversity. Excluding used images outright is right for a full library
+        # and wrong for a thin one — and impossible for a project that means to
+        # carry one picture through a whole film, which is normal for a
+        # motivational piece. With reuse allowed it becomes a heavy penalty
+        # instead: a fresh image still always wins, but a repeat beats a gap.
+        already_used = norm_path in clean_exclude
+        if already_used and not allow_reuse:
             continue
 
-        penalized_score = float(raw_score)
+        # Two scores, deliberately. `eligible` answers "is this a good enough
+        # match?" and is what the caller sees; `rank` answers "which of these
+        # should I hand back first?" and carries the penalties. Subtracting the
+        # reuse penalty from the reported score pushed a repeat under the match
+        # floor, so a one-image project produced nothing but gaps.
+        eligible_score = float(raw_score)
 
-        # Real render usage penalty (small relative to weak_band=0.0045)
-        uses = render_usage_counts.get(norm_path, 0)
-        penalized_score -= (RENDER_USAGE_PENALTY * uses)
+        desc_score = float(desc_scores[idx])
+        if desc_score >= DESCRIPTION_MIN_SCORE:
+            # A near-paraphrase description lifts the image to the floor, so a
+            # picture made for this shot is findable by it.
+            eligible_score = max(eligible_score,
+                                 floor + (desc_score - DESCRIPTION_MIN_SCORE) * 0.05)
 
-        adjusted_results.append((norm_path, penalized_score, float(raw_score)))
+        rank_score = eligible_score
+        if already_used:
+            rank_score -= REUSE_PENALTY
+        rank_score -= RENDER_USAGE_PENALTY * render_usage_counts.get(norm_path, 0)
 
-    # Sort descending by penalized score
+        adjusted_results.append((norm_path, rank_score, eligible_score))
+
+    # Best candidate first, penalties included.
     adjusted_results.sort(key=lambda x: x[1], reverse=True)
 
-    # Filter/return top k
-    top_k = []
-    for norm_path, pen_score, r_score in adjusted_results[:k]:
-        top_k.append((norm_path, pen_score))
-    return top_k
+    # Report the eligibility score: whether this is a good match does not depend
+    # on how many other shots already took it.
+    return [(norm_path, eligible) for norm_path, _rank, eligible in adjusted_results[:k]]
 
 
 # ── 4. Prompt Composition for Gaps ─────────────────────────────────────────────
+
+def scene_from_narration(narration: str, max_words: int = 34) -> str:
+    """
+    A short visual description of what this shot is about, taken from its own
+    narration.
+
+    The prompt's subject used to be the shot query alone — three words of keyword
+    salad like "Usama Madinah Cancel" — so an image generated from it had almost
+    no relationship to the scene being narrated. The narration is the only place
+    the actual content lives.
+
+    Quoted speech, episode furniture and calls to action are removed: they are
+    things people say, not things a picture can show.
+    """
+    if not narration:
+        return ""
+    text = re.sub(r'<[^>]+>', ' ', narration)
+    text = re.sub(r'[“”"‘’]', ' ', text)
+    # Drop the presenter's own asides, which describe the video and not the scene.
+    text = re.sub(
+        r'\b(hit subscribe|subscribe|if you are new here|last time|next episode|'
+        r'we are walking through|this history is only getting bigger)[^.]*\.',
+        ' ', text, flags=re.IGNORECASE)
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    if not sentences:
+        return ""
+
+    words = []
+    for sentence in sentences:
+        words.extend(sentence.split())
+        if len(words) >= max_words:
+            break
+    scene = " ".join(words[:max_words]).strip(" ,;:.")
+    return re.sub(r'\s+', ' ', scene)
+
 
 def compose_gap_prompt(
     shot_query: str,
@@ -471,12 +1257,15 @@ def compose_gap_prompt(
     character_bible: dict = None,
     script_context: str = "",
     series_slug: str = None,
-    project_title: str = None
+    project_title: str = None,
+    include_negative: bool = None,
 ) -> str:
     """
-    Composes a ready-to-use prompt for a library gap using per-series prompt configuration.
-    Never includes project_title or raw narration text directly in the prompt.
-    Script context (narration) is ONLY used for character-bible matching.
+    A ready-to-use image prompt for one shot.
+
+    Built from the shot's subject, the scene as the narration describes it, the
+    series world anchor, any character descriptions that apply, and the series
+    style. The project title never appears — it is metadata, not a picture.
     """
     series_cfg = get_series_config(series_slug=series_slug, project_title=project_title)
     parts = []
@@ -489,6 +1278,12 @@ def compose_gap_prompt(
             framing_bias = "wide establishing shot of "
 
     parts.append(f"{framing_bias}{shot_query}")
+
+    # What the narration says is happening. This is what makes the prompt match
+    # the script instead of three extracted keywords.
+    scene = scene_from_narration(script_context)
+    if scene:
+        parts.append(scene)
 
     anchor = world_anchor or series_cfg.get("world_anchor")
     if anchor:
@@ -506,7 +1301,13 @@ def compose_gap_prompt(
 
     if style_block:
         parts.append(style_block)
-    if negative_block:
+
+    # Negative prompts are off by default now. Most image tools the user works in
+    # take a single prompt box, so the negative text was pasted in as if it were
+    # part of the description — asking for the very things it meant to forbid.
+    if include_negative is None:
+        include_negative = bool(_setting("include_negative_prompt", False))
+    if include_negative and negative_block:
         parts.append(f"Negative prompt: {negative_block}")
 
     return ", ".join(parts)
@@ -533,6 +1334,16 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     world_anchor = project_info.get("world_anchor") or project_info.get("visual_style")
     character_bible = project_info.get("character_bible") or {}
 
+    # A project can restrict itself to one folder of images. Curating twenty
+    # pictures you chose beats steering a search across twelve hundred.
+    folder = project_info.get("image_folder") or ""
+
+    # Repeating an image is normal for some work — a motivational piece may run
+    # one picture for fifteen minutes while the motion and the cuts carry it.
+    allow_reuse = project_info.get("allow_image_reuse")
+    if allow_reuse is None:
+        allow_reuse = _setting("allow_image_reuse", True)
+
     segments = script_data.get("segments", [])
     
     # Extract all shots
@@ -555,7 +1366,24 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 "shot_id": shot.get("shot_id", f"{seg_id}a"),
                 "query": shot.get("query") or seg.get("b_roll_keyword") or "visual landscape",
                 "min_score": shot.get("min_score") or min_score,
-                "narration": narration
+                # A shot's own slice of the narration when it has one, so each
+                # shot in a segment gets a prompt describing its own moment.
+                "narration": shot.get("scene") or narration,
+                # The board lets the user choose an image. That choice is a pin, and a
+                # re-plan must honour it instead of asking CLIP again.
+                "pin": (shot.get("pin") or "").strip() if isinstance(shot.get("pin"), str) else None,
+                # What this shot settled on last time it was planned. Retrieval is
+                # greedy and forbids reuse, so without this every re-plan reshuffled
+                # the whole board: choosing an image for one shot freed its old one
+                # and cascaded through all the others. The board needs a memory.
+                "resolved": (shot.get("resolved") or "").strip() if isinstance(shot.get("resolved"), str) else None,
+                "resolved_score": shot.get("resolved_score"),
+                # The prompt this shot advertised. Kept on the shot so that an
+                # image generated from it hours later is still recognised: the
+                # board shows a prompt, the user goes away and makes the picture,
+                # and Refresh has to know what it was waiting for.
+                "prompt": shot.get("prompt") or "",
+                "_shot": shot,
             })
 
     script_used_images = set()
@@ -563,20 +1391,197 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     matched_count = 0
     weak_count = 0
     gap_count = 0
+    pinned_count = 0
 
     shot_reports = []
     query_to_segments = {}
 
+    # Reserve pinned and previously-resolved images before anything searches, so a
+    # later shot cannot be handed an image another shot has already claimed.
     for s in all_shots:
+        s["pin_resolved"] = resolve_library_path(s["pin"]) if s["pin"] else None
+        if s["pin_resolved"]:
+            script_used_images.add(s["pin"].replace("\\", "/"))
+
+    # Work out the numbered pairing first. A folder of images named 1_, 2_, 3_ is
+    # the user stating which picture goes where, and that has to outrank the
+    # board's own memory of an earlier plan — otherwise a shot that already holds
+    # a library image never looks at the numbered file at all.
+    numbered_matches = {}
+    if folder and _setting("match_by_prompt_name", True):
+        try:
+            _external = os.path.isabs(str(folder)) and os.path.isdir(str(folder))
+            _, _num_paths = (load_folder_index(str(folder)) if _external else load_index())
+            numbered_matches = match_shots_by_number(
+                [p.replace("\\", "/") for p in _num_paths
+                 if _path_in_scope(p.replace("\\", "/"), "" if _external else folder)],
+                len(all_shots),
+                shot_prompts={i: s["prompt"] for i, s in enumerate(all_shots) if s["prompt"]},
+            )
+        except Exception:
+            numbered_matches = {}
+
+    for idx_s, s in enumerate(all_shots):
+        s["keep_resolved"] = None
+        if s["pin_resolved"] or not s["resolved"] or idx_s in numbered_matches:
+            continue
+        candidate = s["resolved"].replace("\\", "/")
+        # Only keep it if it still exists, nobody else has claimed it, and it
+        # comes from the image source this project is now using. Without the last
+        # check, choosing a working folder changed nothing: every shot already
+        # remembered a library image and never consulted the folder at all.
+        if (candidate not in script_used_images
+                and resolve_library_path(candidate)
+                and _path_in_scope(candidate, folder)):
+            s["keep_resolved"] = candidate
+            script_used_images.add(candidate)
+
+    # Solve the whole board at once for the shots still needing an image. Doing
+    # this shot by shot lets an early shot take an image a later one needed, and
+    # the loss cascades — which is exactly what happens to a folder of images
+    # generated one per shot.
+    open_shots = [i for i, s in enumerate(all_shots)
+                  if not s["pin_resolved"] and not s["keep_resolved"]]
+
+    # An image named after a shot's own prompt belongs to that shot. This is
+    # exact — the filename literally repeats the prompt's opening words — so it
+    # is settled before any pixel is scored. It is also what makes generating
+    # images later work: the prompt is remembered on the shot, so an image made
+    # hours after the board was planned is still claimed by the right shot.
+    name_matched = {}
+
+    # The numbered pairing, worked out before the board's memory was consulted.
+    for i, path in numbered_matches.items():
+        if not all_shots[i]["pin_resolved"] and path not in script_used_images:
+            name_matched[i] = path
+            script_used_images.add(path)
+
+    still_open = [i for i in open_shots if i not in name_matched]
+    if still_open and _setting("match_by_prompt_name", True):
+        try:
+            external = bool(folder) and os.path.isabs(str(folder)) and os.path.isdir(str(folder))
+            _, name_paths = (load_folder_index(str(folder)) if external else load_index())
+            in_scope_paths = [
+                p.replace("\\", "/") for p in name_paths
+                if _path_in_scope(p.replace("\\", "/"), "" if external else folder)
+            ]
+            by_name = match_shots_by_prompt_name(
+                {i: all_shots[i]["prompt"] for i in still_open if all_shots[i]["prompt"]},
+                in_scope_paths,
+                excluded=script_used_images,
+            )
+            for i, path in by_name.items():
+                name_matched[i] = path
+                script_used_images.add(path)
+        except Exception:
+            pass
+
+    open_shots = [i for i in open_shots if i not in name_matched]
+    assignment = {}
+    if open_shots and _setting("optimal_assignment", True):
+        try:
+            external = bool(folder) and os.path.isabs(str(folder)) and os.path.isdir(str(folder))
+            emb_all, paths_all = (load_folder_index(str(folder)) if external else load_index())
+            in_scope = [
+                (j, p.replace("\\", "/")) for j, p in enumerate(paths_all)
+                if _path_in_scope(p.replace("\\", "/"), "" if external else folder)
+            ]
+            if in_scope:
+                cols = [j for j, _ in in_scope]
+                solved = optimal_assignment(
+                    queries=[all_shots[i]["query"] for i in open_shots],
+                    paths=[p for _, p in in_scope],
+                    embeddings=np.asarray(emb_all)[cols],
+                    floor=min_score,
+                    excluded=script_used_images,
+                    allow_reuse=allow_reuse,
+                )
+                for row, (path, score) in solved.items():
+                    assignment[open_shots[row]] = (path, score)
+        except Exception:
+            assignment = {}   # greedy still works; never lose the board over this
+
+    for idx, s in enumerate(all_shots):
         q = s["query"]
         target_min = s["min_score"]
         target_weak = target_min - weak_band
-        
+
         if q not in query_to_segments:
             query_to_segments[q] = []
         query_to_segments[q].append(s["segment_id"])
 
-        results = search(q, k=5, exclude=script_used_images, min_score=target_min)
+        pin_missing = bool(s["pin"]) and not s["pin_resolved"]
+
+        if s["pin_resolved"]:
+            # The user chose this image. Offer alternatives so Replace still has
+            # something to show, but the choice itself is not up for re-litigation.
+            alt_results = search(q, k=5, exclude=script_used_images, min_score=0.0,
+                                 folder=folder, allow_reuse=allow_reuse)
+            shot_reports.append({
+                "segment_id": s["segment_id"],
+                "shot_id": s["shot_id"],
+                "query": q,
+                "state": "pinned",
+                "best_score": 1.0,
+                "best_path": s["pin"].replace("\\", "/"),
+                "alternatives": alt_results[:4],
+                "pin_missing": False,
+                "composed_prompt": compose_gap_prompt(
+                    shot_query=q,
+                    world_anchor=world_anchor,
+                    character_bible=character_bible,
+                    script_context=s["narration"],
+                    series_slug=series_slug,
+                    project_title=title,
+                ),
+            })
+            pinned_count += 1
+            continue
+
+        if s["keep_resolved"]:
+            # This shot already had an image and nothing has taken it away. Keep it,
+            # so choosing an image for one shot cannot disturb any other.
+            kept_score = s["resolved_score"] if isinstance(s["resolved_score"], (int, float)) else target_min
+            state = "matched" if kept_score >= target_min else "weak"
+            alt_results = search(q, k=5, exclude=script_used_images, min_score=0.0,
+                                 folder=folder, allow_reuse=allow_reuse)
+            if state == "matched":
+                matched_count += 1
+            else:
+                weak_count += 1
+            shot_reports.append({
+                "segment_id": s["segment_id"],
+                "shot_id": s["shot_id"],
+                "query": q,
+                "state": state,
+                "best_score": kept_score,
+                "best_path": s["keep_resolved"],
+                "alternatives": alt_results[:4],
+                "pin_missing": pin_missing,
+                "composed_prompt": compose_gap_prompt(
+                    shot_query=q,
+                    world_anchor=world_anchor,
+                    character_bible=character_bible,
+                    script_context=s["narration"],
+                    series_slug=series_slug,
+                    project_title=title,
+                ),
+            })
+            continue
+
+        results = search(q, k=5, exclude=script_used_images, min_score=target_min,
+                         folder=folder, allow_reuse=allow_reuse)
+
+        # An image whose filename repeats this shot's prompt wins outright.
+        named = name_matched.get(idx)
+        if named:
+            results = [(named, max(target_min, 1.0))] + [r for r in results if r[0] != named]
+
+        # Prefer the globally-solved choice; `results` still supplies the
+        # alternatives shown under the card.
+        chosen = assignment.get(idx)
+        if chosen and chosen[0] not in script_used_images:
+            results = [chosen] + [r for r in results if r[0] != chosen[0]]
 
         if not results:
             state = "gap"
@@ -608,6 +1613,13 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             project_title=title
         )
 
+        # Remember the prompt on the shot itself. The board shows it, the user
+        # goes away and generates the picture, and when they come back Refresh
+        # has to still know what this shot asked for — that memory has to
+        # outlive the session, so it lives in the script, not in a variable.
+        if s.get("_shot") is not None and not s["_shot"].get("prompt"):
+            s["_shot"]["prompt"] = composed
+
         shot_reports.append({
             "segment_id": s["segment_id"],
             "shot_id": s["shot_id"],
@@ -616,8 +1628,23 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             "best_score": best_score,
             "best_path": best_path,
             "alternatives": results[1:] if len(results) > 1 else [],
+            "pin_missing": pin_missing,
             "composed_prompt": composed
         })
+
+    # Alternatives are computed while the board is planned, so a shot could be
+    # offered an image that a *later* shot then claims as its own best match.
+    # Choosing that alternative handed the image over and silently broke the other
+    # shot — fix one, break another, which is exactly what it felt like. Only offer
+    # images nothing else is currently using.
+    assigned = {r["best_path"] for r in shot_reports if r.get("best_path")}
+    for r in shot_reports:
+        kept = []
+        for alt in r.get("alternatives") or []:
+            alt_path = alt[0] if isinstance(alt, (list, tuple)) else alt
+            if alt_path not in assigned:
+                kept.append(alt)
+        r["alternatives"] = kept
 
     # Rank WEAK matches
     ranked_weak = []
@@ -665,6 +1692,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
         "matched": matched_count,
         "weak": weak_count,
         "gaps": gap_count,
+        "pinned": pinned_count,
         "shot_reports": shot_reports,
         "ranked_weak": ranked_weak,
         "ranked_gaps": ranked_gaps,

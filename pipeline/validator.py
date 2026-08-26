@@ -384,12 +384,36 @@ def validate(script_data: dict) -> list[str]:
                 if not pin_val or not isinstance(pin_val, str) or not pin_val.strip():
                     errors.append(f'{shot_prefix}: source is "pin" but no pin path was given.')
                 else:
-                    # Rule 8: pin paths must stay inside the project — no absolute paths, no ..
+                    # Rule 8: no path traversal.
+                    #
+                    # This used to reject every absolute path as well, on the
+                    # grounds that a pin should "stay inside the project". That
+                    # holds for project-relative pins and still does — but a
+                    # project can now work from a folder anywhere on the machine,
+                    # and those images have no relative path to give. Traversal is
+                    # the part that actually mattered, so that is what is checked;
+                    # an absolute pin has to name a file that exists.
                     clean_pin = pin_val.replace("\\", "/")
-                    if os.path.isabs(pin_val) or clean_pin.startswith("/") or re.search(r'^[a-zA-Z]:', clean_pin):
-                        errors.append(f'{shot_prefix}.pin: path must stay inside the project (absolute path "{pin_val}" is not allowed).')
-                    elif ".." in Path(pin_val).parts or ".." in clean_pin.split("/"):
-                        errors.append(f'{shot_prefix}.pin: path must stay inside the project (path traversal ".." in "{pin_val}" is not allowed).')
+                    if ".." in Path(pin_val).parts or ".." in clean_pin.split("/"):
+                        errors.append(f'{shot_prefix}.pin: path traversal ".." in "{pin_val}" is not allowed.')
+                    elif os.path.isabs(pin_val):
+                        # An absolute pin is only legitimate when it names an image
+                        # in the folder this project declared it works from.
+                        # Allowing any absolute path would let a shared script
+                        # render arbitrary files off the recipient's disk.
+                        work_folder = (proj.get("image_folder") or "").strip()
+                        if not work_folder or not os.path.isabs(work_folder):
+                            errors.append(
+                                f'{shot_prefix}.pin: absolute path "{pin_val}" is only allowed when '
+                                f'the project works from a folder outside it (project.image_folder).'
+                            )
+                        else:
+                            base = os.path.abspath(work_folder).replace("\\", "/").lower().rstrip("/")
+                            if not os.path.abspath(pin_val).replace("\\", "/").lower().startswith(base + "/"):
+                                errors.append(
+                                    f'{shot_prefix}.pin: "{pin_val}" is outside this project\'s '
+                                    f'working folder ({work_folder}).'
+                                )
 
             # Rule 4: source: library or generate requires a non-empty query
             if source in ("library", "generate"):

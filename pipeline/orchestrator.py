@@ -5,6 +5,7 @@ Whisper singleton loading, cancellation checks, completed-count progress, and pa
 """
 
 import os
+import glob
 import json
 import logging
 import traceback
@@ -18,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pipeline.validator import validate_file
 from pipeline.voiceover import generate_voiceover, stitch_master_audio
 from pipeline.captions import generate_captions
-from pipeline.visuals import fetch_visual, _get_dimensions
+from pipeline.visuals import fetch_visual, _get_dimensions, segment_keyword, segment_pin
 from pipeline.composer import compose_segment, _find_ffprobe
 from pipeline.stitcher import stitch_segments
 
@@ -113,6 +114,68 @@ class RenderOrchestrator:
         if self.logger:
             self.logger.info(message)
 
+    #: Intermediate artefacts, safe to delete once the final film exists.
+    INTERMEDIATE_PATTERNS = (
+        "shot_*.mp4", "shot_*_*.jpg",
+        "segment_*_final.mp4", "segment_*_visual_concat.mp4", "segment_*_shots.txt",
+        "segment_*_mixed_audio.wav", "static_ov_*.png",
+    )
+
+    def _cleanup_intermediates(self) -> int:
+        """
+        Delete this render's intermediates, keeping narration and captions.
+
+        Narration MP3s and SRTs stay: they are the expensive part to recreate and
+        are what makes a re-render seconds rather than minutes. Video
+        intermediates are cheap to rebuild and are what actually fills the disk.
+        Controlled by config/settings.json → clean_cache_after_render.
+        """
+        settings_file = os.path.join(self.base_dir, "config", "settings.json")
+        try:
+            with open(settings_file, "r", encoding="utf-8") as f:
+                if not json.load(f).get("clean_cache_after_render", True):
+                    return 0
+        except Exception:
+            pass
+
+        removed, freed = 0, 0
+        for pattern in self.INTERMEDIATE_PATTERNS:
+            for path in glob.glob(os.path.join(self.cache_dir, pattern)):
+                try:
+                    freed += os.path.getsize(path)
+                    os.remove(path)
+                    removed += 1
+                except OSError:
+                    pass
+        if removed:
+            self._log(f"Cleaned {removed} intermediate files ({freed / (1024*1024):.0f} MB); "
+                      f"narration and captions kept for fast re-renders")
+        return removed
+
+    def _drain(self, futures, executor, stage_name: str, errors_map: dict) -> bool:
+        """
+        Wait for a stage's workers, surfacing anything they raised.
+
+        as_completed() on its own silently discards worker exceptions: a raise
+        outside a worker's own try/except is stored on the Future and lost unless
+        result() is called. That is how fourteen failed voiceovers produced a
+        five-millisecond stage with no log lines, and a KeyError two stages later
+        that killed the render thread without a word.
+
+        Returns True if the render was cancelled.
+        """
+        for f in as_completed(futures):
+            if self._cancelled:
+                executor.shutdown(wait=False, cancel_futures=True)
+                return True
+            try:
+                f.result()
+            except Exception as e:
+                key = f"{stage_name} worker {len(errors_map) + 1}"
+                errors_map[key] = f"{type(e).__name__}: {e}"
+                self._log(f"{stage_name} worker raised {type(e).__name__}: {e}")
+        return False
+
     def render(self, script_path: str, google_api_key: str = "", google_tts_api_key: str = "") -> dict:
         """
         Run the full render pipeline with parallel stages A through F.
@@ -186,7 +249,10 @@ class RenderOrchestrator:
             if self._cancelled:
                 return
             seg_id = seg["segment_id"]
-            seg_voice = seg.get("voice", proj["voice"])
+            # The planner writes an explicit "voice": null on every segment, and
+            # dict.get(key, default) returns that stored None rather than the
+            # default — the key exists. `or` is what actually falls back here.
+            seg_voice = seg.get("voice") or proj.get("voice") or ""
             voice_key = google_api_key if "gemini-3.1-flash-tts" in seg_voice.lower() else google_tts_key
 
             def progress_cb(msg):
@@ -197,8 +263,8 @@ class RenderOrchestrator:
                     segment_id=seg_id,
                     narration=seg["narration"],
                     voice=seg_voice,
-                    voice_rate=seg.get("voice_rate", proj.get("voice_rate", "+0%")),
-                    voice_pitch=seg.get("voice_pitch", proj.get("voice_pitch", "+0Hz")),
+                    voice_rate=seg.get("voice_rate") or proj.get("voice_rate") or "+0%",
+                    voice_pitch=seg.get("voice_pitch") or proj.get("voice_pitch") or "+0Hz",
                     cache_dir=self.cache_dir,
                     google_api_key=voice_key,
                     on_progress=progress_cb,
@@ -214,10 +280,8 @@ class RenderOrchestrator:
 
         with ThreadPoolExecutor(max_workers=concurrency["max_tts_workers"]) as executor:
             futures = [executor.submit(run_tts, idx, seg) for idx, seg in enumerate(segments, 1)]
-            for f in as_completed(futures):
-                if self._cancelled:
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    return {"success": False, "error": "Render cancelled by user."}
+            if self._drain(futures, executor, "Voiceovers", errors_map):
+                return {"success": False, "error": "Render cancelled by user."}
 
         if self._cancelled:
             return {"success": False, "error": "Render cancelled by user."}
@@ -292,10 +356,8 @@ class RenderOrchestrator:
 
             with ThreadPoolExecutor(max_workers=concurrency["max_caption_workers"]) as executor:
                 futures = [executor.submit(run_cap, idx, seg) for idx, seg in enumerate(segments, 1)]
-                for f in as_completed(futures):
-                    if self._cancelled:
-                        executor.shutdown(wait=False, cancel_futures=True)
-                        return {"success": False, "error": "Render cancelled by user."}
+                if self._drain(futures, executor, "Captions", errors_map):
+                    return {"success": False, "error": "Render cancelled by user."}
 
         if self._cancelled:
             return {"success": False, "error": "Render cancelled by user."}
@@ -323,7 +385,7 @@ class RenderOrchestrator:
             try:
                 vis_path = fetch_visual(
                     segment_id=seg_id,
-                    keyword=seg["b_roll_keyword"],
+                    keyword=segment_keyword(seg),
                     narration=seg.get("narration", ""),
                     cache_dir=self.cache_dir,
                     google_api_key=google_api_key,
@@ -334,7 +396,7 @@ class RenderOrchestrator:
                     on_progress=progress_cb,
                     visual_type=seg.get("visual_type", "ai_image"),
                     magick_filter=seg.get("magick_filter", "vignette"),
-                    use_base_image=seg.get("use_base_image"),
+                    use_base_image=segment_pin(seg),
                     use_base_image_a=seg.get("use_base_image_a"),
                     use_base_image_b=seg.get("use_base_image_b"),
                     character_bible=proj.get("character_bible"),
@@ -354,10 +416,8 @@ class RenderOrchestrator:
 
         with ThreadPoolExecutor(max_workers=concurrency["max_visual_workers"]) as executor:
             futures = [executor.submit(run_vis, idx, seg) for idx, seg in enumerate(segments, 1)]
-            for f in as_completed(futures):
-                if self._cancelled:
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    return {"success": False, "error": "Render cancelled by user."}
+            if self._drain(futures, executor, "Visuals", errors_map):
+                return {"success": False, "error": "Render cancelled by user."}
 
         if self._cancelled:
             return {"success": False, "error": "Render cancelled by user."}
@@ -395,6 +455,7 @@ class RenderOrchestrator:
                     sfx=seg.get("sfx"),
                     level1_overlay=seg.get("level1_overlay"),
                     segment_dict=seg,
+                    visual_style=visual_style,
                 )
                 with self._lock:
                     segment_videos_map[seg_id] = seg_video
@@ -406,10 +467,8 @@ class RenderOrchestrator:
 
         with ThreadPoolExecutor(max_workers=concurrency["max_compose_workers"]) as executor:
             futures = [executor.submit(run_comp, idx, seg) for idx, seg in enumerate(segments, 1)]
-            for f in as_completed(futures):
-                if self._cancelled:
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    return {"success": False, "error": "Render cancelled by user."}
+            if self._drain(futures, executor, "Composing", errors_map):
+                return {"success": False, "error": "Render cancelled by user."}
 
         if self._cancelled:
             return {"success": False, "error": "Render cancelled by user."}
@@ -455,12 +514,22 @@ class RenderOrchestrator:
                 except Exception as e:
                     self._log(f"Could not record library usage for {lib_path}: {e}")
 
+        # Intermediates are worth keeping only while a render might resume. Once
+        # the film exists they are dead weight — 1,970 MB had accumulated across
+        # 1,811 files by the second real episode.
+        self._cleanup_intermediates()
+
         # Done
         self._emit("complete", output_path=output_path)
         return {"success": True, "output": output_path}
 
     def _fail_render(self, errors_map: dict) -> dict:
-        details = "\n".join(f" - Segment {sid}: {err}" for sid, err in sorted(errors_map.items()))
+        # Keys are segment ids (int) for handled failures and stage labels (str)
+        # for worker crashes, so sort on the text form rather than the raw key.
+        details = "\n".join(
+            f" - Segment {sid}: {err}"
+            for sid, err in sorted(errors_map.items(), key=lambda kv: str(kv[0]))
+        )
         error_msg = f"Render failed due to errors in {len(errors_map)} segment(s):\n{details}"
         self._emit("error", message=error_msg)
         return {"success": False, "error": error_msg}

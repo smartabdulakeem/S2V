@@ -33,6 +33,7 @@
       <button class="nav" role="tab" aria-selected="false" data-p="board" onclick="switchPane('board')">Storyboard<span class="k">2</span></button>
       <button class="nav" role="tab" aria-selected="false" data-p="render" onclick="switchPane('render')">Render<span class="k">3</span></button>
       <button class="nav" role="tab" aria-selected="false" data-p="library" onclick="switchPane('library')">Library<span class="k">4</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="voice" onclick="switchPane('voice')">Voiceover<span class="k">5</span></button>
       <div class="spacer"></div>
       <button class="nav" role="tab" aria-selected="false" data-p="settings" onclick="switchPane('settings')">Settings<span class="k">,</span></button>
     </nav>
@@ -42,12 +43,16 @@
       <div class="row" style="justify-space-between">
         <h2>New video</h2>
         <span class="mono" id="script-status-label">draft &middot; not yet planned</span>
-        <button class="ghost" style="margin-left:auto" onclick="triggerLoadScript()">Open JSON Script…</button>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+          <span class="mono" id="working-folder-label" title="">whole library</span>
+          <button type="button" id="btn-working-folder" onclick="chooseWorkingFolder()">Work from this folder…</button>
+          <button type="button" class="ghost" onclick="useWholeLibrary()" title="Search the whole library again">Whole library</button>
+        </div>
       </div>
 
       <div class="row">
         <label class="f">Title
-          <input type="text" id="pt-title" value="S2E6 — The Long Retreat">
+          <input type="text" id="pt-title" placeholder="e.g. S2E6 — The Long Retreat">
         </label>
         <label class="f">Series Pack
           <select id="pt-series-slug">
@@ -57,7 +62,7 @@
       </div>
 
       <label class="f" style="flex:1 1 100%">Script
-        <textarea id="pt-text" placeholder="Paste or type script narration here…">There is an image the history books do not linger on. A man of sixty years, white haired, known to his community as the softest-hearted among them…</textarea>
+        <textarea id="pt-text" placeholder="Paste your script here. Leave a blank line between paragraphs — each one becomes a scene."></textarea>
       </label>
 
       <!-- FORMAT PICKER -->
@@ -172,6 +177,11 @@
           <span class="mono">shot rhythm</span>
           <input type="range" id="shot-rhythm-slider" min="1" max="5" value="3" style="width:110px" oninput="updateRhythmLabel(this.value)">
           <span class="mono" id="rhythm-label">~7s per shot</span>
+          <button type="button" id="btn-working-folder-board" onclick="chooseWorkingFolder()">Work from this folder…</button>
+          <span class="mono" id="working-folder-label-board" title="">whole library</span>
+          <button type="button" id="btn-copy-prompts" onclick="copyAllPrompts()">Copy all prompts</button>
+          <button type="button" id="btn-refresh-library" onclick="refreshLibraryAndReplan()">Refresh library</button>
+          <button type="button" id="btn-fill-gaps" onclick="fillAllGaps()">Use nearest image for all gaps</button>
           <button type="button" class="primary" id="btn-start-render-board" onclick="startRenderFromBoard()">Render video →</button>
         </div>
       </div>
@@ -181,6 +191,8 @@
         <span><i style="background:var(--warn)"></i>weak &mdash; usable, alternatives offered</span>
         <span><i style="background:var(--gap)"></i>gap &mdash; prompt generated</span>
       </div>
+
+      <div id="board-busy" class="board-busy hidden"></div>
 
       <div class="seglist" id="storyboard-list">
         <!-- Rendered dynamically by JS from coverage report -->
@@ -319,6 +331,106 @@
     </div>
 
     <!-- ══ 5. SETTINGS SCREEN ══ -->
+    <div class="pane" data-pane="voice">
+      <h2>Voiceover Studio</h2>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3>Script</h3>
+          <span class="pill p-mute" id="voice-char-count">0 characters</span>
+        </div>
+        <textarea id="voice-text" rows="7" placeholder="Paste or type the narration you want spoken..." style="width:100%"></textarea>
+
+        <div class="grid2" style="margin-top:10px">
+          <div>
+            <label for="voice-engine">Engine</label>
+            <select id="voice-engine" onchange="onVoiceEngineChange()" style="width:100%"></select>
+            <p class="hint" id="voice-engine-note">Checking which engines are available...</p>
+          </div>
+          <div>
+            <label for="voice-voice">Voice</label>
+            <select id="voice-voice" style="width:100%"></select>
+            <p class="hint" id="voice-voice-note">&nbsp;</p>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top:6px">
+          <div>
+            <label for="voice-speed">Speed <b class="mono" id="voice-speed-val">1.00x</b></label>
+            <input type="range" id="voice-speed" min="0.5" max="2" step="0.05" value="1"
+                   oninput="document.getElementById('voice-speed-val').textContent = (+this.value).toFixed(2) + 'x'"
+                   style="width:100%">
+          </div>
+          <div>
+            <label for="voice-pitch">Pitch <b class="mono" id="voice-pitch-val">0.0</b></label>
+            <input type="range" id="voice-pitch" min="-12" max="12" step="0.5" value="0"
+                   oninput="document.getElementById('voice-pitch-val').textContent = (+this.value).toFixed(1)"
+                   style="width:100%">
+            <p class="hint" id="voice-pitch-note">&nbsp;</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="voice-clone-card" style="display:none">
+        <h3>Reference Voice</h3>
+        <p class="hint">OpenVoice clones from a clean 3&ndash;10 second sample. One speaker, no music, no background noise.</p>
+
+        <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
+          <button type="button" class="ghost" onclick="pickVoiceReference()">Choose audio file</button>
+          <button type="button" class="ghost" id="voice-record-btn" onclick="toggleVoiceRecording()">Record from microphone</button>
+          <span class="mono" id="voice-ref-status">No reference selected</span>
+        </div>
+
+        <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+          <input type="text" id="voice-profile-name" placeholder="Name this voice profile" style="flex:1;min-width:180px">
+          <button type="button" class="ghost" onclick="saveVoiceProfile()">Save profile</button>
+        </div>
+
+        <div style="margin-top:10px">
+          <label for="voice-profile-select">Saved profiles</label>
+          <div class="row" style="gap:8px">
+            <select id="voice-profile-select" onchange="useVoiceProfile()" style="flex:1"></select>
+            <button type="button" class="ghost" onclick="deleteVoiceProfile()">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+          <button type="button" class="primary" id="voice-generate-btn" onclick="generateVoiceover()">Generate Voiceover</button>
+          <button type="button" class="ghost" onclick="openVoiceOutputFolder()">Open Output Folder</button>
+          <span class="mono" id="voice-status">Ready</span>
+        </div>
+        <div class="bar" style="margin-top:10px"><i id="voice-progress-bar" style="width:0%"></i></div>
+
+        <div id="voice-player-wrap" style="margin-top:12px;display:none">
+          <audio id="voice-player" controls preload="auto" style="width:100%"></audio>
+          <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+            <button type="button" class="ghost" onclick="downloadVoiceClip('wav')">Download audio</button>
+            <button type="button" class="ghost" id="voice-dl-mp3" onclick="downloadVoiceClip('mp3')">Download MP3</button>
+            <span class="mono" id="voice-clip-meta"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h3>Recent clips</h3>
+          <button type="button" class="ghost" onclick="clearVoiceHistory()">Clear</button>
+        </div>
+        <div class="tbl">
+          <table>
+            <thead>
+              <tr><th>When</th><th>Engine</th><th>Preview text</th><th>Length</th><th></th></tr>
+            </thead>
+            <tbody id="voice-history-body">
+              <tr><td colspan="5" class="mono">No clips yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div class="pane" data-pane="settings">
       <h2>Settings</h2>
 
@@ -346,30 +458,20 @@
                 <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Test &amp; Save</button></td>
               </tr>
               <tr>
-                <td>DeepSeek</td>
-                <td>Script planning</td>
-                <td><input type="password" id="deepseek-key-input" placeholder="sk-…" style="font-family:var(--mono); font-size:12px"></td>
-                <td><span class="pill p-mute" id="deepseek-key-status">not set</span></td>
-                <td><button type="button" class="ghost" onclick="saveDeepseekKey()">Test &amp; Save</button></td>
-              </tr>
-              <tr>
-                <td>Freesound</td>
-                <td>Ambience &amp; sound effects</td>
-                <td><input type="password" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
-                <td><span class="pill p-mute">not set</span></td>
-                <td><button type="button" class="ghost" disabled>Test</button></td>
-              </tr>
-              <tr>
                 <td>ElevenLabs</td>
-                <td>Premium voice (optional)</td>
-                <td><input type="password" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
-                <td><span class="pill p-mute">not set</span></td>
-                <td><button type="button" class="ghost" disabled>Test</button></td>
+                <td>Premium voice &mdash; optional</td>
+                <td><input type="password" id="elevenlabs-key-input" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
+                <td><span class="pill p-mute" id="elevenlabs-key-status">not set</span></td>
+                <td><button type="button" class="ghost" onclick="saveElevenLabsKey()">Test &amp; Save</button></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="mono">API keys are stored securely. Free local library retrieval and rendering work without any API keys.</p>
+        <p class="mono">
+          Keys are stored on this machine only, in <code>config/settings.json</code>, and never
+          travel with the app. Everything except Google runs offline and needs no key at all:
+          narration, image retrieval, captions and rendering are all local.
+        </p>
       </div>
 
       <!-- VOICE CATALOGUE -->
@@ -389,16 +491,16 @@
       <div class="card">
         <div class="row" style="justify-content:space-between">
           <h3>Language packs</h3>
-          <span class="mono">English installed</span>
+          <span class="mono">English installed &middot; language packs not implemented yet</span>
         </div>
         <div class="tbl">
           <table>
             <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td><td><button type="button" class="ghost">Remove</button></td></tr>
-              <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td><td><button type="button" class="primary">Download</button></td></tr>
-              <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button">Download</button></td></tr>
-              <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button">Download</button></td></tr>
+              <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td><td><button type="button" class="ghost" disabled title="Language packs are not implemented yet">Remove</button></td></tr>
+              <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td><td><button type="button" class="primary" disabled title="Language packs are not implemented yet">Download</button></td></tr>
+              <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
+              <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
             </tbody>
           </table>
         </div>
@@ -471,25 +573,52 @@
     </div>
   </div>
 
-  <!-- REPLACEMENT DECISION MODAL -->
+  <!-- REPLACE MODAL — the single place any shot's image is changed -->
   <div id="replace-modal" class="modal-overlay hidden">
-    <div class="dlg">
-      <h3 id="modal-title">Replace shot image</h3>
-      <p>What should happen to the image you rejected?</p>
-      <div class="row">
-        <button type="button" class="opt" onclick="confirmReplace('just_not_here')">
-          <b>Just not here</b>
-          <small>Stays in the library. May suit another shot.</small>
-        </button>
-        <button type="button" class="opt" onclick="confirmReplace('never_this_query')">
-          <b>Never suggest for this</b>
-          <small>Blocked for this query only. Still available elsewhere.</small>
-        </button>
-        <button type="button" class="opt" onclick="confirmReplace('retire')">
-          <b>Retire it</b>
-          <small>Removed from search. Recoverable from _retired.</small>
-        </button>
+    <div class="dlg dlg-wide">
+      <div class="dlg-head">
+        <h3 id="modal-title">Replace shot image</h3>
+        <button type="button" class="ghost dlg-close" onclick="closeReplaceModal()"
+                aria-label="Close">Cancel &times;</button>
       </div>
+      <p class="sub" id="modal-shot-label"></p>
+
+      <div id="modal-current"></div>
+
+      <div class="modal-sec">
+        <span class="lbl">Use one of these instead</span>
+        <div id="modal-alts" class="alts-grid"></div>
+      </div>
+
+      <div class="modal-sec">
+        <span class="lbl">Use your own image</span>
+        <div class="row-tight">
+          <button type="button" class="primary" onclick="replaceWithOwnImage()">
+            Choose a file &mdash; pins it to this shot
+          </button>
+          <button type="button" onclick="copyShotPrompt()">Copy prompt</button>
+        </div>
+        <code id="modal-prompt" class="promptline"></code>
+      </div>
+
+      <div class="modal-sec">
+        <span class="lbl">Or tell the app what to do with the current image</span>
+        <div class="row">
+          <button type="button" class="opt" onclick="confirmReplace('just_not_here')">
+            <b>Just not here</b>
+            <small>Stays in the library. May suit another shot.</small>
+          </button>
+          <button type="button" class="opt" onclick="confirmReplace('never_this_query')">
+            <b>Never suggest for this</b>
+            <small>Blocked for this query only. Still available elsewhere.</small>
+          </button>
+          <button type="button" class="opt" onclick="confirmReplace('retire')">
+            <b>Retire it</b>
+            <small>Removed from search. Recoverable from library/_retired.</small>
+          </button>
+        </div>
+      </div>
+
       <div style="display:flex; justify-content:flex-end">
         <button type="button" class="ghost" onclick="closeReplaceModal()">Cancel</button>
       </div>
@@ -499,5 +628,6 @@
 </div>
 
 <script src="app.js"></script>
+<script src="voice_studio.js"></script>
 </body>
 </html>

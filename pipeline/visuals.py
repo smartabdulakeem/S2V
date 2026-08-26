@@ -483,6 +483,46 @@ def _convert_white_to_transparent(input_path: str, output_path: str):
 
 # ── Public Entry Point ─────────────────────────────────────────────────────────
 
+def segment_keyword(seg: dict) -> str:
+    """
+    The image subject for a segment, from either schema version.
+
+    v2 scripts carry it on shots[0].query; only v1 has b_roll_keyword. Reading
+    one field alone produced prompts with no subject at all — "Segment 1: , 7th
+    century Arabian Peninsula, ..." — and a bare seg["b_roll_keyword"] in the
+    orchestrator failed every segment of every AI-planned script outright.
+    """
+    shots = seg.get("shots") or []
+    return (
+        seg.get("b_roll_keyword")
+        or (shots[0].get("query") if shots else "")
+        or ""
+    ).strip()
+
+
+def segment_pin(seg: dict):
+    """
+    The image the user chose for this segment, or None.
+
+    The storyboard writes pins to shots[0].pin; v1 scripts use use_base_image.
+    Without this the visuals stage re-searched for a shot the user had already
+    settled, and a pinned gap still failed the render.
+    """
+    shots = seg.get("shots") or []
+    if shots:
+        if shots[0].get("source") == "pin":
+            pinned = (shots[0].get("pin") or "").strip()
+            if pinned:
+                return pinned
+        # What the storyboard displayed for this shot. Honouring it keeps the
+        # render identical to the board the user approved; re-running retrieval
+        # here could quietly pick a different image than the one they saw.
+        resolved = (shots[0].get("resolved") or "").strip()
+        if resolved:
+            return resolved
+    return seg.get("use_base_image")
+
+
 def fetch_visual(
     segment_id: int,
     keyword: str,
@@ -657,10 +697,26 @@ def fetch_visual(
             else:
                 process_collage(actual_a, actual_b, output_path, width, height)
     else:
+        # A storyboard pin names a file in the library, not in the project folder.
+        # Stage it under the segment's own name so everything below is unchanged,
+        # and so the shot the user chose is the shot that renders.
+        pinned_abs = library.resolve_library_path(use_base_image) if use_base_image else None
+        if pinned_abs:
+            Path(project_dir).mkdir(parents=True, exist_ok=True)
+            staged = os.path.join(project_dir, f"{segment_id}.jpg")
+            shutil.copy(pinned_abs, staged)
+            if on_progress:
+                on_progress(f"Segment {segment_id} — using your chosen image: {use_base_image}")
+            if on_library_hit:
+                on_library_hit(str(use_base_image).replace("\\", "/"))
+            # Fall through with the staged filename so the retrieval branch is
+            # skipped and the usual treatment still applies.
+            use_base_image = f"{segment_id}.jpg"
+
         base_img = use_base_image if use_base_image else f"{segment_id}.jpg"
         if not base_img.endswith(".jpg") and not base_img.endswith(".png"):
             base_img += ".jpg"
-            
+
         jpg_path = os.path.join(project_dir, base_img)
         base_img_png = base_img.rsplit(".", 1)[0] + ".png" if "." in base_img else base_img + ".png"
         png_path = os.path.join(project_dir, base_img_png)
@@ -842,15 +898,7 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     
     for seg in script_dict.get("segments", []):
         segment_id = seg["segment_id"]
-        # v2 scripts carry the subject on shots[0].query; only v1 has b_roll_keyword.
-        # Reading one field alone produced prompts with no subject at all —
-        # "Segment 1: , 7th century Arabian Peninsula, ..." — which cannot generate anything.
-        shots = seg.get("shots") or []
-        keyword = (
-            seg.get("b_roll_keyword")
-            or (shots[0].get("query") if shots else "")
-            or ""
-        ).strip()
+        keyword = segment_keyword(seg)
         narration = seg.get("narration", "")
         magick_filter = seg.get("magick_filter", "vignette")
         

@@ -66,8 +66,19 @@ class Api:
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
+    #: Never leaves the backend. The page is local today, but a key handed to the
+    #: front end is a key in the DOM, in any devtools session, and in any future
+    #: web build. The UI only ever needs to know whether a key is present.
+    SECRET_SETTING_KEYS = (
+        "google_api_key", "google_tts_api_key", "deepseek_api_key", "elevenlabs_api_key",
+    )
+
     def get_settings(self) -> dict:
-        return dict(self._settings)
+        """Settings for the UI, with secrets reduced to a set/not-set flag."""
+        safe = {k: v for k, v in self._settings.items() if k not in self.SECRET_SETTING_KEYS}
+        for key in self.SECRET_SETTING_KEYS:
+            safe[f"{key}_set"] = bool(str(self._settings.get(key, "")).strip())
+        return safe
 
 
 
@@ -83,6 +94,12 @@ class Api:
 
     def save_deepseek_key(self, key: str) -> dict:
         self._settings["deepseek_api_key"] = key.strip()
+        _save_settings(self._settings)
+        return {"success": True}
+
+    def save_elevenlabs_key(self, key: str) -> dict:
+        """Optional — only set by users who choose to pay for ElevenLabs."""
+        self._settings["elevenlabs_api_key"] = key.strip()
         _save_settings(self._settings)
         return {"success": True}
 
@@ -197,14 +214,16 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def import_shot_image(self, query: str = "") -> dict:
+    def import_shot_image(self, query: str = "", segment_id=None, shot_id=None) -> dict:
         """
-        Bring an image you made outside the app into the library.
+        Bring an image you made outside the app into the library and pin it to a shot.
 
-        This closes the loop the storyboard was missing: copy the prompt, generate the
-        image somewhere else, then hand it back here. The file is content-hashed into
-        library/images, recorded in the manifest against the query it fills, and the
-        index is rebuilt so the shot matches on the next plan.
+        The pin is the point. Adding the file alone only entered it into a CLIP
+        popularity contest it had no reason to win: measured against the real board,
+        two imported images ranked 250th and 361st of 1,243 for their own shot's
+        query, and nothing in the library cleared the match floor for that query at
+        all. Returning the path so the caller can pin it is what actually fills the
+        shot; the manifest entry and reindex only make it findable later.
         """
         try:
             import hashlib
@@ -231,21 +250,376 @@ class Api:
             name = hashlib.sha1(data).hexdigest()[:12] + ext
             os.makedirs(library.IMAGES_DIR, exist_ok=True)
             target = os.path.join(library.IMAGES_DIR, name)
-            if not os.path.exists(target):
+            already_present = os.path.exists(target)
+            if not already_present:
                 shutil.copy(source, target)
 
             rel = f"library/images/{name}"
-            with open(library.MANIFEST_PATH, "a", encoding="utf-8") as mf:
-                mf.write(json.dumps({
-                    "path": rel,
-                    "prompt": query,
-                    "source": "imported",
-                    "bytes": len(data),
-                    "created_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                }, ensure_ascii=False) + "\n")
+            if not already_present:
+                with open(library.MANIFEST_PATH, "a", encoding="utf-8") as mf:
+                    mf.write(json.dumps({
+                        "path": rel,
+                        "prompt": query,
+                        "source": "imported",
+                        "bytes": len(data),
+                        "created_at": _time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    }, ensure_ascii=False) + "\n")
+                library.reindex(force=True)
 
+            return {
+                "success": True,
+                "path": rel,
+                "url": self._thumb(rel),
+                "filename": name,
+                "segment_id": segment_id,
+                "shot_id": shot_id,
+                "already_in_library": already_present,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    LAST_PROJECT_PATH = os.path.join(BASE_DIR, "config", "last_project.json")
+
+    #: Choices the Script screen should still be showing next time.
+    #: `shot_rhythm` held a slider position under a mapping that has since been
+    #: corrected, so it is stored as seconds now and the old key is not read.
+    UI_DEFAULT_KEYS = ("voice", "series_slug", "tone", "visual_style",
+                       "captions_enabled", "shot_rhythm_seconds", "formats")
+
+    def save_ui_defaults(self, defaults: dict) -> dict:
+        """
+        Remember the Script screen's choices.
+
+        Voice, series pack, tone and style reset to the first option on every
+        launch, so the same selections had to be made before every single video.
+        """
+        try:
+            stored = dict(self._settings.get("ui_defaults") or {})
+            for key in self.UI_DEFAULT_KEYS:
+                if key in (defaults or {}):
+                    stored[key] = defaults[key]
+            self._settings["ui_defaults"] = stored
+            _save_settings(self._settings)
+            return {"success": True, "ui_defaults": stored}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_ui_defaults(self) -> dict:
+        return {"success": True, "ui_defaults": dict(self._settings.get("ui_defaults") or {})}
+
+    def save_project(self, script_data: dict) -> dict:
+        """
+        Save the project where it belongs and remember it as the current one.
+
+        Planned scripts were written to a temp file, and the only route back was
+        a JSON file picker — so closing the app lost an afternoon of placing
+        images, and Windows could clear the file on its own. Projects now live in
+        projects/<title>/script.json and reopen by themselves.
+        """
+        try:
+            import re as _re
+            import unicodedata as _ud
+
+            proj = (script_data or {}).get("project") or {}
+            title = (proj.get("title") or "untitled").strip()
+            slug = _ud.normalize("NFKD", title)
+            slug = _re.sub(r"[^\w\-]+", "_", slug).strip("_") or "untitled"
+
+            folder = os.path.join(BASE_DIR, "projects", slug)
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, "script.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(script_data, f, ensure_ascii=False, indent=2)
+
+            os.makedirs(os.path.dirname(self.LAST_PROJECT_PATH), exist_ok=True)
+            with open(self.LAST_PROJECT_PATH, "w", encoding="utf-8") as f:
+                json.dump({"path": path, "title": title}, f, indent=2)
+
+            return {"success": True, "path": path, "title": title}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_last_project(self) -> dict:
+        """The project this app last had open, so it can pick up where it left off."""
+        try:
+            if not os.path.exists(self.LAST_PROJECT_PATH):
+                return {"success": True, "found": False}
+            with open(self.LAST_PROJECT_PATH, "r", encoding="utf-8") as f:
+                pointer = json.load(f)
+            path = pointer.get("path", "")
+            if not path or not os.path.exists(path):
+                return {"success": True, "found": False}
+            with open(path, "r", encoding="utf-8") as f:
+                script_data = json.load(f)
+            return {
+                "success": True,
+                "found": True,
+                "path": path,
+                "title": pointer.get("title", ""),
+                "script_data": script_data,
+                "segments": len(script_data.get("segments", [])),
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def choose_working_folder(self, script_data: dict) -> dict:
+        """
+        Pick any folder on this machine to work from, and index it.
+
+        Not a library subfolder — anywhere. A working folder is the handful of
+        pictures chosen for one video, kept wherever the user keeps them. Moving
+        them into the library afterwards is their call, not the app's.
+        """
+        try:
+            from pipeline import library
+
+            picked = self._window.create_file_dialog(dialog_type=20)  # FOLDER_DIALOG
+            if not picked:
+                return {"success": False, "cancelled": True}
+
+            folder = picked[0] if isinstance(picked, (list, tuple)) else str(picked)
+            images = library.folder_image_files(folder)
+            if not images:
+                return {"success": False,
+                        "error": f"No images found in {folder}.\n"
+                                 "Put your .jpg/.png files there and choose it again."}
+
+            count, elapsed = library.index_folder(folder)
+            script_data.setdefault("project", {})["image_folder"] = folder
+
+            # Existing choices pointing at the old source would survive the switch
+            # and make the new folder look like it changed nothing.
+            cleared = library.clear_out_of_scope_choices(script_data, folder)
+
+            return {
+                "success": True,
+                "script_data": script_data,
+                "folder": folder,
+                "images": count,
+                "seconds": round(elapsed, 1),
+                "cleared_pins": cleared["pins"],
+                "cleared_resolved": cleared["resolved"],
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def use_whole_library(self, script_data: dict) -> dict:
+        """Go back to searching the whole library."""
+        try:
+            script_data.setdefault("project", {})["image_folder"] = ""
+            return {"success": True, "script_data": script_data}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_working_folder_status(self, script_data: dict) -> dict:
+        """What the board should show about the current image source."""
+        try:
+            from pipeline import library
+            folder = ((script_data or {}).get("project") or {}).get("image_folder") or ""
+            if folder:
+                return {"success": True, "folder": folder,
+                        "images": len(library.folder_image_files(folder)),
+                        "name": os.path.basename(os.path.normpath(folder))}
+            return {"success": True, "folder": "",
+                    "images": len(library.get_image_files()), "name": ""}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def refresh_library(self) -> dict:
+        """
+        Pick up images added to library/images by hand, without a full rebuild.
+
+        Generating an image elsewhere and dropping it into the folder used to do
+        nothing until something happened to invalidate the index, and then cost a
+        full re-embed of the whole library. This indexes only what changed.
+        """
+        try:
+            from pipeline import library
+            notes = []
+            count, elapsed = library.reindex(on_progress=notes.append)
+            return {
+                "success": True,
+                "images": count,
+                "seconds": round(elapsed, 1),
+                "detail": notes[0] if notes else "Library already up to date",
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def save_prompts_to_file(self, text: str) -> dict:
+        """Fallback for when WebView2 refuses clipboard access."""
+        try:
+            import time as _time
+            out_dir = os.path.join(BASE_DIR, "output")
+            os.makedirs(out_dir, exist_ok=True)
+            path = os.path.join(out_dir, f"prompts_{_time.strftime('%Y%m%d_%H%M%S')}.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            return {"success": True, "path": path}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def get_all_prompts(self, script_data: dict) -> dict:
+        """
+        Every shot's image prompt for this script, as one block of text.
+
+        Includes shots that already matched, not only gaps: a suggested image is
+        not always the one you want, and generating a better one needs the prompt.
+        """
+        try:
+            from pipeline.library import plan_shots
+
+            report = plan_shots(script_data)
+
+            # One prompt per line, numbered in shot order.
+            #
+            # The number is the whole point: image tools name their output after
+            # the start of the prompt and truncate it to about twenty characters,
+            # so "wide establishing shot of…" becomes "12_wide_establishing_sh"
+            # and nineteen of forty-seven real files carried no subject words at
+            # all. The leading number survives that truncation and says exactly
+            # which shot the picture belongs to.
+            # The number is prefixed with a short tag from the project title, so
+            # two videos cannot both produce a "1_". Once these images move into
+            # the shared library, an untagged 1_ from last month's film would
+            # otherwise be a perfectly good candidate for this month's shot 1.
+            import re as _re
+            title = ((script_data or {}).get("project") or {}).get("title", "")
+            tag = "".join(_re.findall(r"[A-Za-z0-9]+", title))[:6].lower() or "shot"
+
+            lines = []
+            for i, r in enumerate(report.get("shot_reports", []), 1):
+                prompt = " ".join((r.get("composed_prompt") or "").split())
+                if prompt:
+                    lines.append(f"{tag}{i}. {prompt}")
+
+            return {
+                "success": True,
+                "text": "\n".join(lines),
+                "shots": len(lines),
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def set_shot_rhythm(self, script_data: dict, seconds_per_shot: float = 7.0) -> dict:
+        """
+        Re-cut every segment into shots of roughly seconds_per_shot.
+
+        The slider on the Storyboard used to only rewrite its own label. This is
+        what it was always meant to do: more shots per segment, each with its own
+        query, so the picture changes on a rhythm instead of holding one image for
+        the whole segment.
+        """
+        try:
+            from pipeline.text_parser import apply_shot_rhythm
+            stats = apply_shot_rhythm(script_data, seconds_per_shot)
+            return {"success": True, "script_data": script_data, **stats}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def fill_gaps_with_nearest(self, script_data: dict, allow_reuse: bool = True) -> dict:
+        """
+        Accept the closest library image for every gap, in one action.
+
+        A 117-shot script left 38 gaps, each needing a manual decision. The
+        closest image is already computed for every gap — it just scored under
+        the match floor. Taking it is a judgement the user is entitled to make in
+        bulk, and it is reversible: every filled shot is an ordinary pin that
+        Replace can change.
+
+        allow_reuse lets one image serve more than one shot. Diversity normally
+        forbids that, which is right for a full library and wrong for a thin one.
+        """
+        try:
+            from pipeline.library import plan_shots, search
+
+            report = plan_shots(script_data)
+            by_key = {(r["segment_id"], str(r["shot_id"])): r for r in report["shot_reports"]}
+
+            taken = {
+                r["best_path"] for r in report["shot_reports"]
+                if r["best_path"] and r["state"] != "gap"
+            }
+
+            filled, still_empty = 0, 0
+            for seg in script_data.get("segments", []):
+                for shot in seg.get("shots") or []:
+                    rep = by_key.get((seg.get("segment_id"), str(shot.get("shot_id"))))
+                    if not rep or rep["state"] != "gap":
+                        continue
+
+                    candidate = rep.get("best_path")
+                    if not candidate:
+                        # Nothing survived the exclusion set; ask again without it.
+                        loose = search(rep["query"], k=1, exclude=set() if allow_reuse else taken, min_score=0.0)
+                        candidate = loose[0][0] if loose else None
+                    if candidate and not allow_reuse and candidate in taken:
+                        candidate = None
+
+                    if not candidate:
+                        still_empty += 1
+                        continue
+
+                    shot["source"] = "pin"
+                    shot["pin"] = candidate
+                    shot.pop("resolved", None)
+                    shot.pop("resolved_score", None)
+                    taken.add(candidate)
+                    filled += 1
+
+            return {
+                "success": True,
+                "filled": filled,
+                "still_empty": still_empty,
+                "script_data": script_data,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def reject_shot_image(self, query: str, image_path: str) -> dict:
+        """
+        "Never suggest this for this shot" — record the (query, image) rejection.
+
+        pipeline.library.search() has always honoured this memory; nothing in the app
+        had ever written to it, so library/rejections.jsonl did not exist on disk.
+        """
+        try:
+            from pipeline import library
+            if not query or not image_path:
+                return {"success": False, "error": "query and image_path are both required"}
+            library.record_rejection(query, image_path)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def retire_library_image(self, image_path: str) -> dict:
+        """
+        "Retire it" — move an image out of the retrieval pool into library/_retired/.
+
+        Recoverable by design: the file is moved, never deleted. True deletion stays
+        in the Library screen (DESIGN_SPEC section 9).
+        """
+        try:
+            import shutil
+            from pipeline import library
+
+            abs_path = library.resolve_library_path(image_path)
+            if not abs_path:
+                return {"success": False, "error": f"not found: {image_path}"}
+
+            retired_dir = os.path.join(BASE_DIR, "library", "_retired")
+            os.makedirs(retired_dir, exist_ok=True)
+            target = os.path.join(retired_dir, os.path.basename(abs_path))
+
+            stem, ext = os.path.splitext(target)
+            n = 1
+            while os.path.exists(target):
+                target = f"{stem}_{n}{ext}"
+                n += 1
+
+            shutil.move(abs_path, target)
             library.reindex(force=True)
-            return {"success": True, "path": rel, "url": self._thumb(rel), "filename": name}
+            return {"success": True, "retired_to": os.path.relpath(target, BASE_DIR).replace("\\", "/")}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -532,11 +906,29 @@ class Api:
         )
 
         def run():
-            self._orchestrator.render(
-                script_path,
-                google_api_key=google_key,
-                google_tts_api_key=google_tts_key
-            )
+            # Anything escaping render() used to kill this thread in total silence:
+            # the app runs under pythonw.exe, which has no stderr for the default
+            # threading excepthook to print to, so the UI sat on "rendering"
+            # indefinitely with no way to tell a dead render from a slow one.
+            try:
+                self._orchestrator.render(
+                    script_path,
+                    google_api_key=google_key,
+                    google_tts_api_key=google_tts_key
+                )
+            except Exception as e:
+                import traceback
+                detail = traceback.format_exc()
+                try:
+                    if self._orchestrator.logger:
+                        self._orchestrator.logger.error(detail)
+                except Exception:
+                    pass
+                on_event({
+                    "type": "error",
+                    "message": f"The render stopped unexpectedly: {type(e).__name__}: {e}",
+                    "detail": detail,
+                })
 
         self._render_thread = threading.Thread(target=run, daemon=True)
         self._render_thread.start()
@@ -586,6 +978,181 @@ class Api:
             return {"success": False, "error": str(e)}
 
 
+
+    # ── Voiceover Studio ───────────────────────────────────────────────────────
+
+    def voice_probe_engines(self) -> dict:
+        """Which speech engines can actually run right now, and why not."""
+        try:
+            from pipeline.voice_studio import probe_engines
+            return {"success": True, "engines": probe_engines()}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_generate(self, opts: dict) -> dict:
+        """Generate one clip. `opts` mirrors the Voiceover Studio form."""
+        try:
+            from pipeline.voice_studio import synthesize
+            opts = opts or {}
+            result = synthesize(
+                engine=opts.get("engine", "edge"),
+                text=opts.get("text", ""),
+                voice=opts.get("voice", ""),
+                reference_audio=opts.get("reference_audio", ""),
+                language=opts.get("language", "EN"),
+                speed=opts.get("speed", 1.0),
+                pitch=opts.get("pitch", 0.0),
+                label=opts.get("label", "clip"),
+                google_api_key=(self._settings.get("google_tts_api_key", "").strip()
+                                or self._settings.get("google_api_key", "").strip()),
+            )
+            if not result.get("ok"):
+                return {"success": False, "error": result.get("error", "Generation failed.")}
+            return {"success": True, "entry": result["entry"]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_read_audio(self, path: str) -> dict:
+        """Return an audio file as a base64 data URL so the webview can play it."""
+        import base64
+        import mimetypes
+        try:
+            if not path or not os.path.isfile(path):
+                return {"success": False, "error": "Audio file not found."}
+            mime = mimetypes.guess_type(path)[0] or "audio/wav"
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("ascii")
+            return {"success": True, "data_url": f"data:{mime};base64,{b64}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_pick_reference(self) -> str | None:
+        """Native picker for a reference voice clip."""
+        try:
+            result = self._window.create_file_dialog(
+                dialog_type=10,  # OPEN_DIALOG
+                allow_multiple=False,
+                file_types=("Audio (*.wav;*.mp3;*.m4a;*.ogg;*.flac)", "All files (*.*)"),
+            )
+            return result[0] if result else None
+        except Exception:
+            return None
+
+    def voice_save_recording(self, data_url: str, suffix: str = ".webm") -> dict:
+        """Persist a microphone recording captured in the browser layer."""
+        import base64
+        import tempfile
+        try:
+            if not data_url or "," not in data_url:
+                return {"success": False, "error": "No recording data received."}
+            raw = base64.b64decode(data_url.split(",", 1)[1])
+            if not raw:
+                return {"success": False, "error": "Recording was empty."}
+            fd, path = tempfile.mkstemp(suffix=suffix, prefix="voiceref_")
+            with os.fdopen(fd, "wb") as f:
+                f.write(raw)
+            return {"success": True, "path": path}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_download(self, src_path: str, preferred_name: str = "voiceover") -> dict:
+        """Copy a generated clip to wherever the user chooses."""
+        import re
+        import shutil
+        try:
+            if not src_path or not os.path.isfile(src_path):
+                return {"success": False, "error": "That clip is no longer on disk."}
+            ext = os.path.splitext(src_path)[1] or ".wav"
+
+            # SAVE_DIALOG is 30. Passing 20 here opened a FOLDER picker (see the
+            # library folder import above), so every download landed on a
+            # directory and copyfile died with a permission error.
+            try:
+                import webview
+                save_dialog = int(webview.SAVE_DIALOG)
+            except Exception:
+                save_dialog = 30
+
+            safe_name = re.sub(r'[<>:"/\|?*]+', "_", str(preferred_name)).strip(" .")
+            if not safe_name:
+                safe_name = "voiceover"
+
+            label = ext.lstrip(".").upper() or "Audio"
+            dest = self._window.create_file_dialog(
+                dialog_type=save_dialog,
+                save_filename=f"{safe_name}{ext}",
+                file_types=(f"{label} audio (*{ext})", "All files (*.*)"),
+            )
+            if not dest:
+                return {"success": False, "cancelled": True}
+            if isinstance(dest, (list, tuple)):
+                dest = dest[0]
+            dest = str(dest)
+
+            # A folder can still come back from some backends; keep the clip name.
+            if os.path.isdir(dest):
+                dest = os.path.join(dest, f"{safe_name}{ext}")
+            if not os.path.splitext(dest)[1]:
+                dest += ext
+
+            if os.path.abspath(dest) != os.path.abspath(src_path):
+                shutil.copyfile(src_path, dest)
+            return {"success": True, "path": dest}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_list_profiles(self) -> dict:
+        try:
+            from pipeline.voice_studio import list_profiles
+            return {"success": True, "profiles": list_profiles()}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_save_profile(self, name: str, reference_audio: str, language: str = "EN") -> dict:
+        try:
+            from pipeline.voice_studio import save_profile
+            r = save_profile(name, reference_audio, language)
+            if not r.get("ok"):
+                return {"success": False, "error": r.get("error")}
+            return {"success": True, "profiles": r["profiles"]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_delete_profile(self, profile_id: str) -> dict:
+        try:
+            from pipeline.voice_studio import delete_profile
+            r = delete_profile(profile_id)
+            if not r.get("ok"):
+                return {"success": False, "error": r.get("error")}
+            return {"success": True, "profiles": r["profiles"]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_list_history(self) -> dict:
+        try:
+            from pipeline.voice_studio import list_history
+            return {"success": True, "history": list_history()}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_clear_history(self) -> dict:
+        try:
+            from pipeline.voice_studio import clear_history
+            clear_history()
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def voice_open_output_folder(self) -> dict:
+        try:
+            from pipeline.voice_studio import OUTPUT_DIR
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            os.startfile(OUTPUT_DIR)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
 # ── Window bootstrap ───────────────────────────────────────────────────────────
 
 def main():
@@ -612,6 +1179,11 @@ def main():
         height=900,
         min_size=(900, 750),
         resizable=True,
+        # pywebview defaults text_select to False and injects
+        #   body { user-select: none; cursor: default }
+        # which made every word in the app unselectable — narration could not be
+        # copied out or read with a screen reader.
+        text_select=True,
     )
 
     api.set_window(window)

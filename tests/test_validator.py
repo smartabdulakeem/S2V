@@ -3,6 +3,7 @@ Unit tests for pipeline/validator.py (S2V Script Schema v2).
 """
 
 import json
+import os
 import pytest
 from pathlib import Path
 from pipeline.validator import (
@@ -239,26 +240,71 @@ def test_rule_7_generative_motion_requires_budget():
     assert any("Raise the budget or change motion.kind" in e for e in errors)
 
 
-def test_rule_8_pin_path_must_stay_inside_project():
-    # Absolute path
+def test_rule_8_pin_path_traversal_is_refused():
     script = get_base_script()
     script["segments"][0]["shots"][0] = {
         "shot_id": "1a",
         "source": "pin",
-        "pin": "C:\\Windows\\System32\\cmd.exe"
-    }
-    errors = validate(script)
-    assert any("must stay inside the project" in e for e in errors)
-
-    # Path traversal ..
-    script2 = get_base_script()
-    script2["segments"][0]["shots"][0] = {
-        "shot_id": "1a",
-        "source": "pin",
         "pin": "projects/../../secret.json"
     }
-    errors2 = validate(script2)
-    assert any("must stay inside the project" in e for e in errors2)
+    assert any("traversal" in e for e in validate(script))
+
+
+def test_rule_8_absolute_pin_is_refused_without_a_working_folder():
+    """
+    Absolute pins used to be refused outright. A project can now work from a
+    folder anywhere on the machine, so they are allowed — but only inside that
+    declared folder. Otherwise a shared script could render any file on the
+    recipient's disk.
+    """
+    script = get_base_script()
+    script["segments"][0]["shots"][0] = {
+        "shot_id": "1a",
+        "source": "pin",
+        "pin": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+    }
+    errors = validate(script)
+    assert any("only allowed when" in e for e in errors)
+
+
+def test_rule_8_absolute_pin_outside_the_working_folder_is_refused(tmp_path):
+    work = tmp_path / "my images"
+    work.mkdir()
+    script = get_base_script()
+    script["project"]["image_folder"] = str(work)
+    script["segments"][0]["shots"][0] = {
+        "shot_id": "1a",
+        "source": "pin",
+        "pin": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+    }
+    errors = validate(script)
+    assert any("outside this project's working folder" in e for e in errors)
+
+
+def test_rule_8_absolute_pin_inside_the_working_folder_is_allowed(tmp_path):
+    work = tmp_path / "my images"
+    work.mkdir()
+    chosen = work / "chosen.jpg"
+    chosen.write_bytes(b"not really an image, but a real file")
+
+    script = get_base_script()
+    script["project"]["image_folder"] = str(work)
+    script["segments"][0]["shots"][0] = {
+        "shot_id": "1a",
+        "source": "pin",
+        "pin": str(chosen),
+    }
+    assert not [e for e in validate(script) if ".pin" in e]
+
+
+def test_rule_8_project_relative_pin_is_allowed():
+    script = get_base_script()
+    script["segments"][0]["shots"][0] = {
+        "shot_id": "1a",
+        "source": "pin",
+        "pin": "library/_polotno_downloads/89bd0337c32c.jpg",
+    }
+    assert not [e for e in validate(script) if ".pin" in e]
 
 
 # ── Test 4: Duration resolution logic tests ──────────────────────────────────
