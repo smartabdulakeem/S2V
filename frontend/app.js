@@ -14,6 +14,7 @@ const MAX_LOG_LINES = 150;
 
 let seriesPacks = [];
 let voiceCatalogue = [];
+const openVoiceEngines = new Set();
 let activeReplaceShot = null;
 
 // ── Busy indicators ───────────────────────────────────────────────────────────
@@ -410,9 +411,10 @@ function renderVoiceCatalogueSettings() {
   let totalAvailable = 0;
   let totalEnabled = 0;
 
-  voiceCatalogue.forEach(engGroup => {
+  voiceCatalogue.forEach((engGroup, idx) => {
+    const isOpen = openVoiceEngines.has(engGroup.engine);
     const engDiv = document.createElement("div");
-    engDiv.className = "eng";
+    engDiv.className = isOpen ? "eng" : "eng collapsed";
 
     let enabledInEng = 0;
     let rowsHtml = "";
@@ -439,13 +441,15 @@ function renderVoiceCatalogueSettings() {
       `;
     });
 
+    const tblId = `eng-tbl-${idx}`;
     engDiv.innerHTML = `
-      <div class="eng-h">
+      <div class="eng-h" role="button" tabindex="0" aria-expanded="${isOpen ? 'true' : 'false'}" aria-controls="${tblId}" data-engine="${engGroup.engine}">
+        <span class="chevron" aria-hidden="true">▶</span>
         <b>${engGroup.engine}</b>
         <span class="pill p-mute">${engGroup.voices.length} voices</span>
         <span class="mono" style="margin-left:auto">${enabledInEng} enabled</span>
       </div>
-      <div class="tbl">
+      <div class="tbl" id="${tblId}">
         <table>
           <thead><tr><th style="width:34px"></th><th>Voice</th><th>Lang</th><th>Captions</th><th></th></tr></thead>
           <tbody>${rowsHtml}</tbody>
@@ -461,6 +465,66 @@ function renderVoiceCatalogueSettings() {
     countSpan.textContent = `${totalAvailable} available · ${totalEnabled} enabled`;
   }
 }
+
+// ── Settings Collapsible Sections & Voice Engine Accordion ─────────────────
+document.addEventListener("click", (e) => {
+  const toggleBtn = e.target.closest(".card-toggle");
+  if (toggleBtn) {
+    const card = toggleBtn.closest(".card");
+    const controlsId = toggleBtn.getAttribute("aria-controls");
+    const body = controlsId ? document.getElementById(controlsId) : (card ? card.querySelector(".card-body") : null);
+    const isExpanded = toggleBtn.getAttribute("aria-expanded") === "true";
+    const nextState = !isExpanded;
+
+    toggleBtn.setAttribute("aria-expanded", String(nextState));
+    if (card) {
+      card.classList.toggle("collapsed", !nextState);
+    }
+    if (body) {
+      if (nextState) {
+        body.removeAttribute("hidden");
+      } else {
+        body.setAttribute("hidden", "");
+      }
+    }
+    return;
+  }
+
+  // Voice engine header toggle (ignoring clicks on checkboxes, preview buttons, inputs)
+  const engHeader = e.target.closest(".eng-h");
+  if (engHeader && !e.target.closest(".cb") && !e.target.closest("button") && !e.target.closest("input")) {
+    const engName = engHeader.getAttribute("data-engine");
+    if (engName) {
+      if (openVoiceEngines.has(engName)) {
+        openVoiceEngines.delete(engName);
+      } else {
+        openVoiceEngines.add(engName);
+      }
+      renderVoiceCatalogueSettings();
+    }
+  }
+});
+
+// Keyboard support (Enter & Space) for .eng-h
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    const engHeader = document.activeElement && document.activeElement.closest(".eng-h");
+    if (engHeader && document.activeElement === engHeader) {
+      e.preventDefault();
+      const engName = engHeader.getAttribute("data-engine");
+      if (engName) {
+        if (openVoiceEngines.has(engName)) {
+          openVoiceEngines.delete(engName);
+        } else {
+          openVoiceEngines.add(engName);
+        }
+        renderVoiceCatalogueSettings();
+        const updatedHeader = Array.from(document.querySelectorAll(".eng-h")).find(el => el.getAttribute("data-engine") === engName);
+        if (updatedHeader) updatedHeader.focus();
+      }
+    }
+  }
+});
 
 function toggleVoiceEnable(voiceId) {
   voiceCatalogue.forEach(group => {

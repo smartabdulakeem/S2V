@@ -436,140 +436,169 @@
       <h2>Settings</h2>
 
       <!-- KEYS & SERVICES -->
-      <div class="card">
-        <h3>Keys &amp; services</h3>
-        <div class="tbl">
-          <table>
-            <thead>
-              <tr><th>Service</th><th>Used for</th><th>Key / Secret</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Google AI</td>
-                <td>Imagen, Gemini, Lyria music</td>
-                <td><input type="password" id="google-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
-                <td><span class="pill p-mute" id="google-key-status">not set</span></td>
-                <td><button type="button" class="ghost" onclick="saveGoogleKey()">Test &amp; Save</button></td>
-              </tr>
-              <tr>
-                <td>Google Cloud TTS</td>
-                <td>Narration + word timings</td>
-                <td><input type="password" id="google-tts-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
-                <td><span class="pill p-mute" id="google-tts-key-status">not set</span></td>
-                <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Test &amp; Save</button></td>
-              </tr>
-              <tr>
-                <td>ElevenLabs</td>
-                <td>Premium voice &mdash; optional</td>
-                <td><input type="password" id="elevenlabs-key-input" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
-                <td><span class="pill p-mute" id="elevenlabs-key-status">not set</span></td>
-                <td><button type="button" class="ghost" onclick="saveElevenLabsKey()">Test &amp; Save</button></td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="card collapsed">
+        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-keys">
+          <span class="chevron" aria-hidden="true">▶</span>
+          <h3>Keys &amp; services</h3>
+        </button>
+        <div class="card-body" id="card-body-keys" hidden>
+          <div class="tbl">
+            <table>
+              <thead>
+                <tr><th>Service</th><th>Used for</th><th>Key / Secret</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Google AI</td>
+                  <td>Imagen, Gemini, Lyria music</td>
+                  <td><input type="password" id="google-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
+                  <td><span class="pill p-mute" id="google-key-status">not set</span></td>
+                  <td><button type="button" class="ghost" onclick="saveGoogleKey()">Test &amp; Save</button></td>
+                </tr>
+                <tr>
+                  <td>Google Cloud TTS</td>
+                  <td>Narration + word timings</td>
+                  <td><input type="password" id="google-tts-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
+                  <td><span class="pill p-mute" id="google-tts-key-status">not set</span></td>
+                  <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Test &amp; Save</button></td>
+                </tr>
+                <tr>
+                  <td>ElevenLabs</td>
+                  <td>Premium voice &mdash; optional</td>
+                  <td><input type="password" id="elevenlabs-key-input" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
+                  <td><span class="pill p-mute" id="elevenlabs-key-status">not set</span></td>
+                  <td><button type="button" class="ghost" onclick="saveElevenLabsKey()">Test &amp; Save</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mono">
+            Keys are stored on this machine only, in <code>config/settings.json</code>, and never
+            travel with the app. Everything except Google runs offline and needs no key at all:
+            narration, image retrieval, captions and rendering are all local.
+          </p>
         </div>
-        <p class="mono">
-          Keys are stored on this machine only, in <code>config/settings.json</code>, and never
-          travel with the app. Everything except Google runs offline and needs no key at all:
-          narration, image retrieval, captions and rendering are all local.
-        </p>
       </div>
 
       <!-- VOICE CATALOGUE -->
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
+      <div class="card collapsed">
+        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-voice-cat">
+          <span class="chevron" aria-hidden="true">▶</span>
           <h3>Voice catalogue</h3>
-          <span class="mono" id="voice-catalogue-count">47 available &middot; 6 enabled</span>
-        </div>
-        <p class="mono">Tick the ones you use. Only enabled voices appear on the Script screen.</p>
+          <span class="mono" id="voice-catalogue-count" style="margin-left:auto">47 available &middot; 6 enabled</span>
+        </button>
+        <div class="card-body" id="card-body-voice-cat" hidden>
+          <p class="mono">Tick the ones you use. Only enabled voices appear on the Script screen.</p>
 
-        <div id="voice-engines-container">
-          <!-- Dynamically populated from config/voices.json -->
+          <div id="voice-engines-container">
+            <!-- Dynamically populated from config/voices.json -->
+          </div>
         </div>
       </div>
 
       <!-- LANGUAGE PACKS -->
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
+      <div class="card collapsed">
+        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-lang-packs">
+          <span class="chevron" aria-hidden="true">▶</span>
           <h3>Language packs</h3>
-          <span class="mono">English installed &middot; language packs not implemented yet</span>
-        </div>
-        <div class="tbl">
-          <table>
-            <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td><td><button type="button" class="ghost" disabled title="Language packs are not implemented yet">Remove</button></td></tr>
-              <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td><td><button type="button" class="primary" disabled title="Language packs are not implemented yet">Download</button></td></tr>
-              <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
-              <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
-            </tbody>
-          </table>
+          <span class="mono" style="margin-left:auto">English installed &middot; language packs not implemented yet</span>
+        </button>
+        <div class="card-body" id="card-body-lang-packs" hidden>
+          <div class="tbl">
+            <table>
+              <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td><td><button type="button" class="ghost" disabled title="Language packs are not implemented yet">Remove</button></td></tr>
+                <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td><td><button type="button" class="primary" disabled title="Language packs are not implemented yet">Download</button></td></tr>
+                <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
+                <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       <!-- PRONUNCIATION DICTIONARY -->
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
+      <div class="card collapsed">
+        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-pronunciation">
+          <span class="chevron" aria-hidden="true">▶</span>
           <h3>Pronunciation dictionary</h3>
-          <span class="mono">per series &middot; 34 entries</span>
-        </div>
-        <p class="hint"><b>Arabic names spoken correctly.</b> Wrap names in SSML phonemes so your narrator pronounces proper nouns cleanly.</p>
-        <div class="tbl">
-          <table>
-            <thead><tr><th>Written</th><th>Spoken (IPA)</th><th>Heard in</th><th></th></tr></thead>
-            <tbody>
-              <tr><td>Al-Mansur</td><td class="mono">alˈmansˤuːr</td><td class="mono">S2E1, S2E4</td><td><button type="button" class="ghost">Test</button></td></tr>
-              <tr><td>Abu Ubaydah</td><td class="mono">ʔabuː ʕubajda</td><td class="mono">S2E3, S2E6</td><td><button type="button" class="ghost">Test</button></td></tr>
-              <tr><td>Madinah</td><td class="mono">maˈdiːna</td><td class="mono">all episodes</td><td><button type="button" class="ghost">Test</button></td></tr>
-              <tr><td>Bayt al-Hikmah</td><td class="mono">bajt alˈħikma</td><td class="mono">S2E1</td><td><button type="button" class="ghost">Test</button></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="row">
-          <button type="button">Add entry</button>
-          <button type="button" class="ghost">Import from script</button>
-          <button type="button" class="ghost">Export</button>
+          <span class="mono" style="margin-left:auto">per series &middot; 34 entries</span>
+        </button>
+        <div class="card-body" id="card-body-pronunciation" hidden>
+          <p class="hint"><b>Arabic names spoken correctly.</b> Wrap names in SSML phonemes so your narrator pronounces proper nouns cleanly.</p>
+          <div class="tbl">
+            <table>
+              <thead><tr><th>Written</th><th>Spoken (IPA)</th><th>Heard in</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>Al-Mansur</td><td class="mono">alˈmansˤuːr</td><td class="mono">S2E1, S2E4</td><td><button type="button" class="ghost">Test</button></td></tr>
+                <tr><td>Abu Ubaydah</td><td class="mono">ʔabuː ʕubajda</td><td class="mono">S2E3, S2E6</td><td><button type="button" class="ghost">Test</button></td></tr>
+                <tr><td>Madinah</td><td class="mono">maˈdiːna</td><td class="mono">all episodes</td><td><button type="button" class="ghost">Test</button></td></tr>
+                <tr><td>Bayt al-Hikmah</td><td class="mono">bajt alˈħikma</td><td class="mono">S2E1</td><td><button type="button" class="ghost">Test</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="row">
+            <button type="button">Add entry</button>
+            <button type="button" class="ghost">Import from script</button>
+            <button type="button" class="ghost">Export</button>
+          </div>
         </div>
       </div>
 
       <div class="grid2">
-        <div class="card">
-          <h3>Defaults</h3>
-          <label class="f">Resolution
-            <select><option>1080p</option><option>720p — faster</option><option>1440p</option></select>
-          </label>
-          <label class="f">Frame rate
-            <select><option>30 fps</option><option>24 fps — filmic</option></select>
-          </label>
-          <label class="f">Caption style
-            <select><option>documentary lower-third</option><option>kinetic word-by-word</option><option>bold centre</option></select>
-          </label>
-          <label class="f">Grade
-            <select><option>documentary</option><option>illustration</option><option>silhouette</option><option>none</option></select>
-          </label>
+        <div class="card collapsed">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-defaults">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Defaults</h3>
+          </button>
+          <div class="card-body" id="card-body-defaults" hidden>
+            <label class="f">Resolution
+              <select><option>1080p</option><option>720p — faster</option><option>1440p</option></select>
+            </label>
+            <label class="f">Frame rate
+              <select><option>30 fps</option><option>24 fps — filmic</option></select>
+            </label>
+            <label class="f">Caption style
+              <select><option>documentary lower-third</option><option>kinetic word-by-word</option><option>bold centre</option></select>
+            </label>
+            <label class="f">Grade
+              <select><option>documentary</option><option>illustration</option><option>silhouette</option><option>none</option></select>
+            </label>
+          </div>
         </div>
 
-        <div class="card">
-          <h3>Spending</h3>
-          <label class="f">Cap per video<input type="text" value="$5.00"></label>
-          <label class="f">Warn above<input type="text" value="$2.00"></label>
-          <div class="kv"><span>This month</span><b>$3.12</b></div>
-          <div class="kv"><span>Last video</span><b>$0.28</b></div>
-          <p class="mono">Pre-render cost estimates. Nothing paid is generated without approval.</p>
+        <div class="card collapsed">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-spending">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Spending</h3>
+          </button>
+          <div class="card-body" id="card-body-spending" hidden>
+            <label class="f">Cap per video<input type="text" value="$5.00"></label>
+            <label class="f">Warn above<input type="text" value="$2.00"></label>
+            <div class="kv"><span>This month</span><b>$3.12</b></div>
+            <div class="kv"><span>Last video</span><b>$0.28</b></div>
+            <p class="mono">Pre-render cost estimates. Nothing paid is generated without approval.</p>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <h3>Performance</h3>
-        <div class="row">
-          <label class="f">Encoder
-            <select><option>libx264 veryfast (auto-detected)</option><option>h264_qsv</option></select>
-          </label>
-          <label class="f">Parallel shots
-            <select><option>3 (recommended for 4 cores)</option><option>1</option><option>6</option></select>
-          </label>
+      <div class="card collapsed">
+        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-performance">
+          <span class="chevron" aria-hidden="true">▶</span>
+          <h3>Performance</h3>
+        </button>
+        <div class="card-body" id="card-body-performance" hidden>
+          <div class="row">
+            <label class="f">Encoder
+              <select><option>libx264 veryfast (auto-detected)</option><option>h264_qsv</option></select>
+            </label>
+            <label class="f">Parallel shots
+              <select><option>3 (recommended for 4 cores)</option><option>1</option><option>6</option></select>
+            </label>
+          </div>
+          <p class="mono">Hardware probed at startup. NVENC is not attempted when missing.</p>
         </div>
-        <p class="mono">Hardware probed at startup. NVENC is not attempted when missing.</p>
       </div>
     </div>
   </div>
