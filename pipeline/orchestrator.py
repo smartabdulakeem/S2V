@@ -269,7 +269,8 @@ class RenderOrchestrator:
                     cache_dir=self.cache_dir,
                     google_api_key=voice_key,
                     on_progress=progress_cb,
-                    voice_steering=seg.get("voice_steering", "")
+                    voice_steering=seg.get("voice_steering", ""),
+                    narrative_tone=proj.get("narrative_tone", "")
                 )
                 with self._lock:
                     audio_paths_map[seg_id] = path

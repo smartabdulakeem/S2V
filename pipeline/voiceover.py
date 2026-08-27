@@ -220,7 +220,8 @@ def _generate_with_local_supertonic(
     voice_rate: str,
     output_path: str,
     on_progress=None,
-    segment_id: int = 0
+    segment_id: int = 0,
+    narrative_tone: str = ""
 ):
     """Generate audio offline using local Supertonic synthesis."""
     global _tts_instance, _tts_last_active_time, _tts_monitor_started
@@ -261,17 +262,14 @@ def _generate_with_local_supertonic(
 
     style = tts_instance.get_voice_style(voice_name=voice_name)
 
-    # 2. Map rate string to speed coefficient (0.7 - 2.0)
-    speed = 1.05
-    if voice_rate:
-        voice_rate = voice_rate.strip()
-        if voice_rate.endswith("%"):
-            try:
-                val = float(voice_rate[:-1])
-                speed = round(1.05 + (val / 100.0), 2)
-                speed = max(0.7, min(2.0, speed))
-            except ValueError:
-                pass
+    # 2. Speed and pause length come from the tone, with the user's own rate
+    #    folded in on top. Supertonic chunks the text itself and takes the gap
+    #    between chunks as a parameter, so a motivational read genuinely holds
+    #    between lines rather than just running slower.
+    from pipeline.delivery import delivery_for, apply_rate
+    profile = delivery_for(narrative_tone)
+    speed = apply_rate(profile["speed"], voice_rate)
+    silence_duration = float(profile["silence"])
 
     # 3. Detect / extract language code
     lang = None
@@ -335,6 +333,7 @@ def _generate_with_local_supertonic(
                     text=part_clean,
                     voice_style=active_style,
                     speed=speed,
+                    silence_duration=silence_duration,
                     lang=lang
                 )
                 
@@ -414,6 +413,7 @@ def _generate_with_local_supertonic(
                 text=clean_text,
                 voice_style=style,
                 speed=speed,
+                silence_duration=silence_duration,
                 lang=lang
             )
             tts_instance.save_audio(wav, temp_wav)
@@ -494,7 +494,8 @@ def _generate_with_local_kokoro(
     voice_rate: str,
     output_path: str,
     on_progress=None,
-    segment_id: int = 0
+    segment_id: int = 0,
+    narrative_tone: str = ""
 ):
     """Generate audio offline using local Kokoro-ONNX synthesis."""
     import soundfile as sf
@@ -513,17 +514,12 @@ def _generate_with_local_kokoro(
     elif ":" in v_clean:
         voice_name = v_clean.split(":", 1)[1].strip()
 
-    # Map speed rate
-    speed = 1.0
-    if voice_rate:
-        voice_rate = voice_rate.strip()
-        if voice_rate.endswith("%"):
-            try:
-                val = float(voice_rate[:-1])
-                speed = round(1.0 + (val / 100.0), 2)
-                speed = max(0.5, min(2.0, speed))
-            except ValueError:
-                pass
+    # Speed and pauses come from the tone. Unlike Supertonic, kokoro-onnx has
+    # no silence parameter, so the narration is spoken a block at a time and
+    # the gaps are stitched in as real samples.
+    from pipeline.delivery import delivery_for, apply_rate, split_blocks, join_with_silence
+    profile = delivery_for(narrative_tone)
+    speed = apply_rate(profile["speed"], voice_rate)
 
     if on_progress:
         on_progress(f"Segment {segment_id} — Generating offline voiceover via Kokoro ({voice_name})")
@@ -549,7 +545,20 @@ def _generate_with_local_kokoro(
     elif voice_name.startswith("p"):
         lang = "pt-br"
 
-    samples, sr = kokoro.create(narration, voice=voice_name, speed=speed, lang=lang)
+    blocks = split_blocks(narration)
+    if len(blocks) <= 1:
+        samples, sr = kokoro.create(narration, voice=voice_name, speed=speed, lang=lang)
+    else:
+        pieces = []
+        sr = None
+        for chunk, gap in blocks:
+            chunk_samples, chunk_sr = kokoro.create(
+                chunk, voice=voice_name, speed=speed, lang=lang)
+            sr = sr or chunk_sr
+            pieces.append((chunk_samples, gap))
+        samples = join_with_silence(pieces, sr, profile)
+        if samples is None:
+            raise RuntimeError("Kokoro produced no audio for any block.")
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         temp_wav = tmp.name
@@ -880,7 +889,8 @@ def generate_voiceover(
     cache_dir: str,
     google_api_key: str = "",
     on_progress=None,
-    voice_steering: str = ""
+    voice_steering: str = "",
+    narrative_tone: str = ""
 ) -> str:
     """
     Generate MP3 voiceover. Returns path to the MP3 file.
@@ -894,10 +904,31 @@ def generate_voiceover(
     """
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_audio.mp3")
 
+    # The tone changes how the words are read, so cached audio from a different
+    # tone is the wrong audio. The filename is left alone - app.py and the
+    # caption tests both look for segment_N_audio.mp3 - and the tone is
+    # recorded beside it instead.
+    from pipeline.delivery import resolve_tone
+    tone_key = resolve_tone(narrative_tone)
+    tone_marker = output_path + ".tone"
+
     if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        cached_tone = ""
+        try:
+            with open(tone_marker, "r", encoding="utf-8") as tf:
+                cached_tone = tf.read().strip()
+        except OSError:
+            pass
+        if cached_tone == tone_key:
+            if on_progress:
+                on_progress(f"Segment {segment_id} — voiceover already cached, skipping")
+            return output_path
         if on_progress:
-            on_progress(f"Segment {segment_id} — voiceover already cached, skipping")
-        return output_path
+            on_progress(f"Segment {segment_id} — tone changed, re-recording")
+        try:
+            os.unlink(output_path)
+        except OSError:
+            pass
 
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
@@ -925,7 +956,8 @@ def generate_voiceover(
             voice_rate=voice_rate,
             output_path=output_path,
             on_progress=on_progress,
-            segment_id=segment_id
+            segment_id=segment_id,
+            narrative_tone=narrative_tone
         )
 
     elif is_gemini_tts:
@@ -965,7 +997,8 @@ def generate_voiceover(
             voice_rate=voice_rate,
             output_path=output_path,
             on_progress=on_progress,
-            segment_id=segment_id
+            segment_id=segment_id,
+            narrative_tone=narrative_tone
         )
 
     else:
@@ -982,6 +1015,12 @@ def generate_voiceover(
             on_progress(f"Segment {segment_id} — Generating Edge Neural voiceover ({clean_voice})")
             
         _generate_with_edge_tts(tts_text, clean_voice, voice_rate, voice_pitch, output_path)
+
+    try:
+        with open(tone_marker, "w", encoding="utf-8") as tf:
+            tf.write(tone_key)
+    except OSError:
+        pass
 
     if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError(

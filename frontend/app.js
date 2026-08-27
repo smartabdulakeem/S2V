@@ -304,11 +304,61 @@ async function loadSeriesPacks() {
 
   select.addEventListener("change", async () => {
     await loadStylePresets();
+    await loadNarrationTones();
     await refreshBriefPreview();
   });
   await loadStylePresets();
+  await loadNarrationTones();
   wireBriefBox();
 }
+
+// ── Narration tone ───────────────────────────────────────────────────────────
+// The tone is not a label. It sets the reading speed and the length of the
+// silence left at each sentence and paragraph, which is what actually makes a
+// motivational read sound different from a news read.
+async function loadNarrationTones() {
+  const sel = document.getElementById("pt-tone");
+  if (!sel || isWebMode) return;
+  const slug = (document.getElementById("pt-series-slug") || {}).value || "";
+
+  let tones = [];
+  try {
+    tones = await window.pywebview.api.get_narration_tones(slug);
+  } catch (e) {
+    console.error("Could not load narration tones:", e);
+  }
+  if (!tones.length) return;
+
+  const previous = sel.value;
+  sel.innerHTML = "";
+
+  const best = tones.filter(t => t.recommended);
+  const rest = tones.filter(t => !t.recommended);
+
+  const addGroup = (labelText, items) => {
+    if (!items.length) return;
+    const group = document.createElement("optgroup");
+    group.label = labelText;
+    items.forEach(t => {
+      const opt = new Option(t.label, t.key);
+      opt.title = t.steering;
+      group.appendChild(opt);
+    });
+    sel.appendChild(group);
+  };
+
+  addGroup("Best for this niche", best);
+  addGroup("Other tones", rest);
+
+  // Keep the user's pick if this niche still offers it, else take the first
+  // recommendation, which is the one written for this niche.
+  if (previous && [...sel.options].some(o => o.value === previous)) {
+    sel.value = previous;
+  } else if (best.length) {
+    sel.value = best[0].key;
+  }
+}
+window.loadNarrationTones = loadNarrationTones;
 
 // ── Prompt opening ───────────────────────────────────────────────────────────
 // Blank until the niche or the visual type is changed, then it follows them.

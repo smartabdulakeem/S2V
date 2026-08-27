@@ -318,6 +318,20 @@ class Api:
     #: Choices the Script screen should still be showing next time.
     #: `shot_rhythm` held a slider position under a mapping that has since been
     #: corrected, so it is stored as seconds now and the old key is not read.
+    def get_narration_tones(self, series_slug: str = None) -> list:
+        """
+        Every tone, the ones suited to this niche first.
+
+        A tone is not decoration: it sets the reading speed and the length of
+        the silences between sentences and paragraphs, which is what makes a
+        motivational read different from a news read on the same words.
+        """
+        try:
+            from pipeline.delivery import tones_for_niche
+            return tones_for_niche(series_slug)
+        except Exception:
+            return []
+
     def draft_brief_preview(self, series_slug: str = None, visual_type: str = "") -> dict:
         """
         The opening line these two choices would produce, for the board to show.
