@@ -127,6 +127,79 @@ class Api:
                         pass
         return packs
 
+    def get_niche_style(self, series_slug: str = None) -> dict:
+        """Return merged niche configuration and override status for the Settings editor."""
+        try:
+            from pipeline.library import get_series_config, get_series_override
+            cfg = get_series_config(series_slug=series_slug)
+            overrides = get_series_override(series_slug=series_slug)
+            return {
+                "success": True,
+                "series_slug": cfg.get("series_slug", series_slug or "default"),
+                "display_name": cfg.get("display_name", ""),
+                "medium_block": cfg.get("medium_block", ""),
+                "palette_block": cfg.get("palette_block", ""),
+                "era_block": cfg.get("era_block", ""),
+                "negative_block": cfg.get("negative_block", ""),
+                "style_block": cfg.get("style_block", ""),
+                "is_overridden": bool(overrides),
+                "overrides": overrides,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def save_niche_style(self, series_slug: str, overrides: dict) -> dict:
+        """Save per-niche overrides in config/series_overrides/<slug>.json."""
+        try:
+            from pipeline.library import save_series_override
+            return save_series_override(series_slug=series_slug, overrides=overrides)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def reset_niche_style(self, series_slug: str) -> dict:
+        """Reset a niche to default by deleting its override file."""
+        try:
+            from pipeline.library import reset_series_override
+            return reset_series_override(series_slug=series_slug)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def preview_niche_prompt(self, series_slug: str, medium_block: str = None, palette_block: str = None,
+                             era_block: str = None, negative_block: str = None,
+                             shot_query: str = "A citadel at dawn", apply_era: bool = True) -> dict:
+        """Generate a live prompt preview using temporary blocks."""
+        try:
+            from pipeline.library import get_series_config
+            cfg = get_series_config(series_slug=series_slug)
+            preview_cfg = dict(cfg)
+            if medium_block is not None:
+                preview_cfg["medium_block"] = medium_block
+            if palette_block is not None:
+                preview_cfg["palette_block"] = palette_block
+            if era_block is not None:
+                preview_cfg["era_block"] = era_block
+            if negative_block is not None:
+                preview_cfg["negative_block"] = negative_block
+
+            med = (preview_cfg.get("medium_block") or "").strip()
+            pal = (preview_cfg.get("palette_block") or "").strip()
+            if med or pal:
+                medium = ", ".join(p for p in (med, pal) if p)
+            else:
+                medium = (preview_cfg.get("style_block") or "").strip()
+            era = (preview_cfg.get("era_block") or "").strip() if apply_era else ""
+
+            parts = [shot_query, "wide establishing shot"]
+            if medium:
+                parts.append(medium.rstrip(" ."))
+            if era and era.lower() not in ", ".join(parts).lower():
+                parts.append(era.rstrip(" ."))
+            preview_text = ", ".join(p for p in parts if p).rstrip(" ,") + "."
+            neg = preview_cfg.get("negative_block")
+            return {"success": True, "prompt": preview_text, "negative_prompt": neg}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     #: Keys whose title-cased form reads badly ("Three D Render").
     STYLE_LABEL_OVERRIDES = {
         "three_d_render": "3D Render",

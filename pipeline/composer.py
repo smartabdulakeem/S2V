@@ -334,7 +334,7 @@ def _resolve_pin_path(pin_file: str, project_dir: str, root: str = None) -> str:
 def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height: int, fps: int = 30,
                         default_treatment: str = None, motion_style: str = None) -> str:
     """Generate a SHA-1 hash for shot content cache lookup."""
-    query_or_pin = str(shot.get("pin") or shot.get("query") or "")
+    query_or_pin = str(shot.get("prompt_override") or shot.get("pin") or shot.get("query") or "")
     motion = json.dumps(shot.get("motion", {}), sort_keys=True)
     treatment = json.dumps(shot.get("treatment", {}), sort_keys=True)
     dur_str = f"{resolved_duration:.3f}"
@@ -349,8 +349,9 @@ def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height
     # v4: the motion style sets how far the frame travels, so the same shot at
     #     the same duration renders differently under Gentle drift and Dynamic.
     # v5: lanczos scaling flags, medium/crf 18 encoder preset, faststart, and 192k audio.
+    # v6: prompt_override support, apply_era separation, medium/palette/era split.
     style_key = resolve_motion_style(motion_style)
-    raw = (f"v5|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
+    raw = (f"v6|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
            f"{default_treatment or ''}|{style_key}")
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 

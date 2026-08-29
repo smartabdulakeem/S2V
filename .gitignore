@@ -8,6 +8,7 @@ vendor/
 
 # ── User settings / API keys ─────────────────────────────────────────────────
 config/settings.json
+config/series_overrides/
 
 # ── Machine-specific UI state (absolute paths, changes every session) ────────
 config/last_project.json

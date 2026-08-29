@@ -738,6 +738,7 @@ async function loadSettingsData() {
       aiDescCb.checked = !!settings.ai_shot_descriptions;
     }
   } catch (e) {}
+  await loadNicheStyleSettings();
 }
 
 async function toggleAiShotDescriptions(enabled) {
@@ -770,6 +771,7 @@ async function saveGoogleKey() {
   }
   setKeyStatus("google-key-status", !!key.trim());
 }
+window.saveGoogleKey = saveGoogleKey;
 
 async function saveGoogleTtsKey() {
   const key = document.getElementById("google-tts-key-input").value;
@@ -796,6 +798,177 @@ async function saveElevenLabsKey() {
 }
 window.saveElevenLabsKey = saveElevenLabsKey;
 
+
+// ── Visual Style Per Niche (Settings Editor) ─────────────────────────────────
+
+async function loadNicheStyleSettings() {
+  const sel = document.getElementById("niche-select");
+  if (!sel) return;
+  
+  if (!isWebMode && window.pywebview.api.get_series_packs) {
+    try {
+      const packs = await window.pywebview.api.get_series_packs();
+      sel.innerHTML = "";
+      packs.forEach(p => {
+        const opt = new Option(p.display_name, p.series_slug);
+        sel.appendChild(opt);
+      });
+      const scriptSlug = (document.getElementById("pt-series-slug") || {}).value;
+      if (scriptSlug && Array.from(sel.options).some(o => o.value === scriptSlug)) {
+        sel.value = scriptSlug;
+      }
+    } catch (e) {
+      console.error("Failed to load series packs for niche editor:", e);
+    }
+  }
+  await onNicheSelectChange();
+}
+window.loadNicheStyleSettings = loadNicheStyleSettings;
+
+async function onNicheSelectChange() {
+  const sel = document.getElementById("niche-select");
+  if (!sel) return;
+  const slug = sel.value;
+  if (!slug) return;
+
+  if (!isWebMode && window.pywebview.api.get_niche_style) {
+    try {
+      const data = await window.pywebview.api.get_niche_style(slug);
+      if (data.success) {
+        document.getElementById("niche-medium-input").value = data.medium_block || "";
+        document.getElementById("niche-palette-input").value = data.palette_block || "";
+        document.getElementById("niche-era-input").value = data.era_block || "";
+        document.getElementById("niche-negative-input").value = data.negative_block || "";
+
+        const statusEl = document.getElementById("niche-override-status");
+        if (statusEl) {
+          statusEl.textContent = data.is_overridden ? "customised" : "default";
+          statusEl.className = data.is_overridden ? "mono pill p-warn" : "mono";
+        }
+      }
+    } catch (e) {
+      console.error("Failed to get niche style:", e);
+    }
+  }
+  updateNichePreview();
+}
+window.onNicheSelectChange = onNicheSelectChange;
+
+function updateNichePreview() {
+  const previewEl = document.getElementById("niche-prompt-preview");
+  if (!previewEl) return;
+
+  const med = (document.getElementById("niche-medium-input").value || "").trim();
+  const pal = (document.getElementById("niche-palette-input").value || "").trim();
+  const era = (document.getElementById("niche-era-input").value || "").trim();
+
+  let medium = "";
+  if (med || pal) {
+    medium = [med, pal].filter(Boolean).join(", ");
+  }
+
+  const parts = ["A citadel at dawn", "wide establishing shot"];
+  if (medium) parts.push(medium.replace(/\.+$/, ""));
+  if (era && !parts.join(", ").toLowerCase().includes(era.toLowerCase())) {
+    parts.push(era.replace(/\.+$/, ""));
+  }
+
+  previewEl.textContent = parts.filter(Boolean).join(", ").replace(/,\s*$/, "") + ".";
+}
+window.updateNichePreview = updateNichePreview;
+
+async function saveNicheStyle() {
+  const sel = document.getElementById("niche-select");
+  if (!sel) return;
+  const slug = sel.value;
+  if (!slug) return;
+
+  const overrides = {
+    medium_block: document.getElementById("niche-medium-input").value.trim(),
+    palette_block: document.getElementById("niche-palette-input").value.trim(),
+    era_block: document.getElementById("niche-era-input").value.trim(),
+    negative_block: document.getElementById("niche-negative-input").value.trim(),
+  };
+
+  if (!isWebMode && window.pywebview.api.save_niche_style) {
+    try {
+      const res = await window.pywebview.api.save_niche_style(slug, overrides);
+      if (res.success) {
+        alert("Visual style overrides saved for " + sel.options[sel.selectedIndex].text + ".\nStored in config/series_overrides/" + slug + ".json");
+        await onNicheSelectChange();
+        if (currentScriptData) {
+          await refreshStoryboardCoverage();
+        }
+      } else {
+        alert("Failed to save style: " + (res.error || "unknown error"));
+      }
+    } catch (e) {
+      alert("Error saving style: " + e.message);
+    }
+  }
+}
+window.saveNicheStyle = saveNicheStyle;
+
+async function resetNicheStyle() {
+  const sel = document.getElementById("niche-select");
+  if (!sel) return;
+  const slug = sel.value;
+  if (!slug) return;
+
+  if (!confirm(`Reset ${sel.options[sel.selectedIndex].text} visual style to shipped default?`)) {
+    return;
+  }
+
+  if (!isWebMode && window.pywebview.api.reset_niche_style) {
+    try {
+      const res = await window.pywebview.api.reset_niche_style(slug);
+      if (res.success) {
+        alert("Reset to default.");
+        await onNicheSelectChange();
+        if (currentScriptData) {
+          await refreshStoryboardCoverage();
+        }
+      } else {
+        alert("Failed to reset style: " + (res.error || "unknown error"));
+      }
+    } catch (e) {
+      alert("Error resetting style: " + e.message);
+    }
+  }
+}
+window.resetNicheStyle = resetNicheStyle;
+
+function toggleEditPrompt(segId, shotId) {
+  const el = document.getElementById(`prompt-edit-${segId}-${shotId}`);
+  if (el) {
+    el.classList.toggle("hidden");
+    if (!el.classList.contains("hidden")) {
+      const ta = el.querySelector("textarea");
+      if (ta) ta.focus();
+    }
+  }
+}
+window.toggleEditPrompt = toggleEditPrompt;
+
+let overrideSaveTimer = null;
+function onPromptOverrideInput(segId, shotId, value) {
+  const shot = findShot(segId, shotId);
+  if (!shot) return;
+  const trimmed = value.trim();
+  if (trimmed) {
+    shot.prompt_override = trimmed;
+    shot.prompt = trimmed;
+  } else {
+    delete shot.prompt_override;
+  }
+  // Debounce auto-save draft
+  if (overrideSaveTimer) clearTimeout(overrideSaveTimer);
+  overrideSaveTimer = setTimeout(() => {
+    saveDraftScript(true);
+  }, 600);
+}
+window.onPromptOverrideInput = onPromptOverrideInput;
+
 // ── Script Loading & Planning ────────────────────────────────────────────────
 /**
  * Reopen the project this app last had open.
@@ -819,6 +992,18 @@ async function restoreLastProject() {
     if (title && res.title) title.value = res.title;
     const label = document.getElementById("script-status-label");
     if (label) label.textContent = `reopened: ${res.title} · ${res.segments} segments`;
+
+    if (currentScriptData && currentScriptData.project) {
+      const applyEraEl = document.getElementById("pt-apply-era");
+      if (applyEraEl) {
+        applyEraEl.checked = currentScriptData.project.apply_era !== false;
+      }
+      const briefEl = document.getElementById("pt-brief");
+      if (briefEl && currentScriptData.project.project_brief) {
+        briefEl.value = currentScriptData.project.project_brief;
+        briefEdited = true;
+      }
+    }
 
     await loadImageFolders();
     await refreshStoryboardCoverage();
@@ -859,13 +1044,18 @@ async function planStoryboard() {
       project: {
         title: title || "Untitled Project",
         series_slug: seriesSlug,
-        voice: voice || "local:supertonic-m1",
-        visual_style: style
+        voice: { id: voice },
+        visual_style: style,
+        visual_type: (document.getElementById("pt-style") || {}).value || "",
+        narration_tone: tone,
+        motion_style: motionStyle,
+        apply_era: (document.getElementById("pt-apply-era") || {}).checked !== false,
       },
       segments: paragraphs.map((p, i) => ({
         segment_id: i + 1,
         narration: p.trim(),
-        shots: [{ shot_id: `${i + 1}a`, query: p.slice(0, 40) + " visual" }]
+        b_roll_keyword: "cinematic scene",
+        shots: [{ shot_id: `${i+1}a`, query: "cinematic scene" }]
       }))
     };
 
@@ -913,6 +1103,8 @@ window.onParseComplete = async function(result) {
     // project and every prompt in this script then opens the same way.
     currentScriptData.project = currentScriptData.project || {};
     currentScriptData.project.visual_type = document.getElementById("pt-style").value || "";
+    const applyEraEl = document.getElementById("pt-apply-era");
+    currentScriptData.project.apply_era = applyEraEl ? applyEraEl.checked : true;
     const briefEl = document.getElementById("pt-brief");
     if (briefEl && briefEl.value.trim()) {
       currentScriptData.project.project_brief = briefEl.value.trim();
@@ -1169,6 +1361,12 @@ function renderStoryboardScreen() {
             ${gapBoxHtml}
             <div class="acts">
               <button type="button" onclick="openReplaceModal('${segId}', '${shotId}')">Replace</button>
+              <button type="button" class="ghost" onclick="toggleEditPrompt('${segId}', '${shotId}')">Edit prompt</button>
+            </div>
+            <div id="prompt-edit-${segId}-${shotId}" class="prompt-edit-wrap ${shot.prompt_override ? '' : 'hidden'}" style="margin-top:10px">
+              <label style="font-size:11px; font-weight:700; color:var(--ink-2); display:block; margin-bottom:4px; text-transform:uppercase">Custom prompt override</label>
+              <textarea rows="3" style="width:100%; font-family:var(--mono); font-size:12px; line-height:1.4" placeholder="${(rep.composed_prompt || shot.prompt || '').replace(/"/g, '&quot;')}" oninput="onPromptOverrideInput('${segId}', '${shotId}', this.value)">${shot.prompt_override || ''}</textarea>
+              <span class="hint" style="margin-top:3px; display:block">When filled, this replaces the composed prompt completely.</span>
             </div>
           </div>
         </div>
@@ -1711,12 +1909,14 @@ async function replaceWithOwnImage() {
 }
 
 async function copyPromptFor(segId, shotId) {
+  const shot = findShot(segId, shotId);
   const rep = findReport(segId, shotId);
-  if (!rep) return;
+  const text = (shot && shot.prompt_override && shot.prompt_override.trim()) || (rep && rep.composed_prompt) || "";
+  if (!text) return;
   try {
-    await navigator.clipboard.writeText(rep.composed_prompt || "");
+    await navigator.clipboard.writeText(text);
   } catch (e) {
-    alert("Could not copy — here is the prompt:\n\n" + (rep.composed_prompt || ""));
+    alert("Could not copy — here is the prompt:\n\n" + text);
   }
 }
 
