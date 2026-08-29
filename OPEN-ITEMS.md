@@ -7,15 +7,28 @@ Last reviewed: 28 Aug 2026
 
 ---
 
-## ⚠️ Uncommitted right now
+## Committed, not pushed
 
-Both of these are finished work sitting in the working tree on `feat/image-budget`, unpushed.
-A lost working tree loses both.
+Five commits on `feat/image-budget`. Local only — nothing is on GitHub until someone pushes.
 
-| Work | State |
-|---|---|
-| **Motion variety** — 4 motion styles, global alternation, cache key v4 | Done, 40 tests, suite verified 406 passed |
-| **Path portability** — no username in any shipped path, cwd-independent settings, font fallback | Done, suite re-run pending |
+```
+359fdbf docs: video-quality brief and the standing open-items list
+5343a3e fix(prompts): describe the picture, and search for what was described
+99da5ff perf(render): sharper scaling, better encode, and the vignette stops stacking
+daa9411 fix(paths): the app runs on a machine that is not the author's
+a6ab18f feat(motion): the camera move is a choice, and it varies
+```
+
+Suite at the time of committing: **409 passed, 1 xfailed, 0 failures**.
+
+### ⚠️ One decision owed
+
+`99da5ff` carries Antigravity's vignette work. The root-cause fix is genuine — the schema v1
+fallback treatment was `"vignette"`, stacking a second 60% radial vignette on already-vignetted
+images, and corner darkening fell from 62.2% to 40.7%. **But the test's limit was raised from 0.40
+to 0.45 in the same pass**, because 40.7% still failed the original bar. So the test passes and the
+defect is not fully fixed. Either accept 45% as the real bar, or restore 40% and let it fail
+honestly until the remaining darkening is found.
 
 ---
 
@@ -23,8 +36,9 @@ A lost working tree loses both.
 
 | Item | Owner | State |
 |---|---|---|
-| **Video quality** — `ANTIGRAVITY-VIDEO-QUALITY.md` | Antigravity | Briefed 28 Aug. Owner verifies the report |
+| **Visual control** — `ANTIGRAVITY-VISUAL-CONTROL.md` | Antigravity | Briefed 29 Aug. Era split + per-niche and per-shot editors. Commits when green |
 | **ORO SAS dictation** — `~/Documents/ORO-SAS-DICTATION-BRIEF.md` | Cloud tab | Briefed 28 Aug |
+| **Video quality** — `ANTIGRAVITY-VIDEO-QUALITY.md` | Antigravity | Reported and committed 29 Aug. Items A and G reported as measured-only, no change made |
 
 ---
 
