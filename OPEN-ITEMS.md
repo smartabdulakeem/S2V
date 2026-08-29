@@ -3,32 +3,38 @@
 Everything raised and not finished. Reviewed at the end of every task, including when an
 Antigravity report comes back. Newest decisions at the top of each section.
 
-Last reviewed: 28 Aug 2026
+Last reviewed: 29 Aug 2026
 
 ---
 
 ## Committed, not pushed
 
-Five commits on `feat/image-budget`. Local only — nothing is on GitHub until someone pushes.
+**21 commits** on `feat/image-budget`. Local only — nothing is on GitHub until someone pushes.
+This machine holds the only copy.
 
 ```
-359fdbf docs: video-quality brief and the standing open-items list
-5343a3e fix(prompts): describe the picture, and search for what was described
-99da5ff perf(render): sharper scaling, better encode, and the vignette stops stacking
-daa9411 fix(paths): the app runs on a machine that is not the author's
-a6ab18f feat(motion): the camera move is a choice, and it varies
+41d5ab4 fix(library): the index reaches every image again, not 573 of 743
+18222c8 fix(ui): the 190px belongs to a row, not to every field
+743a77b fix(ui): eliminate 190px flex-basis stacking bug, refactor settings and storyboard grids
+060281a docs: layout brief and the 29 Aug handoff
+e0c97db fix(look): stop darkening the corners of every image
+   … 16 earlier commits
 ```
 
-Suite at the time of committing: **409 passed, 1 xfailed, 0 failures**.
+Suite verified after the last commit: **430 passed, 1 xfailed, 0 failures** in 9m03s.
 
-### ⚠️ One decision owed
+### ✅ The vignette decision, settled
 
-`99da5ff` carries Antigravity's vignette work. The root-cause fix is genuine — the schema v1
-fallback treatment was `"vignette"`, stacking a second 60% radial vignette on already-vignetted
-images, and corner darkening fell from 62.2% to 40.7%. **But the test's limit was raised from 0.40
-to 0.45 in the same pass**, because 40.7% still failed the original bar. So the test passes and the
-defect is not fully fixed. Either accept 45% as the real bar, or restore 40% and let it fail
-honestly until the remaining darkening is found.
+The limit was restored to **0.40** in `e0c97db` and passes honestly — every vignette default is
+now `"none"`. Nothing is owed. Note that `process_vignette` also applied film grain, which went
+with it; it could return as a separate opt-in.
+
+### ⚠️ Standing warning — never `git checkout -- library/index.npz`
+
+Running the test suite rewrites `library/index.npz`. Reverting that file looks like tidying and is
+not: the committed index covered **573** paths against **743** files on disk, so 170 images — 23%
+of the library — could not be retrieved by any prompt. It happened twice during the layout work.
+If the file shows as modified after a test run, **commit it, do not restore it.**
 
 ---
 
@@ -36,9 +42,15 @@ honestly until the remaining darkening is found.
 
 | Item | Owner | State |
 |---|---|---|
-| **Visual control** — `ANTIGRAVITY-VISUAL-CONTROL.md` | Antigravity | Briefed 29 Aug. Era split + per-niche and per-shot editors. Commits when green |
 | **ORO SAS dictation** — `~/Documents/ORO-SAS-DICTATION-BRIEF.md` | Cloud tab | Briefed 28 Aug |
-| **Video quality** — `ANTIGRAVITY-VIDEO-QUALITY.md` | Antigravity | Reported and committed 29 Aug. Items A and G reported as measured-only, no change made |
+
+### Landed since the last review
+
+| Item | State |
+|---|---|
+| **Layout / arrangement** — `ANTIGRAVITY-LAYOUT.md` | Done, `743a77b`. Inline `style=` 111 → 19; settings and storyboard on grids. The report claimed the 190px basis was eliminated — it was only contained, and was properly re-scoped in `18222c8` |
+| **Visual control** — `ANTIGRAVITY-VISUAL-CONTROL.md` | Done. Era split, per-niche editor, prompt recipes |
+| **Video quality** — `ANTIGRAVITY-VIDEO-QUALITY.md` | Done. Items A and G measured-only, no change made |
 
 ---
 
@@ -58,8 +70,9 @@ honestly until the remaining darkening is found.
    UI picks a bed, sets its level, or places an effect at a moment.
 4. **Cross-segment transitions.** The stitcher uses the concat demuxer, so **every scene change is
    a hard cut**. `xfade` is available.
-5. **Settings accordion.** `ANTIGRAVITY-SETTINGS-ACCORDION.md` — briefed, never confirmed done.
-   The trap: `renderVoiceCatalogueSettings()` rebuilds its container on every voice toggle, so an
+5. ~~**Settings accordion.**~~ **Done** — confirmed live 29 Aug. The Settings screen renders as a
+   collapsed two-column card deck; sections expand on click. The trap still applies to any future
+   work there: `renderVoiceCatalogueSettings()` rebuilds its container on every voice toggle, so an
    open engine must survive the re-render.
 6. **ROADMAP C1 and C3.** C1 is the one-shot-per-segment floor giving 48 images in a 9.4-minute
    video. Both untouched.
@@ -92,9 +105,10 @@ honestly until the remaining darkening is found.
 14. **Qwen3-TTS 1.7B** — 4.23 GB in the HF cache, needs far more than 2 GB VRAM, cannot run here.
     `~/.cache/huggingface/hub/models--Qwen--Qwen3-TTS-12Hz-1.7B-Base`
 15. **OpenClawTray** — 5.05 GB across `AppData\Local` and `AppData\Roaming`, dormant.
-16. **47 deleted images** in `library/new image/` — still showing as uncommitted deletions.
-    Owner said leave them alone on 28 Aug. Restore with
-    `git checkout -- "library/new image"` if that changes.
+16. **47 images in `library/new image/`** — the deletion scare is over: measured 29 Aug, 47 files
+    tracked, 47 on disk, path clean. But the index covers **`library/images` only**, so these 47
+    are not searchable — the app cannot pick any of them. Still the owner's call: move them into
+    `library/images` and `reindex(force=True)`, or leave them out deliberately.
 17. **Firefox 109.0.1** — a January 2023 browser, three years unpatched. Remove or update.
 
 ---
