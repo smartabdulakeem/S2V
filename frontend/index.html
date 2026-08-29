@@ -10,11 +10,11 @@
 
 <div class="page">
 
-  <header style="display:flex; flex-direction:column; gap:6px">
-    <div style="display:flex; justify-content:space-between; align-items:center">
+  <header class="app-header">
+    <div class="header-top">
       <span class="eyebrow">Smart Studio &middot; Interface</span>
-      <div style="display:flex; gap:10px; align-items:center">
-        <button id="btn-theme-toggle" onclick="toggleTheme()" class="ghost" style="font-family:var(--mono); font-size:11px">Theme: Dark</button>
+      <div class="header-actions">
+        <button id="btn-theme-toggle" onclick="toggleTheme()" class="ghost btn-theme">Theme: Dark</button>
         <span class="mono" id="version-badge">v2.0.0</span>
       </div>
     </div>
@@ -40,10 +40,10 @@
 
     <!-- ══ 1. SCRIPT SCREEN ══ -->
     <div class="pane" data-on="1" data-pane="script">
-      <div class="row" style="justify-space-between">
+      <div class="row-between">
         <h2>New video</h2>
         <span class="mono" id="script-status-label">draft &middot; not yet planned</span>
-        <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+        <div class="row-center ml-auto">
           <span class="mono" id="working-folder-label" title="">whole library</span>
           <button type="button" id="btn-working-folder" onclick="chooseWorkingFolder()">Work from this folder…</button>
           <button type="button" class="ghost" onclick="useWholeLibrary()" title="Search the whole library again">Whole library</button>
@@ -61,48 +61,48 @@
         </label>
       </div>
 
-      <label class="f" style="flex:1 1 100%">Script
+      <label class="f f-full">Script
         <textarea id="pt-text" placeholder="Paste your script here. Leave a blank line between paragraphs — each one becomes a scene."></textarea>
       </label>
 
-      <div class="row" style="align-items:flex-end">
-        <label class="f" style="flex:1 1 350px">Prompt opening (shared by every image in this film)
+      <div class="row-bottom">
+        <label class="f f-wide">Prompt opening (shared by every image in this film)
           <input type="text" id="pt-brief" placeholder="Drafted automatically when you plan — edit to lock the look across every shot.">
         </label>
-        <label class="f" style="flex:0 0 auto; margin-bottom:6px; display:flex; align-items:center; gap:6px; cursor:pointer">
+        <label class="f f-check">
           <input type="checkbox" id="pt-apply-era" checked>
-          <span style="font-size:12.5px; font-weight:500">Apply the niche's period to every image</span>
+          <span>Apply the niche's period to every image</span>
         </label>
       </div>
 
       <!-- FORMAT PICKER -->
       <div class="card">
-        <div class="row" style="justify-content:space-between">
+        <div class="row-between">
           <h3>Output formats</h3>
           <span class="mono">render once &middot; every format below</span>
         </div>
         <div class="formats">
           <button type="button" class="fmt on" data-fmt="16:9" onclick="toggleFormat(this)">
             <span class="tick">✓</span>
-            <span class="frame" style="width:56px;height:32px"></span>
+            <span class="frame frame-16-9"></span>
             <b>Long</b>
             <small>16:9 &middot; 1080p</small>
           </button>
           <button type="button" class="fmt on" data-fmt="9:16" onclick="toggleFormat(this)">
             <span class="tick">✓</span>
-            <span class="frame" style="width:22px;height:39px"></span>
+            <span class="frame frame-9-16"></span>
             <b>Short</b>
             <small>9:16 &middot; 1080p</small>
           </button>
           <button type="button" class="fmt" data-fmt="1:1" onclick="toggleFormat(this)">
             <span class="tick">&nbsp;</span>
-            <span class="frame" style="width:34px;height:34px"></span>
+            <span class="frame frame-1-1"></span>
             <b>Square</b>
             <small>1:1 &middot; 1080p</small>
           </button>
           <button type="button" class="fmt" data-fmt="4:5" onclick="toggleFormat(this)">
             <span class="tick">&nbsp;</span>
-            <span class="frame" style="width:28px;height:35px"></span>
+            <span class="frame frame-4-5"></span>
             <b>Feed</b>
             <small>4:5 &middot; 1080p</small>
           </button>
@@ -146,7 +146,7 @@
 
       <!-- CAPTIONS CARD -->
       <div class="card">
-        <div class="row" style="justify-content:space-between">
+        <div class="row-between">
           <h3>Captions</h3>
           <span class="tg on" id="capMaster" onclick="toggleCaptionsMaster()"><span class="sw"></span>On</span>
         </div>
@@ -169,7 +169,7 @@
         <p class="mono">Vertical formats get larger, higher captions automatically. Timings come from word marks.</p>
       </div>
 
-      <div class="row" style="justify-content:flex-end">
+      <div class="row-end">
         <button type="button" class="ghost" onclick="saveDraftScript()">Save draft</button>
         <button type="button" class="primary" id="btn-plan-storyboard" onclick="planStoryboard()">Plan storyboard →</button>
       </div>
@@ -185,13 +185,13 @@
           <div><b id="board-cnt-shots">0</b><span>images</span></div>
           <div><b id="board-cnt-runtime">0:00</b><span>runtime</span></div>
         </div>
-        <div style="display:flex; flex-direction:column; gap:4px">
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-            <label for="image-count" class="mono" style="font-weight:600; font-size:12.5px; color:var(--ink)">How many images?</label>
-            <input type="number" id="image-count" min="1" max="500" value="31" style="width:65px; font-family:var(--mono); font-weight:700; text-align:center" oninput="onImageCountInput(this.value)" onblur="onImageCountCommit(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
-            <span class="mono" id="image-count-hint" style="color:var(--ink-2)">~0 words · 0.0 min · about 25s per image</span>
-            <span class="mono" style="margin-left:10px; color:var(--ink-3)">rhythm</span>
-            <input type="range" id="shot-rhythm-slider" min="1" max="5" value="3" style="width:90px" oninput="onRhythmSliderInput(this.value)">
+        <div class="board-controls-col">
+          <div class="board-controls-row">
+            <label for="image-count" class="mono board-count-label">How many images?</label>
+            <input type="number" id="image-count" min="1" max="500" value="31" class="board-count-input" oninput="onImageCountInput(this.value)" onblur="onImageCountCommit(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
+            <span class="mono" id="image-count-hint">~0 words · 0.0 min · about 25s per image</span>
+            <span class="mono ml-sm ink-3">rhythm</span>
+            <input type="range" id="shot-rhythm-slider" min="1" max="5" value="3" class="rhythm-slider" oninput="onRhythmSliderInput(this.value)">
             <span class="mono" id="rhythm-label">~7s per shot</span>
             <button type="button" id="btn-working-folder-board" onclick="chooseWorkingFolder()">Work from this folder…</button>
             <span class="mono" id="working-folder-label-board" title="">whole library</span>
@@ -201,36 +201,36 @@
             <button type="button" id="btn-fill-gaps" onclick="fillAllGaps()">Use nearest image for all gaps</button>
             <button type="button" class="primary" id="btn-start-render-board" onclick="startRenderFromBoard()">Render video →</button>
           </div>
-          <p class="mono" style="margin:0; font-size:11px; color:var(--ink-3)">
+          <p class="mono board-hint">
             Fewer images means each one is held longer with a slow pan. One image can carry a whole script.
           </p>
         </div>
       </div>
 
       <!-- PASTE EXTERNAL PROMPTS PANEL -->
-      <div id="paste-prompts-panel" class="card" style="margin:10px 0; background:var(--bg, #1a222b); border:1px solid var(--border, #2a3642); display:none">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
-          <h3 style="margin:0; font-size:14px">Paste External Prompts &amp; Match Folder Images</h3>
+      <div id="paste-prompts-panel" class="card paste-prompts-card" style="display:none">
+        <div class="row-between">
+          <h3>Paste External Prompts &amp; Match Folder Images</h3>
           <button type="button" class="ghost small" onclick="togglePastePromptsPanel()">Close ✕</button>
         </div>
-        <p class="hint" style="margin-top:0">
+        <p class="hint">
           Paste prompts generated outside the app (one prompt per block, separated by blank lines). Prompts bind to image slots in order (Prompt 1 &rarr; Slot 1). If working from a folder, images named <code>1_whatever.jpg</code> or <code>1.jpg</code> match slot 1 automatically.
         </p>
-        <textarea id="paste-prompts-textarea" rows="6" style="width:100%; font-family:var(--mono); font-size:12px; line-height:1.4" placeholder="Paste external prompts here...&#10;&#10;Prompt 1 (e.g. A vast ancient desert at dawn...)&#10;&#10;Prompt 2 (e.g. One adult male figure alone...)"></textarea>
-        <div class="row" style="margin-top:8px; justify-content:space-between; align-items:center">
-          <div style="display:flex; gap:8px; align-items:center">
+        <textarea id="paste-prompts-textarea" rows="6" class="tall w-full" placeholder="Paste external prompts here...&#10;&#10;Prompt 1 (e.g. A vast ancient desert at dawn...)&#10;&#10;Prompt 2 (e.g. One adult male figure alone...)"></textarea>
+        <div class="row-between mt-sm">
+          <div class="row-center">
             <button type="button" class="primary" id="btn-apply-pasted-prompts" onclick="submitPastedPrompts()">Apply Prompts &amp; Match</button>
-            <span class="mono" id="paste-prompts-summary" style="font-size:12px; color:var(--ink-2)"></span>
+            <span class="mono" id="paste-prompts-summary"></span>
           </div>
         </div>
-        <div id="paste-prompts-table-wrap" style="margin-top:12px; max-height:240px; overflow-y:auto; display:none">
-          <table style="width:100%; font-size:12px; border-collapse:collapse">
+        <div id="paste-prompts-table-wrap" class="table-scroll" style="display:none">
+          <table class="paste-table">
             <thead>
-              <tr style="border-bottom:1px solid var(--border, #2a3642); text-align:left; color:var(--ink-3); font-family:var(--mono)">
-                <th style="padding:6px 8px; width:50px">Slot</th>
-                <th style="padding:6px 8px">Prompt (first 60 chars)</th>
-                <th style="padding:6px 8px; width:220px">Image found</th>
-                <th style="padding:6px 8px; width:80px">Status</th>
+              <tr>
+                <th style="width:50px">Slot</th>
+                <th>Prompt (first 60 chars)</th>
+                <th style="width:220px">Image found</th>
+                <th style="width:80px">Status</th>
               </tr>
             </thead>
             <tbody id="paste-prompts-table-body"></tbody>
@@ -248,7 +248,7 @@
 
       <div class="seglist" id="storyboard-list">
         <!-- Rendered dynamically by JS from coverage report -->
-        <div class="card" style="text-align:center; padding:30px">
+        <div class="card card-placeholder">
           <p class="sub">No storyboard loaded yet. Paste a script on the <b>Script</b> screen and click <b>Plan storyboard</b>.</p>
         </div>
       </div>
@@ -259,16 +259,16 @@
       <h2>Render</h2>
 
       <div class="card">
-        <div class="row" style="justify-content:space-between">
+        <div class="row-between">
           <h3 id="render-project-title">Project Title</h3>
           <span class="pill p-mute" id="render-status-pill">idle</span>
         </div>
         <div class="bar"><i id="render-progress-bar" style="width:0%"></i></div>
-        <div class="row" style="justify-content:space-between">
+        <div class="row-between">
           <span class="mono" id="render-human-step">Ready to render</span>
           <span class="mono" id="render-time-info">elapsed 0:00 &middot; eta --:--</span>
         </div>
-        <div class="grid2" style="margin-top:4px">
+        <div class="grid2 mt-xs">
           <div>
             <div class="kv"><span>Narration</span><b id="kv-narr-status">0 / 0</b></div>
             <div class="kv"><span>Captions</span><b id="kv-cap-status">0 / 0</b></div>
@@ -305,7 +305,7 @@
           <span class="tg on" onclick="this.classList.toggle('on')"><span class="sw"></span>Write description &amp; tags</span>
           <span class="tg" onclick="this.classList.toggle('on')"><span class="sw"></span>Shut down when done</span>
         </div>
-        <div class="row" style="margin-top:8px">
+        <div class="row mt-sm">
           <button type="button" class="primary" id="btn-render-action" onclick="toggleRenderExecution()">Start Render</button>
           <button type="button" class="ghost" onclick="openOutputFolder()">Open Output Folder</button>
           <button type="button" class="ghost" onclick="toggleRawLogs()">Show raw logs</button>
@@ -318,7 +318,7 @@
 
     <!-- ══ 4. LIBRARY SCREEN ══ -->
     <div class="pane" data-pane="library">
-      <div class="row" style="justify-content:space-between">
+      <div class="row-between">
         <h2>Library</h2>
         <span class="mono" id="lib-counts-label">0 images &middot; 87 sounds &middot; 12 music beds</span>
       </div>
@@ -329,10 +329,10 @@
       </div>
 
       <!-- IMAGES TAB CONTENT -->
-      <div id="lib-content-images" style="display:flex; flex-direction:column; gap:14px">
+      <div id="lib-content-images" class="lib-content-col">
         <div class="row">
-          <input type="search" id="lib-search-input" placeholder="Search by description — “rider at dusk”, “oil lamp”…" oninput="filterLibraryImages(this.value)" style="flex:1 1 300px">
-          <select style="width:auto">
+          <input type="search" id="lib-search-input" placeholder="Search by description — “rider at dusk”, “oil lamp”…" oninput="filterLibraryImages(this.value)" class="search-wide">
+          <select class="w-auto">
             <option value="all">All series</option>
             <option value="islamic_history">Islamic History</option>
           </select>
@@ -363,11 +363,11 @@
       </div>
 
       <!-- SOUNDS TAB CONTENT -->
-      <div id="lib-content-sounds" style="display:none; flex-direction:column; gap:14px">
+      <div id="lib-content-sounds" class="lib-content-col" style="display:none">
         <div class="card">
           <h3>Sound Library &amp; Music Beds</h3>
           <p class="sub">87 sound effects and 12 ambient sound beds ducked under narration.</p>
-          <div class="tbl" style="margin-top:10px">
+          <div class="tbl mt-sm">
             <table>
               <thead><tr><th>Track</th><th>Category</th><th>Duration</th><th>Type</th></tr></thead>
               <tbody>
@@ -381,42 +381,42 @@
       </div>
     </div>
 
-    <!-- ══ 5. SETTINGS SCREEN ══ -->
+    <!-- ══ 5. VOICEOVER SCREEN ══ -->
     <div class="pane" data-pane="voice">
       <h2>Voiceover Studio</h2>
 
       <div class="card">
-        <div class="row" style="justify-content:space-between">
+        <div class="row-between">
           <h3>Script</h3>
           <span class="pill p-mute" id="voice-char-count">0 characters</span>
         </div>
-        <textarea id="voice-text" rows="7" placeholder="Paste or type the narration you want spoken..." style="width:100%"></textarea>
+        <textarea id="voice-text" rows="7" placeholder="Paste or type the narration you want spoken..." class="w-full"></textarea>
 
-        <div class="grid2" style="margin-top:10px">
+        <div class="grid2 mt-sm">
           <div>
             <label for="voice-engine">Engine</label>
-            <select id="voice-engine" onchange="onVoiceEngineChange()" style="width:100%"></select>
+            <select id="voice-engine" onchange="onVoiceEngineChange()" class="w-full"></select>
             <p class="hint" id="voice-engine-note">Checking which engines are available...</p>
           </div>
           <div>
             <label for="voice-voice">Voice</label>
-            <select id="voice-voice" style="width:100%"></select>
+            <select id="voice-voice" class="w-full"></select>
             <p class="hint" id="voice-voice-note">&nbsp;</p>
           </div>
         </div>
 
-        <div class="grid2" style="margin-top:6px">
+        <div class="grid2 mt-xs">
           <div>
             <label for="voice-speed">Speed <b class="mono" id="voice-speed-val">1.00x</b></label>
             <input type="range" id="voice-speed" min="0.5" max="2" step="0.05" value="1"
                    oninput="document.getElementById('voice-speed-val').textContent = (+this.value).toFixed(2) + 'x'"
-                   style="width:100%">
+                   class="w-full">
           </div>
           <div>
             <label for="voice-pitch">Pitch <b class="mono" id="voice-pitch-val">0.0</b></label>
             <input type="range" id="voice-pitch" min="-12" max="12" step="0.5" value="0"
                    oninput="document.getElementById('voice-pitch-val').textContent = (+this.value).toFixed(1)"
-                   style="width:100%">
+                   class="w-full">
             <p class="hint" id="voice-pitch-note">&nbsp;</p>
           </div>
         </div>
@@ -426,37 +426,37 @@
         <h3>Reference Voice</h3>
         <p class="hint">OpenVoice clones from a clean 3&ndash;10 second sample. One speaker, no music, no background noise.</p>
 
-        <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:8px">
+        <div class="row mt-xs">
           <button type="button" class="ghost" onclick="pickVoiceReference()">Choose audio file</button>
           <button type="button" class="ghost" id="voice-record-btn" onclick="toggleVoiceRecording()">Record from microphone</button>
           <span class="mono" id="voice-ref-status">No reference selected</span>
         </div>
 
-        <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px">
-          <input type="text" id="voice-profile-name" placeholder="Name this voice profile" style="flex:1;min-width:180px">
+        <div class="row mt-sm">
+          <input type="text" id="voice-profile-name" placeholder="Name this voice profile" class="search-wide">
           <button type="button" class="ghost" onclick="saveVoiceProfile()">Save profile</button>
         </div>
 
-        <div style="margin-top:10px">
+        <div class="mt-sm">
           <label for="voice-profile-select">Saved profiles</label>
-          <div class="row" style="gap:8px">
-            <select id="voice-profile-select" onchange="useVoiceProfile()" style="flex:1"></select>
+          <div class="row">
+            <select id="voice-profile-select" onchange="useVoiceProfile()" class="search-wide"></select>
             <button type="button" class="ghost" onclick="deleteVoiceProfile()">Delete</button>
           </div>
         </div>
       </div>
 
       <div class="card">
-        <div class="row" style="gap:10px;flex-wrap:wrap">
+        <div class="row">
           <button type="button" class="primary" id="voice-generate-btn" onclick="generateVoiceover()">Generate Voiceover</button>
           <button type="button" class="ghost" onclick="openVoiceOutputFolder()">Open Output Folder</button>
           <span class="mono" id="voice-status">Ready</span>
         </div>
-        <div class="bar" style="margin-top:10px"><i id="voice-progress-bar" style="width:0%"></i></div>
+        <div class="bar mt-sm"><i id="voice-progress-bar" style="width:0%"></i></div>
 
-        <div id="voice-player-wrap" style="margin-top:12px;display:none">
-          <audio id="voice-player" controls preload="auto" style="width:100%"></audio>
-          <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+        <div id="voice-player-wrap" class="mt-md" style="display:none">
+          <audio id="voice-player" controls preload="auto" class="w-full"></audio>
+          <div class="row mt-sm">
             <button type="button" class="ghost" onclick="downloadVoiceClip('wav')">Download audio</button>
             <button type="button" class="ghost" id="voice-dl-mp3" onclick="downloadVoiceClip('mp3')">Download MP3</button>
             <span class="mono" id="voice-clip-meta"></span>
@@ -465,7 +465,7 @@
       </div>
 
       <div class="card">
-        <div class="row" style="justify-content:space-between">
+        <div class="row-between">
           <h3>Recent clips</h3>
           <button type="button" class="ghost" onclick="clearVoiceHistory()">Clear</button>
         </div>
@@ -482,257 +482,275 @@
       </div>
     </div>
 
+    <!-- ══ 6. SETTINGS SCREEN ══ -->
     <div class="pane" data-pane="settings">
       <h2>Settings</h2>
 
-      <!-- KEYS & SERVICES -->
-      <div class="card collapsed">
-        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-keys">
-          <span class="chevron" aria-hidden="true">▶</span>
-          <h3>Keys &amp; services</h3>
-        </button>
-        <div class="card-body" id="card-body-keys" hidden>
-          <div class="tbl">
-            <table>
-              <thead>
-                <tr><th>Service</th><th>Used for</th><th>Key / Secret</th><th>Status</th><th></th></tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Google AI</td>
-                  <td>Imagen, Gemini, Lyria music</td>
-                  <td><input type="password" id="google-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
-                  <td><span class="pill p-mute" id="google-key-status">not set</span></td>
-                  <td><button type="button" class="ghost" onclick="saveGoogleKey()">Test &amp; Save</button></td>
-                </tr>
-                <tr>
-                  <td>Google Cloud TTS</td>
-                  <td>Narration + word timings</td>
-                  <td><input type="password" id="google-tts-key-input" placeholder="AIzaSy…" style="font-family:var(--mono); font-size:12px"></td>
-                  <td><span class="pill p-mute" id="google-tts-key-status">not set</span></td>
-                  <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Test &amp; Save</button></td>
-                </tr>
-                <tr>
-                  <td>ElevenLabs</td>
-                  <td>Premium voice &mdash; optional</td>
-                  <td><input type="password" id="elevenlabs-key-input" placeholder="optional" style="font-family:var(--mono); font-size:12px"></td>
-                  <td><span class="pill p-mute" id="elevenlabs-key-status">not set</span></td>
-                  <td><button type="button" class="ghost" onclick="saveElevenLabsKey()">Test &amp; Save</button></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border, #2a3642);">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text, #e1e7ec);">
-              <input type="checkbox" id="setting-ai-shot-descriptions" onchange="toggleAiShotDescriptions(this.checked)">
-              <span>Write descriptive image prompts with AI</span>
-            </label>
-          </div>
-          <p class="mono">
-            Keys are stored on this machine only, in <code>config/settings.json</code>, and never
-            travel with the app. Everything except Google runs offline and needs no key at all:
-            narration, image retrieval, captions and rendering are all local.
-          </p>
-        </div>
-      </div>
-
-      <!-- VISUAL STYLE PER NICHE -->
-      <div class="card collapsed" id="card-niche-style">
-        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-niche-style">
-          <span class="chevron" aria-hidden="true">▶</span>
-          <h3>Visual style per niche</h3>
-          <span class="mono" id="niche-override-status" style="margin-left:auto">default</span>
-        </button>
-        <div class="card-body" id="card-body-niche-style" hidden>
-          <p class="hint">Customize how diffusion models render images for each niche. Edits are saved separately in <code>config/series_overrides/</code> without touching default packs.</p>
-          <div class="row" style="margin-bottom:10px; align-items:flex-end; gap:8px">
-            <label class="f" style="flex:1">Niche
-              <select id="niche-select" onchange="onNicheSelectChange()">
-                <!-- Dynamically populated from series packs -->
-              </select>
-            </label>
-            <button type="button" class="ghost small" onclick="openNewNicheModal()" style="height:36px; padding:0 12px">+ New niche</button>
-          </div>
-          <div class="row" style="flex-direction:column; gap:10px">
-            <label class="f">Display Name <small class="mono">(name shown in dropdowns)</small>
-              <input type="text" id="niche-display-name-input" placeholder="e.g. Islamic History &amp; Golden Age">
-            </label>
-            <label class="f">Brief Subject <small class="mono">(core topic anchor for prompt generation)</small>
-              <input type="text" id="niche-brief-subject-input" placeholder="e.g. seventh century Arabia and early Islamic history">
-            </label>
-            <label class="f">Medium <small class="mono">(how it is photographed)</small>
-              <textarea id="niche-medium-input" rows="2" placeholder="e.g. Shot on 35mm film, cinematic documentary photography..." oninput="updateNichePreview()"></textarea>
-            </label>
-            <label class="f">Palette <small class="mono">(colour, lighting, and grain)</small>
-              <textarea id="niche-palette-input" rows="2" placeholder="e.g. muted earth palette of ochre sand, dust grey..." oninput="updateNichePreview()"></textarea>
-            </label>
-            <label class="f">Era <small class="mono">(period and historical setting — omittable per project)</small>
-              <textarea id="niche-era-input" rows="2" placeholder="e.g. historically accurate 7th century Arabian Peninsula..." oninput="updateNichePreview()"></textarea>
-            </label>
-            <label class="f">Negative prompt <small class="mono">(what to exclude)</small>
-              <textarea id="niche-negative-input" rows="2" placeholder="e.g. No text, no watermark, no signature..." oninput="updateNichePreview()"></textarea>
-            </label>
-            <label class="f">Prompt Recipe <small class="mono">(replaces default planner prompt for this niche when non-empty)</small>
-              <textarea id="niche-prompt-recipe-input" rows="8" placeholder="Paste your custom prompt recipe here. When non-empty, this instruction replaces S2V's default planner prompt for this niche." style="font-family:var(--mono); font-size:12px; line-height:1.4"></textarea>
-            </label>
-          </div>
-
-          <div style="margin-top:12px; padding:12px; background:var(--bg, #1a222b); border-radius:6px; border:1px solid var(--border, #2a3642)">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
-              <label style="font-size:11.5px; font-weight:700; color:var(--ink-2); text-transform:uppercase">Live Prompt Preview</label>
-              <span class="mono" style="font-size:11px; color:var(--ink-3)">query: "A citadel at dawn"</span>
+      <div class="settings-grid">
+        <!-- VISUAL STYLE PER NICHE (Spans full width for rich editing) -->
+        <div class="card card-wide collapsed" id="card-niche-style">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-niche-style">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Visual style per niche</h3>
+            <span class="mono ml-auto" id="niche-override-status">default</span>
+          </button>
+          <div class="card-body" id="card-body-niche-style" hidden>
+            <p class="hint">Customize how diffusion models render images for each niche. Edits are saved separately in <code>config/series_overrides/</code> without touching default packs.</p>
+            <div class="row-bottom">
+              <label class="f f-wide">Niche
+                <select id="niche-select" onchange="onNicheSelectChange()">
+                  <!-- Dynamically populated from series packs -->
+                </select>
+              </label>
+              <button type="button" class="ghost small btn-new-niche" onclick="openNewNicheModal()">+ New niche</button>
             </div>
-            <p class="mono" id="niche-prompt-preview" style="font-size:12px; margin:0; line-height:1.45; color:var(--text, #e1e7ec)">Loading preview...</p>
-          </div>
 
-          <div class="row" style="margin-top:14px; justify-content:space-between; align-items:center">
-            <button type="button" class="primary" onclick="saveNicheStyle()">Save</button>
-            <div style="display:flex; gap:8px">
-              <button type="button" class="ghost" id="btn-niche-reset" onclick="resetNicheStyle()">Reset to default</button>
-              <button type="button" class="ghost" id="btn-niche-delete" onclick="deleteNicheStyle()" style="display:none; color:var(--gap, #e06c75)">Delete niche</button>
+            <!-- Single-line inputs in 2-column grid -->
+            <div class="form-grid-2">
+              <label class="f">Display Name <small class="mono">(shown in dropdowns)</small>
+                <input type="text" id="niche-display-name-input" placeholder="e.g. Islamic History &amp; Golden Age">
+              </label>
+              <label class="f">Brief Subject <small class="mono">(core topic anchor)</small>
+                <input type="text" id="niche-brief-subject-input" placeholder="e.g. seventh century Arabia and early Islamic history">
+              </label>
+            </div>
+
+            <!-- Compact 2-row textareas in 2 columns -->
+            <div class="form-grid-2">
+              <label class="f">Medium <small class="mono">(camera &amp; light)</small>
+                <textarea id="niche-medium-input" class="compact" rows="2" placeholder="e.g. Shot on 35mm film, cinematic documentary photography..." oninput="updateNichePreview()"></textarea>
+              </label>
+              <label class="f">Palette <small class="mono">(colour, lighting, grain)</small>
+                <textarea id="niche-palette-input" class="compact" rows="2" placeholder="e.g. muted earth palette of ochre sand, dust grey..." oninput="updateNichePreview()"></textarea>
+              </label>
+              <label class="f">Era <small class="mono">(period &amp; historical setting)</small>
+                <textarea id="niche-era-input" class="compact" rows="2" placeholder="e.g. historically accurate 7th century Arabian Peninsula..." oninput="updateNichePreview()"></textarea>
+              </label>
+              <label class="f">Negative prompt <small class="mono">(what to exclude)</small>
+                <textarea id="niche-negative-input" class="compact" rows="2" placeholder="e.g. No text, no watermark, no signature..." oninput="updateNichePreview()"></textarea>
+              </label>
+            </div>
+
+            <!-- Prompt Recipe: tall textarea with dedicated scroll -->
+            <div class="form-stacked">
+              <label class="f f-full">Prompt Recipe <small class="mono">(replaces default planner prompt for this niche when non-empty)</small>
+                <textarea id="niche-prompt-recipe-input" class="tall" rows="6" placeholder="Paste your custom prompt recipe here. When non-empty, this instruction replaces S2V's default planner prompt for this niche."></textarea>
+              </label>
+            </div>
+
+            <!-- Live prompt preview -->
+            <div class="preview-box">
+              <div class="preview-box-head">
+                <span class="preview-box-title">Live Prompt Preview</span>
+                <span class="mono preview-box-sub">query: "A citadel at dawn"</span>
+              </div>
+              <p class="preview-box-text" id="niche-prompt-preview">Loading preview...</p>
+            </div>
+
+            <div class="row-between mt-sm">
+              <button type="button" class="primary" onclick="saveNicheStyle()">Save</button>
+              <div class="row-tight">
+                <button type="button" class="ghost" id="btn-niche-reset" onclick="resetNicheStyle()">Reset to default</button>
+                <button type="button" class="ghost danger" id="btn-niche-delete" onclick="deleteNicheStyle()" style="display:none">Delete niche</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- CREATE NEW NICHE MODAL -->
-      <div id="modal-new-niche" class="modal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.65); display:none; align-items:center; justify-content:center; z-index:1000">
-        <div class="card" style="width:440px; max-width:90%; padding:20px; background:var(--surface, #1e2936)">
-          <h3 style="margin-top:0">Create New Niche</h3>
-          <p class="hint">Creates a new series pack seeded from default.json in <code>config/series_overrides/</code>.</p>
-          <div style="display:flex; flex-direction:column; gap:12px; margin:16px 0">
-            <label class="f">Niche Slug <small class="mono">(lowercase letters &amp; underscores)</small>
-              <input type="text" id="new-niche-slug" placeholder="e.g. cyberpunk_noir">
-            </label>
-            <label class="f">Display Name
-              <input type="text" id="new-niche-name" placeholder="e.g. Cyberpunk Noir">
-            </label>
-          </div>
-          <div class="row" style="justify-content:flex-end; gap:8px">
-            <button type="button" class="ghost" onclick="closeNewNicheModal()">Cancel</button>
-            <button type="button" class="primary" onclick="submitCreateNewNiche()">Create</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- VOICE CATALOGUE -->
-      <div class="card collapsed">
-        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-voice-cat">
-          <span class="chevron" aria-hidden="true">▶</span>
-          <h3>Voice catalogue</h3>
-          <span class="mono" id="voice-catalogue-count" style="margin-left:auto">47 available &middot; 6 enabled</span>
-        </button>
-        <div class="card-body" id="card-body-voice-cat" hidden>
-          <p class="mono">Tick the ones you use. Only enabled voices appear on the Script screen.</p>
-
-          <div id="voice-engines-container">
-            <!-- Dynamically populated from config/voices.json -->
+        <!-- CREATE NEW NICHE MODAL -->
+        <div id="modal-new-niche" class="modal-overlay-flex">
+          <div class="card modal-card">
+            <h3>Create New Niche</h3>
+            <p class="hint">Creates a new series pack seeded from default.json in <code>config/series_overrides/</code>.</p>
+            <div class="form-stacked modal-fields">
+              <label class="f f-full">Niche Slug <small class="mono">(lowercase letters &amp; underscores)</small>
+                <input type="text" id="new-niche-slug" placeholder="e.g. cyberpunk_noir">
+              </label>
+              <label class="f f-full">Display Name
+                <input type="text" id="new-niche-name" placeholder="e.g. Cyberpunk Noir">
+              </label>
+            </div>
+            <div class="row-end">
+              <button type="button" class="ghost" onclick="closeNewNicheModal()">Cancel</button>
+              <button type="button" class="primary" onclick="submitCreateNewNiche()">Create</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- LANGUAGE PACKS -->
-      <div class="card collapsed">
-        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-lang-packs">
-          <span class="chevron" aria-hidden="true">▶</span>
-          <h3>Language packs</h3>
-          <span class="mono" style="margin-left:auto">English installed &middot; language packs not implemented yet</span>
-        </button>
-        <div class="card-body" id="card-body-lang-packs" hidden>
-          <div class="tbl">
-            <table>
-              <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th><th></th></tr></thead>
-              <tbody>
-                <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td><td><button type="button" class="ghost" disabled title="Language packs are not implemented yet">Remove</button></td></tr>
-                <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td><td><button type="button" class="primary" disabled title="Language packs are not implemented yet">Download</button></td></tr>
-                <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
-                <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td><td><button type="button" disabled title="Language packs are not implemented yet">Download</button></td></tr>
-              </tbody>
-            </table>
+        <!-- KEYS & SERVICES -->
+        <div class="card collapsed">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-keys">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Keys &amp; services</h3>
+          </button>
+          <div class="card-body" id="card-body-keys" hidden>
+            <div class="tbl">
+              <table>
+                <thead>
+                  <tr><th>Service</th><th>Used for</th><th>Key / Secret</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Google AI</td>
+                    <td>Imagen, Gemini, Lyria music</td>
+                    <td><input type="password" id="google-key-input" placeholder="AIzaSy…" class="input-mono-sm"></td>
+                    <td><span class="pill p-mute" id="google-key-status">not set</span></td>
+                    <td><button type="button" class="ghost" onclick="saveGoogleKey()">Test &amp; Save</button></td>
+                  </tr>
+                  <tr>
+                    <td>Google Cloud TTS</td>
+                    <td>Narration + word timings</td>
+                    <td><input type="password" id="google-tts-key-input" placeholder="AIzaSy…" class="input-mono-sm"></td>
+                    <td><span class="pill p-mute" id="google-tts-key-status">not set</span></td>
+                    <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Test &amp; Save</button></td>
+                  </tr>
+                  <tr>
+                    <td>ElevenLabs</td>
+                    <td>Premium voice &mdash; optional</td>
+                    <td><input type="password" id="elevenlabs-key-input" placeholder="optional" class="input-mono-sm"></td>
+                    <td><span class="pill p-mute" id="elevenlabs-key-status">not set</span></td>
+                    <td><button type="button" class="ghost" onclick="saveElevenLabsKey()">Test &amp; Save</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="setting-ai-shot-descriptions" onchange="toggleAiShotDescriptions(this.checked)">
+                <span>Write descriptive image prompts with AI</span>
+              </label>
+            </div>
+            <p class="mono">
+              Keys are stored on this machine only, in <code>config/settings.json</code>, and never
+              travel with the app. Everything except Google runs offline and needs no key at all:
+              narration, image retrieval, captions and rendering are all local.
+            </p>
           </div>
         </div>
-      </div>
 
-      <!-- PRONUNCIATION DICTIONARY -->
-      <div class="card collapsed">
-        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-pronunciation">
-          <span class="chevron" aria-hidden="true">▶</span>
-          <h3>Pronunciation dictionary</h3>
-          <span class="mono" style="margin-left:auto">per series &middot; 34 entries</span>
-        </button>
-        <div class="card-body" id="card-body-pronunciation" hidden>
-          <p class="hint"><b>Arabic names spoken correctly.</b> Wrap names in SSML phonemes so your narrator pronounces proper nouns cleanly.</p>
-          <div class="tbl">
-            <table>
-              <thead><tr><th>Written</th><th>Spoken (IPA)</th><th>Heard in</th><th></th></tr></thead>
-              <tbody>
-                <tr><td>Al-Mansur</td><td class="mono">alˈmansˤuːr</td><td class="mono">S2E1, S2E4</td><td><button type="button" class="ghost">Test</button></td></tr>
-                <tr><td>Abu Ubaydah</td><td class="mono">ʔabuː ʕubajda</td><td class="mono">S2E3, S2E6</td><td><button type="button" class="ghost">Test</button></td></tr>
-                <tr><td>Madinah</td><td class="mono">maˈdiːna</td><td class="mono">all episodes</td><td><button type="button" class="ghost">Test</button></td></tr>
-                <tr><td>Bayt al-Hikmah</td><td class="mono">bajt alˈħikma</td><td class="mono">S2E1</td><td><button type="button" class="ghost">Test</button></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="row">
-            <button type="button">Add entry</button>
-            <button type="button" class="ghost">Import from script</button>
-            <button type="button" class="ghost">Export</button>
+        <!-- VOICE CATALOGUE -->
+        <div class="card collapsed">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-voice-cat">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Voice catalogue</h3>
+            <span class="mono ml-auto" id="voice-catalogue-count">47 available &middot; 6 enabled</span>
+          </button>
+          <div class="card-body" id="card-body-voice-cat" hidden>
+            <p class="mono">Tick the ones you use. Only enabled voices appear on the Script screen.</p>
+            <div id="voice-engines-container">
+              <!-- Dynamically populated from config/voices.json -->
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="grid2">
+        <!-- LANGUAGE PACKS -->
+        <div class="card collapsed">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-lang-packs">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Language packs</h3>
+            <span class="mono ml-auto">English installed &middot; language packs not implemented yet</span>
+          </button>
+          <div class="card-body" id="card-body-lang-packs" hidden>
+            <div class="tbl">
+              <table>
+                <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td></tr>
+                  <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td></tr>
+                  <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td></tr>
+                  <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PRONUNCIATION DICTIONARY -->
+        <div class="card collapsed">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-pronunciation">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Pronunciation dictionary</h3>
+            <span class="mono ml-auto">per series &middot; 34 entries</span>
+          </button>
+          <div class="card-body" id="card-body-pronunciation" hidden>
+            <p class="hint"><b>Arabic names spoken correctly.</b> Wrap names in SSML phonemes so your narrator pronounces proper nouns cleanly.</p>
+            <div class="tbl">
+              <table>
+                <thead><tr><th>Written</th><th>Spoken (IPA)</th><th>Heard in</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>Al-Mansur</td><td class="mono">alˈmansˤuːr</td><td class="mono">S2E1, S2E4</td><td><button type="button" class="ghost">Test</button></td></tr>
+                  <tr><td>Abu Ubaydah</td><td class="mono">ʔabuː ʕubajda</td><td class="mono">S2E3, S2E6</td><td><button type="button" class="ghost">Test</button></td></tr>
+                  <tr><td>Madinah</td><td class="mono">maˈdiːna</td><td class="mono">all episodes</td><td><button type="button" class="ghost">Test</button></td></tr>
+                  <tr><td>Bayt al-Hikmah</td><td class="mono">bajt alˈħikma</td><td class="mono">S2E1</td><td><button type="button" class="ghost">Test</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="row mt-sm">
+              <button type="button">Add entry</button>
+              <button type="button" class="ghost">Import from script</button>
+              <button type="button" class="ghost">Export</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEFAULTS -->
         <div class="card collapsed">
           <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-defaults">
             <span class="chevron" aria-hidden="true">▶</span>
             <h3>Defaults</h3>
           </button>
           <div class="card-body" id="card-body-defaults" hidden>
-            <label class="f">Resolution
-              <select><option>1080p</option><option>720p — faster</option><option>1440p</option></select>
-            </label>
-            <label class="f">Frame rate
-              <select><option>30 fps</option><option>24 fps — filmic</option></select>
-            </label>
-            <label class="f">Caption style
-              <select><option>documentary lower-third</option><option>kinetic word-by-word</option><option>bold centre</option></select>
-            </label>
-            <label class="f">Grade
-              <select><option>documentary</option><option>illustration</option><option>silhouette</option><option>none</option></select>
-            </label>
+            <div class="form-grid-2">
+              <label class="f">Resolution
+                <select><option>1080p</option><option>720p — faster</option><option>1440p</option></select>
+              </label>
+              <label class="f">Frame rate
+                <select><option>30 fps</option><option>24 fps — filmic</option></select>
+              </label>
+              <label class="f">Caption style
+                <select><option>documentary lower-third</option><option>kinetic word-by-word</option><option>bold centre</option></select>
+              </label>
+              <label class="f">Grade
+                <select><option>documentary</option><option>illustration</option><option>silhouette</option><option>none</option></select>
+              </label>
+            </div>
           </div>
         </div>
 
+        <!-- SPENDING -->
         <div class="card collapsed">
           <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-spending">
             <span class="chevron" aria-hidden="true">▶</span>
             <h3>Spending</h3>
           </button>
           <div class="card-body" id="card-body-spending" hidden>
-            <label class="f">Cap per video<input type="text" value="$5.00"></label>
-            <label class="f">Warn above<input type="text" value="$2.00"></label>
+            <div class="form-grid-2">
+              <label class="f">Cap per video<input type="text" value="$5.00"></label>
+              <label class="f">Warn above<input type="text" value="$2.00"></label>
+            </div>
             <div class="kv"><span>This month</span><b>$3.12</b></div>
             <div class="kv"><span>Last video</span><b>$0.28</b></div>
             <p class="mono">Pre-render cost estimates. Nothing paid is generated without approval.</p>
           </div>
         </div>
-      </div>
 
-      <div class="card collapsed">
-        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-performance">
-          <span class="chevron" aria-hidden="true">▶</span>
-          <h3>Performance</h3>
-        </button>
-        <div class="card-body" id="card-body-performance" hidden>
-          <div class="row">
-            <label class="f">Encoder
-              <select><option>libx264 veryfast (auto-detected)</option><option>h264_qsv</option></select>
-            </label>
-            <label class="f">Parallel shots
-              <select><option>3 (recommended for 4 cores)</option><option>1</option><option>6</option></select>
-            </label>
+        <!-- PERFORMANCE -->
+        <div class="card collapsed">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-performance">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Performance</h3>
+          </button>
+          <div class="card-body" id="card-body-performance" hidden>
+            <div class="row">
+              <label class="f">Encoder
+                <select><option>libx264 veryfast (auto-detected)</option><option>h264_qsv</option></select>
+              </label>
+              <label class="f">Parallel shots
+                <select><option>3 (recommended for 4 cores)</option><option>1</option><option>6</option></select>
+              </label>
+            </div>
+            <p class="mono">Hardware probed at startup. NVENC is not attempted when missing.</p>
           </div>
-          <p class="mono">Hardware probed at startup. NVENC is not attempted when missing.</p>
         </div>
       </div>
     </div>
@@ -784,7 +802,7 @@
         </div>
       </div>
 
-      <div style="display:flex; justify-content:flex-end">
+      <div class="row-end">
         <button type="button" class="ghost" onclick="closeReplaceModal()">Cancel</button>
       </div>
     </div>
