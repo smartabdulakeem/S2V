@@ -388,6 +388,17 @@ label.f {
   letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--ink-3);
+}
+
+/* The 190px is a WIDTH, so it belongs only to fields sitting in a horizontal
+   container. Left on the base rule it becomes a minimum HEIGHT the moment a
+   field lands in a column, which is what made every input a 190px block. */
+.row > label.f,
+.row-bottom > label.f,
+.row-between > label.f,
+.row-end > label.f,
+.row-center > label.f,
+.row-tight > label.f {
   flex: 1 1 190px;
 }
 
