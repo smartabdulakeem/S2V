@@ -42,6 +42,7 @@ If the file shows as modified after a test run, **commit it, do not restore it.*
 
 | Item | Owner | State |
 |---|---|---|
+| **Visual types** — `ANTIGRAVITY-VISUAL-TYPES.md` | Antigravity | Briefed 29 Aug. Per-niche visual type list; Brief subject, Medium and Palette leave the panel |
 | **ORO SAS dictation** — `~/Documents/ORO-SAS-DICTATION-BRIEF.md` | Cloud tab | Briefed 28 Aug |
 
 ### Landed since the last review
