@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from pipeline.captions import parse_srt
 from pipeline.validator import resolve_shot_durations
+from pipeline.motion import pad_factor_for, travel_for, resolve_motion_style
 
 FPS = 30
 
@@ -60,30 +61,51 @@ def _find_ffprobe() -> str:
 
 def _get_best_encoder(on_progress=None) -> tuple[str, list[str]]:
     """
-    Probe system once at startup to select the fastest reliable H.264 encoder.
-    Defaults to libx264 -preset veryfast -crf 21. Result is cached.
+    Select the optimal H.264 encoder and parameters for sharp, artifact-free delivery.
+    Uses libx264 with medium preset, CRF 18 (near-transparent), and faststart flag.
     """
     global _CACHED_ENCODER
     if _CACHED_ENCODER is not None:
         return _CACHED_ENCODER
 
-    # Selected standard CPU libx264 (veryfast preset, crf 21)
-    best = ("libx264", ["-preset", "veryfast", "-crf", "21"])
+    # Selected standard CPU libx264 (medium preset, crf 18, faststart)
+    best = ("libx264", ["-preset", "medium", "-crf", "18", "-movflags", "+faststart"])
     _CACHED_ENCODER = best
     if on_progress:
-        on_progress("Encoder selected: libx264 (-preset veryfast -crf 21)")
+        on_progress("Encoder selected: libx264 (-preset medium -crf 18 -movflags +faststart)")
     return _CACHED_ENCODER
+
+
+#: Font files are looked up under the *real* Windows directory. "C:/Windows"
+#: was hardcoded, and Windows is not always installed on C:. The overlay filter
+#: further down hardcoded a single file with no fallback at all, so a machine
+#: without arialbd.ttf lost every text overlay to an FFmpeg error rather than
+#: falling back to another face.
+_FONT_NAMES = ("arialbd.ttf", "arial.ttf", "calibrib.ttf", "segoeui.ttf")
+
+
+def _font_candidates():
+    """Every font file worth trying on this machine, best first."""
+    windir = os.environ.get("WINDIR") or os.environ.get("SystemRoot") or "C:/Windows"
+    return [os.path.join(windir, "Fonts", name) for name in _FONT_NAMES]
+
+
+def _find_font_file():
+    """The first font file that actually exists here, or None if there is none."""
+    for path in _font_candidates():
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _ffmpeg_font_arg(path: str) -> str:
+    """A font path as an FFmpeg filter argument: forward slashes, escaped colon."""
+    return path.replace(chr(92), "/").replace(":", chr(92) + ":")
 
 
 def _get_font(size: int):
     """Load a TTF font; fall back to PIL default if no system font found."""
-    font_candidates = [
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/calibrib.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
-    ]
-    for path in font_candidates:
+    for path in _font_candidates():
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size)
@@ -310,7 +332,7 @@ def _resolve_pin_path(pin_file: str, project_dir: str, root: str = None) -> str:
 
 
 def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height: int, fps: int = 30,
-                        default_treatment: str = None) -> str:
+                        default_treatment: str = None, motion_style: str = None) -> str:
     """Generate a SHA-1 hash for shot content cache lookup."""
     query_or_pin = str(shot.get("pin") or shot.get("query") or "")
     motion = json.dumps(shot.get("motion", {}), sort_keys=True)
@@ -324,7 +346,12 @@ def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height
     #     treatments are applied to the image.
     # v3: default_treatment (from the resolved visual type/preset) is part of
     #     the key, so changing the picked visual type invalidates the cache.
-    raw = f"v3|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|{default_treatment or ''}"
+    # v4: the motion style sets how far the frame travels, so the same shot at
+    #     the same duration renders differently under Gentle drift and Dynamic.
+    # v5: lanczos scaling flags, medium/crf 18 encoder preset, faststart, and 192k audio.
+    style_key = resolve_motion_style(motion_style)
+    raw = (f"v5|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
+           f"{default_treatment or ''}|{style_key}")
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -535,6 +562,7 @@ def render_shot_clip(
     fps: int = 30,
     on_progress=None,
     default_treatment: str | None = None,
+    motion_style: str | None = None,
 ) -> str:
     """
     Render a single shot into an MP4 clip using an FFmpeg filtergraph.
@@ -552,9 +580,11 @@ def render_shot_clip(
     transition_out = shot.get("transition_out", "cut")
     level1_overlay = shot.get("level1_overlay")
 
-    # Base scale & zoompan
-    pad_w = int(width * 1.25)
-    pad_h = int(height * 1.25)
+    # Base scale & zoompan. The padding is the style's, because the crop of a
+    # Dynamic move travels further than a 1.25x frame can hold.
+    pad = pad_factor_for(motion_style)
+    pad_w = int(width * pad)
+    pad_h = int(height * pad)
 
     # Treatment (the "grade" look). magick_processor has implemented vignette,
     # vox_collage, documentary, illustration and silhouette all along, but the
@@ -563,16 +593,17 @@ def render_shot_clip(
     visual_path = _apply_treatment(shot, visual_path, output_mp4_path, pad_w, pad_h,
                                    on_progress, default_treatment)
 
-    filters = [f"scale={pad_w}:{pad_h}"]
+    filters = [f"scale={pad_w}:{pad_h}:flags=lanczos"]
 
     # Motion (Ken Burns).
     #
     # The travel used to be a flat 15% however long the shot ran. Over a 3s shot
     # that reads as a push; over the ~19s segments this app now produces it is
-    # 0.8% per second — indistinguishable from a still frame. Scale the travel
-    # with duration so the *rate* stays constant, and cap it so the crop stays
-    # inside the 1.25x padding.
-    travel = max(0.06, min(0.24, 0.05 * duration))
+    # 0.8% per second — indistinguishable from a still frame. It scales with
+    # duration so the *rate* stays constant, and the project's motion style sets
+    # that rate and the clamps around it. Static returns zero, which collapses
+    # every expression below to a held frame whatever move the shot asked for.
+    travel = travel_for(motion_style, duration)
     pan_zoom = 1.0 + travel
 
     if motion_kind == "zoom_in":
@@ -586,8 +617,13 @@ def render_shot_clip(
     else:
         filters.append(f"zoompan=z='1.0':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={num_frames}:s={width}x{height}:fps={fps}")
 
-    # Text overlay
-    if text_overlay and text_overlay.get("text"):
+    # Text overlay. Skipped rather than attempted when the machine has none of
+    # the candidate fonts: drawtext with a missing fontfile fails the whole
+    # render, which would lose the picture as well as the caption.
+    overlay_font = _find_font_file()
+    if text_overlay and text_overlay.get("text") and not overlay_font and on_progress:
+        on_progress("No usable system font found - skipping the text overlay.")
+    if text_overlay and text_overlay.get("text") and overlay_font:
         ov_text = text_overlay.get("text", "").replace("'", "'\\''").replace(":", "\\:")
         pos = text_overlay.get("position", "bottom_center")
         ov_dur = text_overlay.get("duration_seconds", duration)
@@ -602,7 +638,7 @@ def render_shot_clip(
             "center":        ("(w-text_w)/2", "(h-text_h)/2"),
         }
         x_expr, y_expr = ov_positions.get(pos, ov_positions["bottom_center"])
-        font_path = "C\\:/Windows/Fonts/arialbd.ttf"
+        font_path = _ffmpeg_font_arg(overlay_font)
         ov_font_size = max(24, int(width * 0.033))
         
         drawtext_str = (
@@ -724,7 +760,7 @@ def render_shot_clip(
     cmd.extend(["-pix_fmt", "yuv420p"])
 
     if audio_path and os.path.exists(audio_path):
-        cmd.extend(["-c:a", "aac", "-shortest"])
+        cmd.extend(["-c:a", "aac", "-b:a", "192k", "-shortest"])
 
     cmd.append(output_mp4_path)
 
@@ -760,6 +796,7 @@ def compose_segment(
     visual_style: str = "",
     visual_type: str = "",
     series_slug: str = None,
+    motion_style: str = None,
 ) -> str:
     """
     Compose a single segment into an MP4 of resolution width x height.
@@ -814,7 +851,7 @@ def compose_segment(
             "query": "segment visual",
             "source": "pin" if visual_path and not visual_path.endswith("_placeholder.jpg") else "library",
             "motion": {"kind": ken_burns},
-            "treatment": {"filter": "vignette"},
+            "treatment": {"filter": "none"},
             "text_overlay": text_overlay,
             "transition_in": transition_in,
             "transition_out": transition_out,
@@ -831,7 +868,8 @@ def compose_segment(
     shot_clip_paths = []
     for i, shot in enumerate(shots):
         dur = resolved_durations[i]
-        cache_key = _get_shot_cache_key(shot, dur, width, height, FPS, default_treatment=default_treatment)
+        cache_key = _get_shot_cache_key(shot, dur, width, height, FPS, default_treatment=default_treatment,
+                                        motion_style=motion_style)
         shot_mp4 = os.path.join(cache_dir, f"shot_{cache_key}.mp4")
 
         # Determine visual path for shot
@@ -863,6 +901,7 @@ def compose_segment(
                 fps=FPS,
                 on_progress=on_progress,
                 default_treatment=default_treatment,
+                motion_style=motion_style,
             )
 
         shot_clip_paths.append(shot_mp4)
@@ -876,6 +915,7 @@ def compose_segment(
             "-i", final_audio_path,
             "-c:v", "copy",
             "-c:a", "aac",
+            "-b:a", "192k",
             "-shortest",
             output_path
         ]
@@ -908,6 +948,7 @@ def compose_segment(
         "-i", final_audio_path,
         "-c:v", "copy",
         "-c:a", "aac",
+        "-b:a", "192k",
         "-shortest",
         output_path
     ]

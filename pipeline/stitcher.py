@@ -76,8 +76,11 @@ def stitch_segments(
                 ffmpeg, "-y",
                 "-i", temp_video,
                 "-i", master_audio_path,
+                "-map", "0:v",
+                "-map", "1:a",
                 "-c:v", "copy",
                 "-c:a", "aac",
+                "-b:a", "192k",
                 output_path
             ]
             _run_ffmpeg(cmd2, "add master audio")
@@ -101,6 +104,7 @@ def stitch_segments(
                 "-map", "[aout]",
                 "-c:v", "copy",
                 "-c:a", "aac",
+                "-b:a", "192k",
                 "-shortest",
                 output_path
             ]
