@@ -92,6 +92,9 @@ async function initApp() {
   await loadSettingsData();
   await loadLibraryData();
   await loadImageFolders();
+  // Before applyUiDefaults, which can only restore a choice the list already
+  // holds. The motion styles do not depend on the niche, so they load once.
+  await loadMotionStyles();
   await applyUiDefaults();
   await restoreLastProject();
 }
@@ -104,6 +107,7 @@ async function initApp() {
 const UI_FIELDS = {
   voice: "pt-voice", series_slug: "pt-series-slug",
   tone: "pt-tone", visual_type: "pt-style",
+  motion_style: "pt-motion",
 };
 
 async function rememberUiChoices() {
@@ -310,6 +314,38 @@ async function loadSeriesPacks() {
   await loadStylePresets();
   await loadNarrationTones();
   wireBriefBox();
+}
+
+// ── Camera motion ────────────────────────────────────────────────────────────
+// Static / Gentle drift / Ken Burns / Dynamic. The style sets how far the frame
+// travels per second of shot and how much padding the crop moves across, and it
+// deals the four moves out in a cycle so a film stops repeating one move.
+async function loadMotionStyles() {
+  const sel = document.getElementById("pt-motion");
+  if (!sel || isWebMode) return;
+
+  let styles = [];
+  try {
+    styles = await window.pywebview.api.get_motion_styles();
+  } catch (e) {
+    console.error("Could not load motion styles:", e);
+  }
+  if (!styles.length) return;
+
+  const previous = sel.value;
+  sel.innerHTML = "";
+  styles.forEach(st => {
+    const opt = new Option(st.label, st.key);
+    opt.title = st.description;
+    sel.appendChild(opt);
+  });
+
+  if (previous && [...sel.options].some(o => o.value === previous)) {
+    sel.value = previous;
+  } else {
+    const fallback = styles.find(st => st.default) || styles[0];
+    sel.value = fallback.key;
+  }
 }
 
 // ── Narration tone ───────────────────────────────────────────────────────────
@@ -805,6 +841,8 @@ async function planStoryboard() {
     ? styleSel.options[styleSel.selectedIndex].textContent.trim()
     : "";
   const tone = document.getElementById("pt-tone").value;
+  const motionEl = document.getElementById("pt-motion");
+  const motionStyle = motionEl ? motionEl.value : "";
 
   if (!text.trim()) {
     alert("Please paste or type script text before planning.");
@@ -849,7 +887,9 @@ async function planStoryboard() {
       getSelectedFormats()[0],
       "",
       "",
-      tone
+      tone,
+      "single",
+      motionStyle
     );
 
     if (res.started) {

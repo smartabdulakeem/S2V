@@ -332,6 +332,20 @@ class Api:
         except Exception:
             return []
 
+    def get_motion_styles(self) -> list:
+        """
+        Every camera-motion style the project can be rendered under.
+
+        Like the tone, this is not decoration: it sets how far the frame travels
+        per second of shot and which moves follow which, so a film stops running
+        one move at one strength from the first shot to the last.
+        """
+        try:
+            from pipeline.motion import styles_for_ui
+            return styles_for_ui()
+        except Exception:
+            return []
+
     def draft_brief_preview(self, series_slug: str = None, visual_type: str = "") -> dict:
         """
         The opening line these two choices would produce, for the board to show.
@@ -867,7 +881,8 @@ class Api:
         ai_guideline: str = "",
         voice_dialect: str = "",
         narrative_tone: str = "",
-        speaker_mode: str = "single"
+        speaker_mode: str = "single",
+        motion_style: str = ""
     ) -> dict:
         """
         Start plain-text parsing using the AI storyboard planner in a background thread.
@@ -905,7 +920,8 @@ class Api:
                     aspect_ratio=aspect_ratio,
                     voice_dialect=voice_dialect,
                     narrative_tone=narrative_tone,
-                    speaker_mode=speaker_mode
+                    speaker_mode=speaker_mode,
+                    motion_style=motion_style
                 )
 
                 if not res.get("success"):

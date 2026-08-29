@@ -123,8 +123,14 @@
               <!-- Populated from the picked niche's style_presets -->
             </select>
           </label>
+          <label class="f">Camera motion
+            <select id="pt-motion">
+              <!-- Populated from pipeline/motion.py; sets how far the frame travels -->
+            </select>
+          </label>
         </div>
         <p class="mono">Only enabled voices appear here. Manage the full catalogue in Settings.</p>
+        <p class="hint"><b>Camera motion.</b> How far each shot's frame travels per second, and which move follows which — consecutive shots never repeat a move.</p>
         <div class="row">
           <button type="button" class="ghost" id="btn-preview-voice" onclick="previewVoice()">Preview voice</button>
           <span id="voice-preview-status" class="mono"></span>

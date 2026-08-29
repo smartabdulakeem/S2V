@@ -42,7 +42,8 @@ def generate_storyboard_plan(
     aspect_ratio: str = "16:9",
     voice_dialect: str = "",
     narrative_tone: str = "",
-    speaker_mode: str = "single"
+    speaker_mode: str = "single",
+    motion_style: str = ""
 ) -> dict:
     """
     Parse a plain script using AI (DeepSeek + Gemini Oversight, falling back to Gemini-only) into a storyboard.
@@ -68,6 +69,7 @@ def generate_storyboard_plan(
     except Exception:
         pass
 
+    from pipeline.motion import assign_effects, resolve_motion_style
     from pipeline.visuals import initialize_project_sourcing
 
     if deepseek_api_key or google_api_key:
@@ -96,6 +98,10 @@ def generate_storyboard_plan(
             script_dict["project"]["voice_dialect"] = voice_dialect
             script_dict["project"]["narrative_tone"] = narrative_tone
             script_dict["project"]["speaker_mode"] = speaker_mode
+            # The camera moves are the motion style's to deal out, not the
+            # planner's: a cached plan carries the moves it was first given.
+            script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+            assign_effects(script_dict, motion_style)
             
             # Initialize project sourcing workspace (folders, placeholders, image_prompts.txt)
             try:
@@ -121,6 +127,10 @@ def generate_storyboard_plan(
             script_dict["project"]["voice_dialect"] = voice_dialect
             script_dict["project"]["narrative_tone"] = narrative_tone
             script_dict["project"]["speaker_mode"] = speaker_mode
+            # The camera moves are the motion style's to deal out, not the
+            # planner's: a cached plan carries the moves it was first given.
+            script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+            assign_effects(script_dict, motion_style)
             for s in script_dict["segments"]:
                 s["voice_steering"] = ai_guideline
             
@@ -149,6 +159,10 @@ def generate_storyboard_plan(
         script_dict["project"]["voice_dialect"] = voice_dialect
         script_dict["project"]["narrative_tone"] = narrative_tone
         script_dict["project"]["speaker_mode"] = speaker_mode
+        # The camera moves are the motion style's to deal out, not the
+        # planner's: a cached plan carries the moves it was first given.
+        script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+        assign_effects(script_dict, motion_style)
         for s in script_dict["segments"]:
             s["voice_steering"] = ai_guideline
         

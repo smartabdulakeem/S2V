@@ -42,6 +42,8 @@ STOPWORDS = {
 }
 
 # Ken Burns effects cycle — gives variety across scenes
+from pipeline.motion import assign_effects, style_of
+
 KEN_BURNS_CYCLE = ["zoom_in", "pan_right", "zoom_out", "pan_left", "zoom_in", "zoom_out"]
 
 # Transition cycle
@@ -120,10 +122,6 @@ def _cap_segment_length(segments: list, max_words: int) -> list:
 #: Measured on this machine: Supertonic reads ~2.6 words per second.
 WORDS_PER_SECOND = 2.6
 
-#: Consecutive shots should not repeat a move, or the cut reads as a glitch.
-_MOTION_CYCLE = ("zoom_in", "pan_left", "zoom_out", "pan_right")
-
-
 def split_narration_for_shots(narration: str, n: int) -> list:
     """Split one segment's narration into n runs of whole sentences."""
     if n <= 1:
@@ -186,6 +184,10 @@ def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
     Existing pins are carried over positionally: a deliberate choice for the first
     shot survives a rhythm change, later ones are re-planned.
 
+    The camera moves are dealt out afterwards, in one pass over the whole script,
+    under the project's motion style. Assigning them here, per segment, meant
+    every segment opened on the same move.
+
     Returns {"shots_before": int, "shots_after": int, "segments": int}.
     """
     seconds_per_shot = max(2.0, float(seconds_per_shot or 7.0))
@@ -220,7 +222,7 @@ def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
                 "query": extract_keyword(chunk) or extract_keyword(narration) or "documentary shot",
                 "pin": None,
                 "min_score": template.get("min_score", 0.26),
-                "motion": {"kind": "ken_burns", "effect": _MOTION_CYCLE[i % len(_MOTION_CYCLE)]},
+                "motion": {"kind": "ken_burns", "effect": "zoom_in"},
                 "treatment": dict(treatment),
                 # The slice of narration this shot covers. Without it every shot
                 # in a segment shares one description and gets the same prompt.
@@ -232,6 +234,8 @@ def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
 
         seg["shots"] = new_shots
         after += len(new_shots)
+
+    assign_effects(script_data, style_of(script_data))
 
     return {
         "shots_before": before,
@@ -338,7 +342,7 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                     "query": extract_keyword(chunk) or extract_keyword(narration) or "documentary shot",
                     "pin": None,
                     "min_score": template.get("min_score", 0.26),
-                    "motion": {"kind": "ken_burns", "effect": _MOTION_CYCLE[j % len(_MOTION_CYCLE)]},
+                    "motion": {"kind": "ken_burns", "effect": "zoom_in"},
                     "treatment": dict(treatment),
                     "scene": chunk,
                     "share_with": None,
@@ -348,6 +352,8 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                 new_shots.append(shot)
 
             seg["shots"] = new_shots
+
+        assign_effects(script_data, style_of(script_data))
 
         return {
             "images_before": before,
@@ -403,7 +409,7 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                     "query": run_query,
                     "pin": None,
                     "min_score": template.get("min_score", 0.26),
-                    "motion": {"kind": "ken_burns", "effect": _MOTION_CYCLE[pos % len(_MOTION_CYCLE)]},
+                    "motion": {"kind": "ken_burns", "effect": "zoom_in"},
                     "treatment": dict(treatment),
                     "scene": narration,
                     "share_with": None if is_first else first_shot_id,
@@ -417,6 +423,8 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                             shot[k] = old_shots[0][k]
 
                 seg["shots"] = [shot]
+
+        assign_effects(script_data, style_of(script_data))
 
         return {
             "images_before": before,
