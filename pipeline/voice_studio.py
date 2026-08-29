@@ -41,11 +41,62 @@ PROFILE_DIR = os.path.join(BASE_DIR, "config", "voice_profiles")
 PROFILE_INDEX = os.path.join(PROFILE_DIR, "profiles.json")
 HISTORY_INDEX = os.path.join(OUTPUT_DIR, "history.json")
 
-OPENVOICE_DIR = r"C:\Users\HomePC\Documents\GitHub\OpenVoice"
-OPENVOICE_SCRIPT = os.path.join(OPENVOICE_DIR, "clone_voice.py")
-OPENVOICE_PYTHON = r"C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe"
+def _setting(name: str, default=None):
+    """Read one value from config/settings.json, falling back to a default."""
+    try:
+        with open(os.path.join(BASE_DIR, "config", "settings.json"), "r", encoding="utf-8") as f:
+            return json.load(f).get(name, default)
+    except Exception:
+        return default
 
-PIPER_DIR = r"C:\Users\HomePC\Documents\GitHub\piper-desktop-skill"
+
+def _companion_dir(setting_key: str, env_var: str, folder: str, marker: str) -> str:
+    """
+    Where a companion checkout lives on *this* machine.
+
+    These paths used to be absolute, with a username inside them, so every
+    install except the author's reported "not found at C:/Users/HomePC/...".
+    Looked for in order: an explicit entry in settings.json, an environment
+    variable, a copy vendored inside the app, then a sibling of the app folder,
+    which is where a second checkout naturally lands. The sibling is returned
+    even when nothing matched, so the blocker message names a place the user
+    can actually put it.
+    """
+    candidates = []
+    for value in (_setting(setting_key), os.environ.get(env_var)):
+        if value:
+            candidates.append(str(value))
+    sibling = os.path.join(os.path.dirname(BASE_DIR), folder)
+    candidates += [os.path.join(BASE_DIR, "vendor", folder), sibling]
+
+    for path in candidates:
+        if os.path.isfile(os.path.join(path, marker)):
+            return os.path.normpath(path)
+    return os.path.normpath(sibling)
+
+
+def _companion_python(setting_key: str, env_var: str) -> str:
+    """
+    The interpreter that runs a companion script.
+
+    Defaults to the one already running this app, which is the portable answer
+    and correct whenever the companion shares the environment. The override
+    exists because OpenVoice needs MeloTTS, which some installs keep apart.
+    """
+    configured = _setting(setting_key) or os.environ.get(env_var)
+    if configured and os.path.isfile(str(configured)):
+        return os.path.normpath(str(configured))
+    return sys.executable
+
+
+OPENVOICE_DIR = _companion_dir(
+    "openvoice_dir", "SMART_STUDIO_OPENVOICE_DIR", "OpenVoice", "clone_voice.py")
+OPENVOICE_SCRIPT = os.path.join(OPENVOICE_DIR, "clone_voice.py")
+OPENVOICE_PYTHON = _companion_python(
+    "openvoice_python", "SMART_STUDIO_OPENVOICE_PYTHON")
+
+PIPER_DIR = _companion_dir(
+    "piper_dir", "SMART_STUDIO_PIPER_DIR", "piper-desktop-skill", "piper_skill.py")
 PIPER_SCRIPT = os.path.join(PIPER_DIR, "piper_skill.py")
 
 # Kokoro was installed by an Electron app, so the ONNX weights already exist

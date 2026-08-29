@@ -6,7 +6,12 @@ from pipeline.llm.deepseek import DeepSeekProvider
 from pipeline.llm.gemini import GeminiProvider
 from pipeline.llm.anthropic import AnthropicProvider
 
-SETTINGS_PATH = os.path.abspath("config/settings.json")
+# Resolved against this file, never the working directory. os.path.abspath()
+# resolves against the cwd, so launching the app from anywhere but the repo
+# root silently returned {} here - no API key, and the planner dropped to
+# keyword mode with nothing on screen to say why.
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SETTINGS_PATH = os.path.join(_ROOT, "config", "settings.json")
 
 def load_settings() -> dict:
     if os.path.exists(SETTINGS_PATH):

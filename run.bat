@@ -1,8 +1,10 @@
 @echo off
 cd /d "%~dp0"
 
-REM Try the known installation path first
-set PYEXE=C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe
+REM A virtual environment inside the app folder wins, so an install never
+REM depends on which Python the machine happens to have. This used to name one
+REM absolute path with a username in it, which no other machine could have.
+set PYEXE=%~dp0.venv\Scripts\python.exe
 if exist "%PYEXE%" goto found_python
 
 REM Fall back to whatever python is on PATH
