@@ -414,6 +414,8 @@ class RenderOrchestrator:
                     world_anchor=project_world_anchor(proj),
                     work_folder=(proj.get("image_folder") or "").strip() or None,
                     visual_description=(seg.get("shots") and seg["shots"][0].get("visual_description")) or seg.get("visual_description"),
+                    prompt_override=(seg.get("shots") and seg["shots"][0].get("prompt_override")) or seg.get("prompt_override"),
+                    apply_era=proj.get("apply_era", True),
                 )
                 with self._lock:
                     visual_paths_map[seg_id] = vis_path

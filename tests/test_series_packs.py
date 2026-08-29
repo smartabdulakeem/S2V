@@ -88,3 +88,48 @@ def test_every_authored_treatment_is_real(path):
         if isinstance(entry, dict) and entry.get("treatment"):
             assert entry["treatment"] in SINGLE_IMAGE_TREATMENTS, \
                 f"{os.path.basename(path)}: {key} maps to unknown treatment {entry['treatment']}"
+
+
+@pytest.mark.parametrize("path", PACK_PATHS, ids=PACK_SLUGS)
+def test_every_pack_has_split_blocks(path):
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    slug = data.get("series_slug")
+    assert isinstance(data.get("medium_block"), str), f"{slug} missing medium_block string"
+    assert isinstance(data.get("palette_block"), str), f"{slug} missing palette_block string"
+    assert isinstance(data.get("era_block"), str), f"{slug} missing era_block string"
+    if slug == "motivational":
+        assert data.get("era_block") == "", "motivational pack must have empty era_block"
+
+
+def test_series_overrides_lifecycle():
+    from pipeline.library import save_series_override, get_series_config, reset_series_override
+    slug = "islamic_history"
+    
+    # Base config before override
+    base_cfg = get_series_config(series_slug=slug)
+    base_medium = base_cfg.get("medium_block")
+    
+    # Save custom override
+    res = save_series_override(slug, {"medium_block": "Custom medium test string"})
+    assert res["success"] is True
+    
+    # Loaded config reflects override
+    overridden_cfg = get_series_config(series_slug=slug)
+    assert overridden_cfg["medium_block"] == "Custom medium test string"
+    assert overridden_cfg["palette_block"] == base_cfg["palette_block"]
+    
+    # Base file was never modified
+    base_path = os.path.join("config", "series", f"{slug}.json")
+    with open(base_path, "r", encoding="utf-8") as f:
+        disk_base = json.load(f)
+    assert disk_base["medium_block"] == base_medium
+    
+    # Reset override
+    reset_res = reset_series_override(slug)
+    assert reset_res["success"] is True
+    
+    # Config returns to default
+    restored_cfg = get_series_config(series_slug=slug)
+    assert restored_cfg["medium_block"] == base_medium
+

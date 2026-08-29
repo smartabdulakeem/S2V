@@ -65,9 +65,15 @@
         <textarea id="pt-text" placeholder="Paste your script here. Leave a blank line between paragraphs — each one becomes a scene."></textarea>
       </label>
 
-      <label class="f" style="flex:1 1 100%">Prompt opening (shared by every image in this film)
-        <input type="text" id="pt-brief" placeholder="Drafted automatically when you plan — edit to lock the look across every shot.">
-      </label>
+      <div class="row" style="align-items:flex-end">
+        <label class="f" style="flex:1 1 350px">Prompt opening (shared by every image in this film)
+          <input type="text" id="pt-brief" placeholder="Drafted automatically when you plan — edit to lock the look across every shot.">
+        </label>
+        <label class="f" style="flex:0 0 auto; margin-bottom:6px; display:flex; align-items:center; gap:6px; cursor:pointer">
+          <input type="checkbox" id="pt-apply-era" checked>
+          <span style="font-size:12.5px; font-weight:500">Apply the niche's period to every image</span>
+        </label>
+      </div>
 
       <!-- FORMAT PICKER -->
       <div class="card">
@@ -495,6 +501,52 @@
             travel with the app. Everything except Google runs offline and needs no key at all:
             narration, image retrieval, captions and rendering are all local.
           </p>
+        </div>
+      </div>
+
+      <!-- VISUAL STYLE PER NICHE -->
+      <div class="card collapsed" id="card-niche-style">
+        <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-niche-style">
+          <span class="chevron" aria-hidden="true">▶</span>
+          <h3>Visual style per niche</h3>
+          <span class="mono" id="niche-override-status" style="margin-left:auto">default</span>
+        </button>
+        <div class="card-body" id="card-body-niche-style" hidden>
+          <p class="hint">Customize how diffusion models render images for each niche. Edits are saved separately in <code>config/series_overrides/</code> without touching default packs.</p>
+          <div class="row" style="margin-bottom:10px">
+            <label class="f" style="flex:1">Niche
+              <select id="niche-select" onchange="onNicheSelectChange()">
+                <!-- Dynamically populated from series packs -->
+              </select>
+            </label>
+          </div>
+          <div class="row" style="flex-direction:column; gap:10px">
+            <label class="f">Medium <small class="mono">(how it is photographed)</small>
+              <textarea id="niche-medium-input" rows="2" placeholder="e.g. Shot on 35mm film, cinematic documentary photography..." oninput="updateNichePreview()"></textarea>
+            </label>
+            <label class="f">Palette <small class="mono">(colour, lighting, and grain)</small>
+              <textarea id="niche-palette-input" rows="2" placeholder="e.g. muted earth palette of ochre sand, dust grey..." oninput="updateNichePreview()"></textarea>
+            </label>
+            <label class="f">Era <small class="mono">(period and historical setting — omittable per project)</small>
+              <textarea id="niche-era-input" rows="2" placeholder="e.g. historically accurate 7th century Arabian Peninsula..." oninput="updateNichePreview()"></textarea>
+            </label>
+            <label class="f">Negative prompt <small class="mono">(what to exclude)</small>
+              <textarea id="niche-negative-input" rows="2" placeholder="e.g. No text, no watermark, no signature..." oninput="updateNichePreview()"></textarea>
+            </label>
+          </div>
+
+          <div style="margin-top:12px; padding:12px; background:var(--bg, #1a222b); border-radius:6px; border:1px solid var(--border, #2a3642)">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
+              <label style="font-size:11.5px; font-weight:700; color:var(--ink-2); text-transform:uppercase">Live Prompt Preview</label>
+              <span class="mono" style="font-size:11px; color:var(--ink-3)">query: "A citadel at dawn"</span>
+            </div>
+            <p class="mono" id="niche-prompt-preview" style="font-size:12px; margin:0; line-height:1.45; color:var(--text, #e1e7ec)">Loading preview...</p>
+          </div>
+
+          <div class="row" style="margin-top:14px; justify-content:space-between">
+            <button type="button" class="primary" onclick="saveNicheStyle()">Save</button>
+            <button type="button" class="ghost" onclick="resetNicheStyle()">Reset to default</button>
+          </div>
         </div>
       </div>
 

@@ -557,6 +557,8 @@ def fetch_visual(
     #: The project's own world anchor, or None to let the series pack supply
     #: it. Never visual_style - that is the label of the picked look.
     world_anchor: str = None,
+    prompt_override: str = None,
+    apply_era: bool = True,
 ) -> str:
     """
     Fetch or generate a visual for this segment at the correct aspect ratio.
@@ -776,17 +778,21 @@ def fetch_visual(
                         on_progress(f"Segment {segment_id} — Found library match: {best_path} (score: {best_score:.2f})")
             
             if not os.path.exists(manual_path):
-                composed_prompt = library.compose_gap_prompt(
-                    shot_query=keyword,
-                    world_anchor=world_anchor,
-                    character_bible=character_bible,
-                    script_context=narration,
-                    series_slug=series_slug,
-                    project_title=video_title,
-                    visual_type=style_preset,
-                    project_brief=project_brief,
-                    visual_description=visual_description,
-                )
+                if prompt_override and prompt_override.strip():
+                    composed_prompt = prompt_override.strip()
+                else:
+                    composed_prompt = library.compose_gap_prompt(
+                        shot_query=keyword,
+                        world_anchor=world_anchor,
+                        character_bible=character_bible,
+                        script_context=narration,
+                        series_slug=series_slug,
+                        project_title=video_title,
+                        visual_type=style_preset,
+                        project_brief=project_brief,
+                        visual_description=visual_description,
+                        apply_era=apply_era,
+                    )
                 if not auto_generate:
                     raise ValueError(
                         f"Library miss for segment {segment_id} query '{search_query[:60]}' "
@@ -851,6 +857,14 @@ def fetch_visual(
                 if on_progress:
                     on_progress(f"Segment {segment_id} — Skipping filter, copying file")
                 shutil.copy(manual_path, output_path)
+            elif magick_filter == "diptych":
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying Diptych filter")
+                process_diptych(manual_path, output_path, width, height)
+            elif magick_filter == "collage":
+                if on_progress:
+                    on_progress(f"Segment {segment_id} — Applying Collage filter")
+                process_collage(manual_path, output_path, width, height)
             elif magick_filter in ["vox_collage", "vox_paper_collage", "vox"] or (visual_style and "vox" in visual_style.lower()):
                 if on_progress:
                     on_progress(f"Segment {segment_id} — Applying Vox Paper-Collage filter")
@@ -882,17 +896,21 @@ def fetch_visual(
 
     # Create/update the project-specific visual prompts text file
     prompts_file = os.path.join(project_dir, "image_prompts.txt")
-    prompt_desc = library.compose_gap_prompt(
-        shot_query=keyword,
-        world_anchor=world_anchor,
-        character_bible=character_bible,
-        script_context=narration,
-        series_slug=series_slug,
-        project_title=video_title,
-        visual_type=style_preset,
-        project_brief=project_brief,
-        visual_description=visual_description,
-    )
+    if prompt_override and prompt_override.strip():
+        prompt_desc = prompt_override.strip()
+    else:
+        prompt_desc = library.compose_gap_prompt(
+            shot_query=keyword,
+            world_anchor=world_anchor,
+            character_bible=character_bible,
+            script_context=narration,
+            series_slug=series_slug,
+            project_title=video_title,
+            visual_type=style_preset,
+            project_brief=project_brief,
+            visual_description=visual_description,
+            apply_era=apply_era,
+        )
     
     existing_lines = {}
     if os.path.exists(prompts_file):
@@ -929,6 +947,7 @@ def initialize_project_sourcing(script_dict: dict) -> str:
     title = proj.get("title", "My Video")
     aspect_ratio = proj.get("aspect_ratio", "16:9")
     visual_style = proj.get("visual_style", "")
+    apply_era = proj.get("apply_era", True)
     # visual_style is the label of the picked look, never a setting. Passing it
     # as the anchor printed the style name into the prompt's setting slot.
     from pipeline.library import project_world_anchor
@@ -985,17 +1004,22 @@ def initialize_project_sourcing(script_dict: dict) -> str:
             
         # 2. Build rich prompt for image_prompts.txt
         series_slug = proj.get("series_slug")
-        prompt_desc = library.compose_gap_prompt(
-            shot_query=keyword,
-            world_anchor=world_anchor,
-            character_bible=character_bible,
-            script_context=narration,
-            series_slug=series_slug,
-            project_title=title,
-            visual_type=proj.get("visual_type", ""),
-            project_brief=proj.get("project_brief", ""),
-            visual_description=v_desc,
-        )
+        prompt_override = seg.get("prompt_override") or (seg.get("shots") and seg["shots"][0].get("prompt_override"))
+        if prompt_override and prompt_override.strip():
+            prompt_desc = prompt_override.strip()
+        else:
+            prompt_desc = library.compose_gap_prompt(
+                shot_query=keyword,
+                world_anchor=world_anchor,
+                character_bible=character_bible,
+                script_context=narration,
+                series_slug=series_slug,
+                project_title=title,
+                visual_type=proj.get("visual_type", ""),
+                project_brief=proj.get("project_brief", ""),
+                visual_description=v_desc,
+                apply_era=apply_era,
+            )
         lines.append(f"Segment {segment_id}: {prompt_desc}")
         
     # Write image_prompts.txt

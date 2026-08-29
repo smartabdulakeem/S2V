@@ -282,3 +282,73 @@ def test_literal_weather_still_reaches_the_prompt():
     assert "pre-dawn" in out, out
     assert "snow" in out, out
     assert "smoke" in out, out
+
+
+def test_era_block_goes_last():
+    out = compose_gap_prompt(
+        shot_query="A citadel at dawn",
+        series_slug="islamic_history",
+        apply_era=True,
+    )
+    assert out.endswith("7th century Arabian Peninsula, early Islamic era.")
+
+
+def test_apply_era_false_omits_era_block():
+    out = compose_gap_prompt(
+        shot_query="Swirling nebulae glow in deep space",
+        series_slug="islamic_history",
+        apply_era=False,
+    )
+    assert "7th century arabian peninsula" not in out.lower()
+    assert "early islamic era" not in out.lower()
+    assert "35mm film" in out
+
+
+def test_fallback_to_style_block_when_unsplit():
+    # If custom series pack has only style_block and no medium_block/palette_block/era_block
+    custom_cfg = {
+        "series_slug": "custom_unsplit",
+        "style_block": "Custom 16mm film style, warm golden tones, heavy grain.",
+        "style_presets": {},
+    }
+    from unittest.mock import patch
+    with patch("pipeline.library.get_series_config", return_value=custom_cfg):
+        out = compose_gap_prompt(
+            shot_query="A quiet library",
+            series_slug="custom_unsplit",
+        )
+    assert "Custom 16mm film style, warm golden tones, heavy grain." in out
+
+
+def test_prompt_override_in_plan_shots():
+    from pipeline.library import plan_shots
+    script_data = {
+        "project": {"title": "Test Override", "series_slug": "islamic_history", "apply_era": True},
+        "segments": [{
+            "segment_id": 1,
+            "narration": "A scene about the desert.",
+            "shots": [{
+                "shot_id": "1a",
+                "query": "desert dunes",
+                "prompt_override": "Exact custom prompt typed by owner.",
+            }]
+        }]
+    }
+    report = plan_shots(script_data)
+    r0 = report["shot_reports"][0]
+    assert r0["composed_prompt"] == "Exact custom prompt typed by owner."
+    assert r0["prompt_override"] == "Exact custom prompt typed by owner."
+    # Composed prompt did not append style blocks or era blocks
+    assert "35mm film" not in r0["composed_prompt"]
+    assert "7th century" not in r0["composed_prompt"]
+
+
+def test_prompt_override_changes_cache_key():
+    from pipeline.composer import _get_shot_cache_key
+    shot_base = {"query": "desert dunes", "pin": None}
+    shot_with_override = {"query": "desert dunes", "pin": None, "prompt_override": "Custom override prompt"}
+    
+    k1 = _get_shot_cache_key(shot_base, 5.0, 1920, 1080)
+    k2 = _get_shot_cache_key(shot_with_override, 5.0, 1920, 1080)
+    assert k1 != k2
+

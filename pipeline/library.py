@@ -96,6 +96,13 @@ def validate_series_pack(pack_data: dict) -> list[str]:
     if not isinstance(pack_data.get("negative_block"), str):
         errors.append("series_pack.negative_block: string required")
 
+    if "medium_block" in pack_data and not isinstance(pack_data["medium_block"], str):
+        errors.append("series_pack.medium_block: string required")
+    if "palette_block" in pack_data and not isinstance(pack_data["palette_block"], str):
+        errors.append("series_pack.palette_block: string required")
+    if "era_block" in pack_data and not isinstance(pack_data["era_block"], str):
+        errors.append("series_pack.era_block: string required")
+
     presets = pack_data.get("style_presets")
     if not isinstance(presets, dict) or not presets:
         errors.append("series_pack.style_presets: expected a non-empty dictionary")
@@ -180,10 +187,109 @@ def get_calibration_config(series_slug: str = None) -> dict:
     }
 
 
+def _apply_series_overrides(data: dict) -> dict:
+    """Merge per-niche user overrides from config/series_overrides/<slug>.json if present."""
+    if not isinstance(data, dict):
+        return data
+    slug = data.get("series_slug")
+    if not slug:
+        return data
+    override_dir = os.path.join(ROOT, "config", "series_overrides")
+    override_path = os.path.join(override_dir, f"{slug}.json")
+    if os.path.exists(override_path):
+        try:
+            with open(override_path, "r", encoding="utf-8") as of:
+                overrides = json.load(of)
+            if isinstance(overrides, dict):
+                data = dict(data)
+                data.update(overrides)
+        except Exception:
+            pass
+    return data
+
+
+def get_series_override(series_slug: str) -> dict:
+    """Return user overrides for a niche from config/series_overrides/<slug>.json."""
+    if not series_slug:
+        return {}
+    slug = series_slug.strip().lower().replace("-", "_")
+    override_path = os.path.join(ROOT, "config", "series_overrides", f"{slug}.json")
+    if os.path.exists(override_path):
+        try:
+            with open(override_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def save_series_override(series_slug: str, overrides: dict) -> dict:
+    """
+    Save per-niche overrides to config/series_overrides/<slug>.json.
+    Only keys that differ from the base pack in config/series/<slug>.json are saved.
+    Never writes to config/series/*.json.
+    """
+    if not series_slug:
+        return {"success": False, "error": "series_slug required"}
+    slug = series_slug.strip().lower().replace("-", "_")
+    base_path = os.path.join(SERIES_CONFIG_DIR, f"{slug}.json")
+    base_data = {}
+    if os.path.exists(base_path):
+        try:
+            with open(base_path, "r", encoding="utf-8") as f:
+                base_data = json.load(f)
+        except Exception:
+            pass
+
+    # Keep only modified keys
+    to_save = {}
+    allowed_keys = ("medium_block", "palette_block", "era_block", "negative_block", "style_block")
+    for k in allowed_keys:
+        if k in overrides:
+            val = overrides[k]
+            if val is not None and str(val).strip() != str(base_data.get(k, "")).strip():
+                to_save[k] = val
+
+    override_dir = os.path.join(ROOT, "config", "series_overrides")
+    os.makedirs(override_dir, exist_ok=True)
+    override_path = os.path.join(override_dir, f"{slug}.json")
+
+    if not to_save:
+        # No differences, delete override file if exists
+        if os.path.exists(override_path):
+            try:
+                os.remove(override_path)
+            except Exception:
+                pass
+        return {"success": True, "overrides": {}, "is_overridden": False}
+
+    try:
+        with open(override_path, "w", encoding="utf-8") as f:
+            json.dump(to_save, f, indent=2, ensure_ascii=False)
+        return {"success": True, "overrides": to_save, "is_overridden": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def reset_series_override(series_slug: str) -> dict:
+    """Reset a niche to default by deleting its override file."""
+    if not series_slug:
+        return {"success": False, "error": "series_slug required"}
+    slug = series_slug.strip().lower().replace("-", "_")
+    override_path = os.path.join(ROOT, "config", "series_overrides", f"{slug}.json")
+    if os.path.exists(override_path):
+        try:
+            os.remove(override_path)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    return {"success": True, "is_overridden": False}
+
+
 def get_series_config(series_slug: str = None, project_title: str = None) -> dict:
     """
     Resolves per-series prompt configuration and pack defaults strictly from series_slug.
-    Validates loaded pack using validate_series_pack().
+    Validates loaded pack using validate_series_pack() and merges overrides if present.
     """
     available_packs = {}
     if os.path.exists(SERIES_CONFIG_DIR):
@@ -200,7 +306,7 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
                 errors = validate_series_pack(data)
                 if errors:
                     raise ValueError(f"Invalid series pack '{slug_clean}.json': {'; '.join(errors)}")
-                return data
+                return _apply_series_overrides(data)
             except Exception as e:
                 if isinstance(e, ValueError):
                     raise e
@@ -222,11 +328,11 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
         try:
             with open(default_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return data
+            return _apply_series_overrides(data)
         except Exception:
             pass
 
-    return {
+    return _apply_series_overrides({
         "series_slug": "default",
         "display_name": "General Documentary",
         "voice": {"id": "en-US-GuyNeural", "steering": "", "tone": ""},
@@ -242,7 +348,7 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
             "real_queries": [],
             "fake_queries": []
         }
-    }
+    })
 
 
 # ── 1. CLIP Model Singleton & Reindex ──────────────────────────────────────────
@@ -1584,16 +1690,15 @@ def compose_gap_prompt(
     project_brief: str = None,
     visual_description: str = None,
     shot_position: int = None,
+    apply_era: bool = True,
 ) -> str:
     """
     A ready-to-use image prompt for one shot, built from named slots.
 
-    Slots, in order: project brief, framing, subject, motion, ground,
-    atmosphere, setting, character bible, medium. A slot that matches nothing
-    is omitted rather than emitting filler. Narration is never quoted
-    verbatim, which is what stops the old 34-word cut chopping prompts
-    mid-phrase, and the setting is suppressed when the medium text already
-    carries it, which is what stops the world anchor appearing twice.
+    Slots, in order: subject (leads), framing, project brief, motion, ground,
+    atmosphere, setting, light, character bible, medium & palette, era (last,
+    omittable), negative prompt. A slot that matches nothing is omitted rather
+    than emitting filler.
     """
     from pipeline.prompt_slots import (
         match_slot, PROMPT_FRAMING, PROMPT_MOTION, PROMPT_GROUND,
@@ -1604,23 +1709,27 @@ def compose_gap_prompt(
     blob = f"{shot_query or ''} {script_context or ''}"
 
     preset = resolve_style_preset(series_cfg, visual_type)
-    medium = preset["prompt"] if preset else (series_cfg.get("style_block") or "")
+    if preset:
+        medium = preset["prompt"]
+    else:
+        med = (series_cfg.get("medium_block") or "").strip()
+        pal = (series_cfg.get("palette_block") or "").strip()
+        if med or pal:
+            medium = ", ".join(p for p in (med, pal) if p)
+        else:
+            medium = (series_cfg.get("style_block") or "").strip()
+
+    era = (series_cfg.get("era_block") or "").strip() if apply_era else ""
 
     parts = []
 
     # Subject slot: use visual_description when present and non-empty, otherwise shot_query
     subject_text = (visual_description or "").strip() if (visual_description and visual_description.strip()) else (shot_query or "").strip()
 
-    # The subject leads. It used to sit third, behind the project brief and the
-    # framing, so every prompt opened on the same two generic clauses and the
-    # one sentence describing *this* picture arrived after them. Diffusion
-    # models weight what comes first, and the brief is the least specific thing
-    # in the prompt — it now follows the subject instead of burying it.
+    # The subject leads.
     parts.append(subject_text)
 
-    # Only supply framing the subject does not already state, or the same phrase
-    # lands twice: "wide establishing shot, ..., wide establishing shot of a
-    # muddy riverbank at dawn".
+    # Only supply framing the subject does not already state.
     if match_slot(PROMPT_FRAMING, subject_text) is None:
         parts.append(default_framing_for(shot_position))
 
@@ -1632,23 +1741,15 @@ def compose_gap_prompt(
         if phrase:
             parts.append(phrase)
 
-    # The brief opens with the era and region too, so checking only the medium
-    # let the anchor through twice in every real prompt.
-    # Two different things arrive here. An explicit world_anchor is the
-    # project's own words and is always honoured. The pack's world_anchor is
-    # not so clean - in most packs it ends with a medium ("Matthew Brady
-    # tintype archival photograph"), which fights the picked visual type - so
-    # it defers to the brief, which states the setting in medium-free language.
+    # Setting slot / world anchor.
     explicit = (world_anchor or "").strip()
-    # A bare snake_case token is a preset key that reached us by mistake, never
-    # a place; emitting it puts "courtroom_sketch" into the prompt verbatim.
     if explicit and " " not in explicit and "_" in explicit:
         explicit = ""
-    already_said = f"{medium} {project_brief or ''}".lower()
+    already_said = f"{medium} {era} {project_brief or ''}".lower()
     if explicit:
         if explicit.lower() not in already_said:
             parts.append(explicit)
-    elif not project_brief:
+    elif not project_brief and apply_era and not era:
         anchor = series_cfg.get("world_anchor") or ""
         if anchor and anchor.lower() not in already_said:
             parts.append(anchor)
@@ -1666,6 +1767,11 @@ def compose_gap_prompt(
 
     if medium:
         parts.append(medium.rstrip(" ."))
+
+    if era and not project_brief:
+        current_lower = ", ".join(p for p in parts if p).lower()
+        if era.lower() not in current_lower:
+            parts.append(era.rstrip(" ."))
 
     if include_negative is None:
         include_negative = bool(_setting("include_negative_prompt", False))
@@ -1702,6 +1808,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
         " ".join(seg.get("narration", "") for seg in script_data.get("segments", [])),
     )
     project_info["project_brief"] = project_brief
+    apply_era = project_info.get("apply_era", True)
     character_bible = project_info.get("character_bible") or {}
 
     # A project can restrict itself to one folder of images. Curating twenty
@@ -1753,6 +1860,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 # board shows a prompt, the user goes away and makes the picture,
                 # and Refresh has to know what it was waiting for.
                 "prompt": shot.get("prompt") or "",
+                "prompt_override": (shot.get("prompt_override") or "").strip() if isinstance(shot.get("prompt_override"), str) else None,
                 "share_with": shot.get("share_with"),
                 "run_index": shot.get("run_index"),
                 "run_position": shot.get("run_position"),
@@ -1931,19 +2039,28 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 else:
                     gap_count += 1
 
-                composed = compose_gap_prompt(
-                    shot_query=q,
-                    world_anchor=world_anchor,
-                    character_bible=character_bible,
-                    script_context=s["narration"],
-                    series_slug=series_slug,
-                    project_title=title,
-                    visual_type=visual_type,
-                    project_brief=project_brief,
-                    visual_description=s.get("visual_description"),
-                )
+                override_prompt = (s.get("prompt_override") or (s.get("_shot") and s["_shot"].get("prompt_override")) or "").strip()
+                if override_prompt:
+                    composed = override_prompt
+                else:
+                    composed = compose_gap_prompt(
+                        shot_query=q,
+                        world_anchor=world_anchor,
+                        character_bible=character_bible,
+                        script_context=s["narration"],
+                        series_slug=series_slug,
+                        project_title=title,
+                        visual_type=visual_type,
+                        project_brief=project_brief,
+                        visual_description=s.get("visual_description"),
+                        shot_position=idx,
+                        apply_era=apply_era,
+                    )
                 if s.get("_shot") is not None:
-                    if not s["_shot"].get("prompt"):
+                    if override_prompt:
+                        s["_shot"]["prompt"] = override_prompt
+                        s["_shot"]["prompt_override"] = override_prompt
+                    elif not s["_shot"].get("prompt"):
                         s["_shot"]["prompt"] = composed
                     s["_shot"]["resolved"] = best_path
                     s["_shot"]["resolved_score"] = best_score
@@ -1960,6 +2077,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     "alternatives": alts,
                     "pin_missing": False,
                     "composed_prompt": composed,
+                    "prompt_override": override_prompt if override_prompt else None,
                     "share_with": ref_id,
                     "source": ref_rep.get("source", "library"),
                 }
@@ -1972,16 +2090,11 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             # something to show, but the choice itself is not up for re-litigation.
             alt_results = search(q, k=5, exclude=script_used_images, min_score=0.0,
                                  folder=folder, allow_reuse=allow_reuse)
-            rep = {
-                "segment_id": s["segment_id"],
-                "shot_id": s["shot_id"],
-                "query": q,
-                "state": "pinned",
-                "best_score": 1.0,
-                "best_path": s["pin"].replace("\\", "/"),
-                "alternatives": alt_results[:4],
-                "pin_missing": False,
-                "composed_prompt": compose_gap_prompt(
+            override_prompt = (s.get("prompt_override") or (s.get("_shot") and s["_shot"].get("prompt_override")) or "").strip()
+            if override_prompt:
+                composed = override_prompt
+            else:
+                composed = compose_gap_prompt(
                     shot_query=q,
                     world_anchor=world_anchor,
                     character_bible=character_bible,
@@ -1991,10 +2104,28 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     visual_type=visual_type,
                     project_brief=project_brief,
                     visual_description=s.get("visual_description"),
-                ),
+                    shot_position=idx,
+                    apply_era=apply_era,
+                )
+            rep = {
+                "segment_id": s["segment_id"],
+                "shot_id": s["shot_id"],
+                "query": q,
+                "state": "pinned",
+                "best_score": 1.0,
+                "best_path": s["pin"].replace("\\", "/"),
+                "alternatives": alt_results[:4],
+                "pin_missing": False,
+                "composed_prompt": composed,
+                "prompt_override": override_prompt if override_prompt else None,
                 "source": s["_shot"].get("source", "library") if s.get("_shot") else "library",
             }
             if s.get("_shot") is not None:
+                if override_prompt:
+                    s["_shot"]["prompt"] = override_prompt
+                    s["_shot"]["prompt_override"] = override_prompt
+                elif not s["_shot"].get("prompt"):
+                    s["_shot"]["prompt"] = composed
                 s["_shot"]["resolved"] = rep["best_path"]
                 s["_shot"]["resolved_score"] = 1.0
             shot_reports.append(rep)
@@ -2013,16 +2144,11 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 matched_count += 1
             else:
                 weak_count += 1
-            rep = {
-                "segment_id": s["segment_id"],
-                "shot_id": s["shot_id"],
-                "query": q,
-                "state": state,
-                "best_score": kept_score,
-                "best_path": s["keep_resolved"],
-                "alternatives": alt_results[:4],
-                "pin_missing": pin_missing,
-                "composed_prompt": compose_gap_prompt(
+            override_prompt = (s.get("prompt_override") or (s.get("_shot") and s["_shot"].get("prompt_override")) or "").strip()
+            if override_prompt:
+                composed = override_prompt
+            else:
+                composed = compose_gap_prompt(
                     shot_query=q,
                     world_anchor=world_anchor,
                     character_bible=character_bible,
@@ -2032,10 +2158,28 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     visual_type=visual_type,
                     project_brief=project_brief,
                     visual_description=s.get("visual_description"),
-                ),
+                    shot_position=idx,
+                    apply_era=apply_era,
+                )
+            rep = {
+                "segment_id": s["segment_id"],
+                "shot_id": s["shot_id"],
+                "query": q,
+                "state": state,
+                "best_score": kept_score,
+                "best_path": s["keep_resolved"],
+                "alternatives": alt_results[:4],
+                "pin_missing": pin_missing,
+                "composed_prompt": composed,
+                "prompt_override": override_prompt if override_prompt else None,
                 "source": s["_shot"].get("source", "library") if s.get("_shot") else "library",
             }
             if s.get("_shot") is not None:
+                if override_prompt:
+                    s["_shot"]["prompt"] = override_prompt
+                    s["_shot"]["prompt_override"] = override_prompt
+                elif not s["_shot"].get("prompt"):
+                    s["_shot"]["prompt"] = composed
                 s["_shot"]["resolved"] = rep["best_path"]
                 s["_shot"]["resolved_score"] = kept_score
             shot_reports.append(rep)
@@ -2077,24 +2221,33 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
         else:
             gap_count += 1
 
-        composed = compose_gap_prompt(
-            shot_query=q,
-            world_anchor=world_anchor,
-            character_bible=character_bible,
-            script_context=s["narration"],
-            series_slug=series_slug,
-            project_title=title,
-            visual_type=visual_type,
-            project_brief=project_brief,
-            visual_description=s.get("visual_description"),
-        )
+        override_prompt = (s.get("prompt_override") or (s.get("_shot") and s["_shot"].get("prompt_override")) or "").strip()
+        if override_prompt:
+            composed = override_prompt
+        else:
+            composed = compose_gap_prompt(
+                shot_query=q,
+                world_anchor=world_anchor,
+                character_bible=character_bible,
+                script_context=s["narration"],
+                series_slug=series_slug,
+                project_title=title,
+                visual_type=visual_type,
+                project_brief=project_brief,
+                visual_description=s.get("visual_description"),
+                shot_position=idx,
+                apply_era=apply_era,
+            )
 
         # Remember the prompt on the shot itself. The board shows it, the user
         # goes away and generates the picture, and when they come back Refresh
         # has to still know what this shot asked for — that memory has to
         # outlive the session, so it lives in the script, not in a variable.
         if s.get("_shot") is not None:
-            if not s["_shot"].get("prompt"):
+            if override_prompt:
+                s["_shot"]["prompt"] = override_prompt
+                s["_shot"]["prompt_override"] = override_prompt
+            elif not s["_shot"].get("prompt"):
                 s["_shot"]["prompt"] = composed
             if best_path:
                 s["_shot"]["resolved"] = best_path
@@ -2110,6 +2263,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             "alternatives": results[1:] if len(results) > 1 else [],
             "pin_missing": pin_missing,
             "composed_prompt": composed,
+            "prompt_override": override_prompt if override_prompt else None,
             "source": s["_shot"].get("source", "library") if s.get("_shot") else "library",
         }
         shot_reports.append(rep)
