@@ -139,9 +139,9 @@ def test_composer_corner_brightness_vignette_check():
         output_darkening = corner_darkening(Image.open(frame_png))
         added = output_darkening - source_darkening
 
-        assert added <= 0.45, (
+        assert added <= 0.40, (
             f"Runaway vignette: compositor added {added * 100:.1f}% corner darkening "
-            f"(source {source_darkening * 100:.1f}%, output {output_darkening * 100:.1f}%, limit 45%)"
+            f"(source {source_darkening * 100:.1f}%, output {output_darkening * 100:.1f}%, limit 40%)"
         )
 
     finally:

@@ -6,7 +6,7 @@
     "steering": "Speak in a solemn, respectful documentary narration voice.",
     "tone": "Dramatic Historical Documentary"
   },
-  "grade": "vignette",
+  "grade": "none",
   "caption_style": "bottom_center",
   "shot_rhythm_seconds": 4.0,
   "world_anchor": "7th century Arabian Peninsula, early Islamic era",

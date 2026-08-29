@@ -6,7 +6,7 @@
     "steering": "Speak in a clear, neutral documentary narration voice.",
     "tone": "Neutral Documentary"
   },
-  "grade": "vignette",
+  "grade": "none",
   "caption_style": "bottom_center",
   "shot_rhythm_seconds": 4.0,
   "world_anchor": "General documentary photography",

@@ -456,7 +456,7 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
         "series_slug": "default",
         "display_name": "General Documentary",
         "voice": {"id": "en-US-GuyNeural", "steering": "", "tone": ""},
-        "grade": "vignette",
+        "grade": "none",
         "caption_style": "bottom_center",
         "shot_rhythm_seconds": 4.0,
         "world_anchor": "",
@@ -1828,7 +1828,7 @@ UNIVERSAL_STYLE_PRESETS = {
     "cinematic": {
         "prompt": "Cinematic film still, anamorphic framing, shallow depth of "
                   "field, graded colour, subtle halation.",
-        "treatment": "vignette",
+        "treatment": "none",
     },
     "black_and_white": {
         "prompt": "Black and white photograph, deep blacks, controlled "
@@ -1848,7 +1848,7 @@ UNIVERSAL_STYLE_PRESETS = {
     "three_d_render": {
         "prompt": "3D render, soft global illumination, physically based "
                   "materials, shallow depth of field.",
-        "treatment": "vignette",
+        "treatment": "none",
     },
 }
 

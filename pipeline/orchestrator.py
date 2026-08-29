@@ -397,7 +397,7 @@ class RenderOrchestrator:
                     visual_style=visual_style,
                     on_progress=progress_cb,
                     visual_type=seg.get("visual_type", "ai_image"),
-                    magick_filter=seg.get("magick_filter", "vignette"),
+                    magick_filter=seg.get("magick_filter", "none"),
                     use_base_image=segment_pin(seg),
                     use_base_image_a=seg.get("use_base_image_a"),
                     use_base_image_b=seg.get("use_base_image_b"),

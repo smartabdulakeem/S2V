@@ -107,7 +107,7 @@ def load_and_upconvert(script_data: dict) -> dict:
 
             magick_filter = seg.get("magick_filter", "vignette")
             treatment = {
-                "filter": magick_filter if magick_filter in ALLOWED_TREATMENT_FILTERS else "vignette",
+                "filter": magick_filter if magick_filter in ALLOWED_TREATMENT_FILTERS else "none",
                 "grade": None
             }
 
@@ -144,7 +144,7 @@ def load_and_upconvert(script_data: dict) -> dict:
                 if "motion" not in shot or not isinstance(shot["motion"], dict):
                     shot["motion"] = {"kind": "ken_burns", "effect": "zoom_in"}
                 if "treatment" not in shot or not isinstance(shot["treatment"], dict):
-                    shot["treatment"] = {"filter": "vignette", "grade": None}
+                    shot["treatment"] = {"filter": "none", "grade": None}
 
     return script
 

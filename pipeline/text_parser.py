@@ -211,7 +211,7 @@ def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
             for s in old_shots
         ]
         template = old_shots[0] if old_shots else {}
-        treatment = template.get("treatment") or {"filter": "vignette", "grade": None}
+        treatment = template.get("treatment") or {"filter": "none", "grade": None}
 
         new_shots = []
         for i, chunk in enumerate(chunks):
@@ -331,7 +331,7 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                 for s in old_shots
             ]
             template = old_shots[0] if old_shots else {}
-            treatment = template.get("treatment") or {"filter": "vignette", "grade": None}
+            treatment = template.get("treatment") or {"filter": "none", "grade": None}
 
             new_shots = []
             for j, chunk in enumerate(chunks):
@@ -397,7 +397,7 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                 narration = seg.get("narration", "") or ""
                 old_shots = seg.get("shots") or []
                 template = old_shots[0] if old_shots else {}
-                treatment = template.get("treatment") or {"filter": "vignette", "grade": None}
+                treatment = template.get("treatment") or {"filter": "none", "grade": None}
 
                 shot_id = f"{seg_id}a"
                 is_first = (pos == 0)
@@ -1064,7 +1064,7 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
                             "effect": KEN_BURNS_CYCLE[(seg_id + s_idx) % len(KEN_BURNS_CYCLE)]
                         },
                         "treatment": {
-                            "filter": series_cfg.get("grade", "vignette"),
+                            "filter": series_cfg.get("grade", "none"),
                             "grade": None
                         }
                     }
@@ -1084,7 +1084,7 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
                         "effect": KEN_BURNS_CYCLE[seg_id % len(KEN_BURNS_CYCLE)]
                     },
                     "treatment": {
-                        "filter": series_cfg.get("grade", "vignette"),
+                        "filter": series_cfg.get("grade", "none"),
                         "grade": None
                     }
                 })
