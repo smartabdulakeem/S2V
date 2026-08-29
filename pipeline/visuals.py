@@ -550,6 +550,10 @@ def fetch_visual(
     style_preset: str = "",
     project_brief: str = "",
     visual_description: str = None,
+    #: The project's chosen working folder, when it has one. Without this the
+    #: render searched the whole library while the board searched the folder,
+    #: so a picture the board found was unreachable at render time.
+    work_folder: str = None,
     #: The project's own world anchor, or None to let the series pack supply
     #: it. Never visual_style - that is the label of the picked look.
     world_anchor: str = None,
@@ -735,11 +739,33 @@ def fetch_visual(
         manual_path = png_path if os.path.exists(png_path) else jpg_path
 
         if not os.path.exists(manual_path):
-            # Library-first lookup
-            lib_results = library.search(keyword, k=1, exclude=exclude_paths or set(), min_score=min_score)
+            # Library-first lookup.
+            #
+            # Search on the planner's sentence when there is one. The keyword is
+            # two or three nouns pulled out by extract_keyword — measured, five
+            # consecutive shots in one project all searched "Adam Muslim human",
+            # which scored 0.2439 against a 0.2796 floor and matched nothing. The
+            # visual description is a sentence about the picture, which is what
+            # the image embeddings were built from.
+            search_query = (visual_description or "").strip() or keyword
+
+            # A working folder is a decision, not a filter. When the user has put
+            # the pictures for this film in one folder, the question is "which of
+            # these fits best", not "is this good enough against a library of
+            # 700". The floor is calibrated for the second question: it rejected
+            # a murmuration image that had correctly ranked first for a shot
+            # about a flock of birds, scoring 0.2358 against 0.2796.
+            using_work_folder = bool(work_folder) and os.path.isdir(str(work_folder))
+            effective_min = 0.0 if using_work_folder else min_score
+
+            lib_results = library.search(
+                search_query, k=1, exclude=exclude_paths or set(),
+                min_score=effective_min,
+                folder=work_folder if using_work_folder else None,
+            )
             best_path, best_score = lib_results[0] if lib_results else (None, 0.0)
 
-            if best_path and best_score >= min_score:
+            if best_path and best_score >= effective_min:
                 abs_lib_path = os.path.join(library.ROOT, best_path)
                 if os.path.exists(abs_lib_path):
                     shutil.copy(abs_lib_path, jpg_path)
@@ -763,7 +789,8 @@ def fetch_visual(
                 )
                 if not auto_generate:
                     raise ValueError(
-                        f"Library miss for segment {segment_id} query '{keyword}' (best score: {best_score:.2f} < {min_score}). "
+                        f"Library miss for segment {segment_id} query '{search_query[:60]}' "
+                        f"(best score: {best_score:.2f} < {effective_min}). "
                         f"Composed prompt:\n{composed_prompt}"
                     )
                 else:

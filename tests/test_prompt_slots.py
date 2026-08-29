@@ -39,7 +39,7 @@ def test_malformed_object_resolves_to_none():
 
 from pipeline.prompt_slots import (
     match_slot, PROMPT_FRAMING, PROMPT_MOTION, PROMPT_GROUND,
-    PROMPT_ATMOSPHERE, PROMPT_LIGHT, DEFAULT_FRAMING,
+    PROMPT_ATMOSPHERE, PROMPT_LIGHT, DEFAULT_FRAMING, DEFAULT_FRAMING_CYCLE,
 )
 
 
@@ -137,13 +137,42 @@ def test_a_bare_shot_with_no_context_still_composes():
                              series_slug="islamic_history",
                              visual_type="architectural_plate")
     assert out.endswith(".")
-    assert "wide establishing shot" in out
     assert "a walled city" in out
+    assert any(f in out for f in DEFAULT_FRAMING_CYCLE), "no framing reached the prompt"
 
 
-def test_the_brief_opens_the_prompt():
+def test_the_subject_opens_the_prompt():
+    """
+    The subject leads, not the brief.
+
+    It used to sit third, behind the brief and the framing, so every prompt in a
+    film opened on the same two generic clauses and the sentence describing this
+    particular picture arrived after them. Diffusion models weight what comes
+    first. The brief is still in the prompt, just no longer in front of the only
+    part that differs between one shot and the next.
+    """
     out = _prompt(visual_type="architectural_plate", project_brief="Documentary still from a film")
-    assert out.startswith("Documentary still from a film")
+    assert out.startswith("Khalid ibn al-Walid leading cavalry")
+    assert "Documentary still from a film" in out
+
+
+def test_no_prompt_ever_asks_for_a_small_subject():
+    """
+    The old default framing was "wide establishing shot, subject small in the
+    frame", applied to nearly every shot because most shot text names no framing
+    of its own. It is an instruction to fill the frame with background, and it
+    is why finished films looked cheap however good the generator was.
+    """
+    for position in range(len(DEFAULT_FRAMING_CYCLE) + 2):
+        out = _prompt(visual_type="architectural_plate", shot_position=position)
+        assert "subject small" not in out.lower()
+
+
+def test_the_framing_varies_across_a_film():
+    """One camera distance for 47 shots is one camera position for the film."""
+    seen = {_prompt(shot_query="a walled city", visual_type="architectural_plate",
+                    shot_position=p) for p in range(len(DEFAULT_FRAMING_CYCLE))}
+    assert len(seen) == len(DEFAULT_FRAMING_CYCLE)
 
 
 def test_no_negative_block_is_emitted_by_default():

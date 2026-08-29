@@ -412,6 +412,7 @@ class RenderOrchestrator:
                     style_preset=proj.get("visual_type", ""),
                     project_brief=proj.get("project_brief", ""),
                     world_anchor=project_world_anchor(proj),
+                    work_folder=(proj.get("image_folder") or "").strip() or None,
                     visual_description=(seg.get("shots") and seg["shots"][0].get("visual_description")) or seg.get("visual_description"),
                 )
                 with self._lock:
@@ -466,6 +467,7 @@ class RenderOrchestrator:
                     visual_style=visual_style,
                     visual_type=proj.get("visual_type", ""),
                     series_slug=proj.get("series_slug"),
+                    motion_style=proj.get("motion_style"),
                 )
                 with self._lock:
                     segment_videos_map[seg_id] = seg_video

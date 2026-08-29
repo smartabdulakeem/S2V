@@ -14,13 +14,48 @@ import re
 #: Camera distance and how the subject sits in the frame.
 PROMPT_FRAMING = [
     (r"\b(aerial|overhead|bird's eye)\b", "high aerial shot looking down"),
-    (r"\b(wide|establishing|vista|panorama)\b", "wide establishing shot, subject small in the frame"),
+    (r"\b(wide|establishing|vista|panorama)\b",
+     "wide establishing shot, subject clearly readable against the setting"),
     (r"\b(close[- ]?up|macro|extreme close|tight (?:shot|crop|framing)|detail (?:of|shot))\b",
      "tight detail shot, shallow plane of focus"),
 ]
 
 #: Used when the shot names no framing of its own.
-DEFAULT_FRAMING = "wide establishing shot, subject small in the frame"
+#:
+#: This was one phrase — "wide establishing shot, subject small in the frame" —
+#: applied to nearly every shot in every film, because most shot text names no
+#: framing. Two things came of it. Every picture sat the same distance from its
+#: subject, so a 47-image film had one camera position. And every picture was
+#: told to make its subject *small*, which is a direct instruction to the image
+#: model to fill the frame with background. Detail near the camera is what reads
+#: as expensive; a small subject reads as cheap however good the generator is.
+#:
+#: The cycle varies distance across a film instead. The caller passes the shot's
+#: position; without one it takes the first entry, which is the safest single
+#: choice rather than the widest.
+DEFAULT_FRAMING_CYCLE = (
+    "cinematic medium shot, subject filling much of the frame",
+    "close shot, subject large in the frame, background falling away",
+    "wide establishing shot, subject clearly readable against the setting",
+    "three-quarter shot, subject off centre, depth receding behind",
+)
+
+DEFAULT_FRAMING = DEFAULT_FRAMING_CYCLE[0]
+
+
+def default_framing_for(position=None) -> str:
+    """
+    The framing for a shot at this position in the film.
+
+    Position is the shot's index across the whole script, so the variety
+    crosses segment boundaries rather than resetting at each one.
+    """
+    if position is None:
+        return DEFAULT_FRAMING
+    try:
+        return DEFAULT_FRAMING_CYCLE[int(position) % len(DEFAULT_FRAMING_CYCLE)]
+    except (TypeError, ValueError):
+        return DEFAULT_FRAMING
 
 #: Whether the scene is moving or held.
 PROMPT_MOTION = [

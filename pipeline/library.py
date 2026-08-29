@@ -1583,6 +1583,7 @@ def compose_gap_prompt(
     visual_type: str = None,
     project_brief: str = None,
     visual_description: str = None,
+    shot_position: int = None,
 ) -> str:
     """
     A ready-to-use image prompt for one shot, built from named slots.
@@ -1596,7 +1597,7 @@ def compose_gap_prompt(
     """
     from pipeline.prompt_slots import (
         match_slot, PROMPT_FRAMING, PROMPT_MOTION, PROMPT_GROUND,
-        PROMPT_ATMOSPHERE, PROMPT_LIGHT, DEFAULT_FRAMING,
+        PROMPT_ATMOSPHERE, PROMPT_LIGHT, default_framing_for,
     )
 
     series_cfg = get_series_config(series_slug=series_slug, project_title=project_title)
@@ -1607,18 +1608,24 @@ def compose_gap_prompt(
 
     parts = []
 
-    if project_brief:
-        parts.append(project_brief.rstrip(" ,."))
-
     # Subject slot: use visual_description when present and non-empty, otherwise shot_query
     subject_text = (visual_description or "").strip() if (visual_description and visual_description.strip()) else (shot_query or "").strip()
+
+    # The subject leads. It used to sit third, behind the project brief and the
+    # framing, so every prompt opened on the same two generic clauses and the
+    # one sentence describing *this* picture arrived after them. Diffusion
+    # models weight what comes first, and the brief is the least specific thing
+    # in the prompt — it now follows the subject instead of burying it.
+    parts.append(subject_text)
 
     # Only supply framing the subject does not already state, or the same phrase
     # lands twice: "wide establishing shot, ..., wide establishing shot of a
     # muddy riverbank at dawn".
     if match_slot(PROMPT_FRAMING, subject_text) is None:
-        parts.append(DEFAULT_FRAMING)
-    parts.append(subject_text)
+        parts.append(default_framing_for(shot_position))
+
+    if project_brief:
+        parts.append(project_brief.rstrip(" ,."))
 
     for table in (PROMPT_MOTION, PROMPT_GROUND, PROMPT_ATMOSPHERE):
         phrase = match_slot(table, blob)
