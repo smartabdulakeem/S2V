@@ -133,3 +133,49 @@ def test_series_overrides_lifecycle():
     restored_cfg = get_series_config(series_slug=slug)
     assert restored_cfg["medium_block"] == base_medium
 
+
+def test_user_niche_creation_override_and_deletion():
+    from pipeline.library import create_user_niche, delete_user_niche, save_series_override, get_series_config
+    slug = "test_custom_niche_unique"
+    
+    # Clean up if leftover
+    delete_user_niche(slug)
+    
+    # 1. Create custom niche
+    create_res = create_user_niche(slug, "My Custom Niche")
+    assert create_res["success"] is True
+    
+    # 2. Resolve custom niche
+    cfg = get_series_config(series_slug=slug)
+    assert cfg["series_slug"] == slug
+    assert cfg["display_name"] == "My Custom Niche"
+    assert "prompt_recipe" in cfg
+    
+    # 3. Save prompt recipe and overrides
+    recipe_text = "Custom recipe instruction for tests."
+    save_res = save_series_override(slug, {
+        "display_name": "Updated Custom Niche",
+        "prompt_recipe": recipe_text,
+        "medium_block": "Custom medium"
+    })
+    assert save_res["success"] is True
+    
+    cfg_updated = get_series_config(series_slug=slug)
+    assert cfg_updated["display_name"] == "Updated Custom Niche"
+    assert cfg_updated["prompt_recipe"] == recipe_text
+    assert cfg_updated["medium_block"] == "Custom medium"
+    
+    # 4. Cannot delete shipped packs
+    shipped_del = delete_user_niche("islamic_history")
+    assert shipped_del["success"] is False
+    assert "Shipped niches cannot be deleted" in shipped_del["error"]
+    
+    # 5. Delete custom niche
+    del_res = delete_user_niche(slug)
+    assert del_res["success"] is True
+    
+    # Deleted niche can no longer be resolved
+    with pytest.raises(ValueError, match="Unknown series_slug"):
+        get_series_config(series_slug=slug)
+
+

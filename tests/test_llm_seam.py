@@ -193,3 +193,39 @@ def test_image_prompts_file_names_a_subject(tmp_path, monkeypatch):
 
     assert "desert caravan at dusk" in text, "the shot query must appear in the prompt"
     assert "Segment 1: ," not in text, "prompt line has no subject"
+
+
+def test_prompt_recipe_replaces_system_prompt_and_appends_retrieval_query():
+    from pipeline.library import save_series_override, reset_series_override
+    
+    slug = "islamic_history"
+    recipe_content = "HOUSE OF WISDOM CINEMATIC PROMPT RECIPE v1.0. Follow all 48 sections strictly."
+    save_series_override(slug, {"prompt_recipe": recipe_content})
+    
+    try:
+        class _RecipeCheckProvider(BaseLLMProvider):
+            def __init__(self):
+                self.received_system = ""
+            def complete(self, system, user, json_schema=None, **kwargs):
+                self.received_system = system
+                return {"batch_results": [{"segment_id": 1, "shots": [{"query": "desert dunes", "visual_description": "Cinematic 35mm photograph of endless dunes"}]}]}
+
+        provider = _RecipeCheckProvider()
+        script = build_script_with_ai(
+            text="A caravan in the desert.",
+            title="Recipe Prompt Test",
+            series_slug=slug,
+            llm_provider=provider,
+        )
+        
+        assert recipe_content in provider.received_system
+        assert "RETRIEVAL QUERY REQUIREMENT" in provider.received_system
+        assert "BATCH_PLANNING_SYSTEM_PROMPT" not in provider.received_system
+        
+        # Verify shot preserves visual_description
+        shot = script["segments"][0]["shots"][0]
+        assert shot["query"] == "desert dunes"
+        assert shot["visual_description"] == "Cinematic 35mm photograph of endless dunes"
+    finally:
+        reset_series_override(slug)
+

@@ -890,6 +890,7 @@ BATCH_PLANNING_SCHEMA = {
                             "type": "object",
                             "properties": {
                                 "query": {"type": "string"},
+                                "visual_description": {"type": "string"},
                                 "source": {"type": "string", "enum": ["library", "generate", "pin"]}
                             },
                             "required": ["query"]
@@ -952,7 +953,15 @@ def build_script_with_ai(
     provider = llm_provider or get_llm_provider()
 
     # Stable system prompt prefix for prompt caching
-    system_prefix = f"""{BATCH_PLANNING_SYSTEM_PROMPT}
+    recipe = (series_cfg.get("prompt_recipe") or "").strip()
+    if recipe:
+        system_prefix = f"""{recipe}
+
+RETRIEVAL QUERY REQUIREMENT:
+For each shot, in addition to visual_description, you must always provide a concise 'query' of 5-12 words summarizing the core visual subject for library retrieval and file matching.
+"""
+    else:
+        system_prefix = f"""{BATCH_PLANNING_SYSTEM_PROMPT}
 
 SERIES PACK CONSTRAINTS ({series_slug}):
 World Anchor: {series_cfg.get('world_anchor', '')}
@@ -1023,7 +1032,8 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
             if res_shots and isinstance(res_shots, list):
                 for s_idx, s_obj in enumerate(res_shots):
                     query_str = s_obj.get("query", "").strip() or extract_keyword(seg_text)
-                    shots_list.append({
+                    vdesc_str = (s_obj.get("visual_description") or "").strip()
+                    shot_item = {
                         "shot_id": f"{seg_id}{chr(97 + s_idx)}",
                         "duration": None,
                         "source": s_obj.get("source", "library"),
@@ -1037,7 +1047,10 @@ Negative Constraints: {series_cfg.get('negative_block', '')}
                             "filter": series_cfg.get("grade", "vignette"),
                             "grade": None
                         }
-                    })
+                    }
+                    if vdesc_str:
+                        shot_item["visual_description"] = vdesc_str
+                    shots_list.append(shot_item)
             
             if not shots_list:
                 shots_list.append({
