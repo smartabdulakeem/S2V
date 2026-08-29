@@ -350,8 +350,9 @@ def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height
     #     the same duration renders differently under Gentle drift and Dynamic.
     # v5: lanczos scaling flags, medium/crf 18 encoder preset, faststart, and 192k audio.
     # v6: prompt_override support, apply_era separation, medium/palette/era split.
+    # v7: prompt_recipe support, external prompt binding, and numbered slot matching.
     style_key = resolve_motion_style(motion_style)
-    raw = (f"v6|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
+    raw = (f"v7|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
            f"{default_treatment or ''}|{style_key}")
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 

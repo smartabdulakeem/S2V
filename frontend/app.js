@@ -835,16 +835,37 @@ async function onNicheSelectChange() {
     try {
       const data = await window.pywebview.api.get_niche_style(slug);
       if (data.success) {
-        document.getElementById("niche-medium-input").value = data.medium_block || "";
-        document.getElementById("niche-palette-input").value = data.palette_block || "";
-        document.getElementById("niche-era-input").value = data.era_block || "";
-        document.getElementById("niche-negative-input").value = data.negative_block || "";
+        const nameEl = document.getElementById("niche-display-name-input");
+        const briefEl = document.getElementById("niche-brief-subject-input");
+        const medEl = document.getElementById("niche-medium-input");
+        const palEl = document.getElementById("niche-palette-input");
+        const eraEl = document.getElementById("niche-era-input");
+        const negEl = document.getElementById("niche-negative-input");
+        const recipeEl = document.getElementById("niche-prompt-recipe-input");
+
+        if (nameEl) nameEl.value = data.display_name || "";
+        if (briefEl) briefEl.value = data.brief_subject || "";
+        if (medEl) medEl.value = data.medium_block || "";
+        if (palEl) palEl.value = data.palette_block || "";
+        if (eraEl) eraEl.value = data.era_block || "";
+        if (negEl) negEl.value = data.negative_block || "";
+        if (recipeEl) recipeEl.value = data.prompt_recipe || "";
 
         const statusEl = document.getElementById("niche-override-status");
         if (statusEl) {
-          statusEl.textContent = data.is_overridden ? "customised" : "default";
-          statusEl.className = data.is_overridden ? "mono pill p-warn" : "mono";
+          if (data.is_user_created) {
+            statusEl.textContent = "custom niche";
+            statusEl.className = "mono pill p-ok";
+          } else {
+            statusEl.textContent = data.is_overridden ? "customised" : "default";
+            statusEl.className = data.is_overridden ? "mono pill p-warn" : "mono";
+          }
         }
+
+        const resetBtn = document.getElementById("btn-niche-reset");
+        const deleteBtn = document.getElementById("btn-niche-delete");
+        if (resetBtn) resetBtn.style.display = data.is_user_created ? "none" : "inline-block";
+        if (deleteBtn) deleteBtn.style.display = data.is_user_created ? "inline-block" : "none";
       }
     } catch (e) {
       console.error("Failed to get niche style:", e);
@@ -884,18 +905,22 @@ async function saveNicheStyle() {
   if (!slug) return;
 
   const overrides = {
+    display_name: (document.getElementById("niche-display-name-input") || {}).value || "",
+    brief_subject: (document.getElementById("niche-brief-subject-input") || {}).value || "",
     medium_block: document.getElementById("niche-medium-input").value.trim(),
     palette_block: document.getElementById("niche-palette-input").value.trim(),
     era_block: document.getElementById("niche-era-input").value.trim(),
     negative_block: document.getElementById("niche-negative-input").value.trim(),
+    prompt_recipe: (document.getElementById("niche-prompt-recipe-input") || {}).value || "",
   };
 
   if (!isWebMode && window.pywebview.api.save_niche_style) {
     try {
       const res = await window.pywebview.api.save_niche_style(slug, overrides);
       if (res.success) {
-        alert("Visual style overrides saved for " + sel.options[sel.selectedIndex].text + ".\nStored in config/series_overrides/" + slug + ".json");
-        await onNicheSelectChange();
+        alert("Visual style saved for " + sel.options[sel.selectedIndex].text + ".\nStored in config/series_overrides/" + slug + ".json");
+        await loadSeriesPacks();
+        await loadNicheStyleSettings();
         if (currentScriptData) {
           await refreshStoryboardCoverage();
         }
@@ -938,36 +963,173 @@ async function resetNicheStyle() {
 }
 window.resetNicheStyle = resetNicheStyle;
 
-function toggleEditPrompt(segId, shotId) {
-  const el = document.getElementById(`prompt-edit-${segId}-${shotId}`);
-  if (el) {
-    el.classList.toggle("hidden");
-    if (!el.classList.contains("hidden")) {
-      const ta = el.querySelector("textarea");
-      if (ta) ta.focus();
+function openNewNicheModal() {
+  const modal = document.getElementById("modal-new-niche");
+  if (modal) {
+    const slugEl = document.getElementById("new-niche-slug");
+    const nameEl = document.getElementById("new-niche-name");
+    if (slugEl) slugEl.value = "";
+    if (nameEl) nameEl.value = "";
+    modal.style.display = "flex";
+    if (slugEl) slugEl.focus();
+  }
+}
+window.openNewNicheModal = openNewNicheModal;
+
+function closeNewNicheModal() {
+  const modal = document.getElementById("modal-new-niche");
+  if (modal) modal.style.display = "none";
+}
+window.closeNewNicheModal = closeNewNicheModal;
+
+async function submitCreateNewNiche() {
+  const slugInput = document.getElementById("new-niche-slug");
+  const nameInput = document.getElementById("new-niche-name");
+  const rawSlug = (slugInput ? slugInput.value : "").trim();
+  const rawName = (nameInput ? nameInput.value : "").trim();
+
+  if (!rawSlug) {
+    alert("Please provide a niche slug (e.g. cyberpunk_noir).");
+    return;
+  }
+
+  const slug = rawSlug.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+
+  if (!isWebMode && window.pywebview.api.create_user_niche) {
+    try {
+      const res = await window.pywebview.api.create_user_niche(slug, rawName || slug.replace(/_/g, " ").toUpperCase());
+      if (res.success) {
+        closeNewNicheModal();
+        await loadSeriesPacks();
+        await loadNicheStyleSettings();
+        const sel = document.getElementById("niche-select");
+        if (sel) {
+          sel.value = slug;
+          await onNicheSelectChange();
+        }
+        alert(`Created new niche "${rawName || slug}" in config/series_overrides/${slug}.json`);
+      } else {
+        alert("Failed to create niche: " + (res.error || "unknown error"));
+      }
+    } catch (e) {
+      alert("Error creating niche: " + e.message);
     }
   }
 }
-window.toggleEditPrompt = toggleEditPrompt;
+window.submitCreateNewNiche = submitCreateNewNiche;
 
-let overrideSaveTimer = null;
-function onPromptOverrideInput(segId, shotId, value) {
-  const shot = findShot(segId, shotId);
-  if (!shot) return;
-  const trimmed = value.trim();
-  if (trimmed) {
-    shot.prompt_override = trimmed;
-    shot.prompt = trimmed;
-  } else {
-    delete shot.prompt_override;
+async function deleteNicheStyle() {
+  const sel = document.getElementById("niche-select");
+  if (!sel) return;
+  const slug = sel.value;
+  if (!slug) return;
+
+  if (!confirm(`Delete custom niche "${sel.options[sel.selectedIndex].text}" (${slug})?\n\nThis will remove config/series_overrides/${slug}.json.`)) {
+    return;
   }
-  // Debounce auto-save draft
-  if (overrideSaveTimer) clearTimeout(overrideSaveTimer);
-  overrideSaveTimer = setTimeout(() => {
-    saveDraftScript(true);
-  }, 600);
+
+  if (!isWebMode && window.pywebview.api.delete_user_niche) {
+    try {
+      const res = await window.pywebview.api.delete_user_niche(slug);
+      if (res.success) {
+        alert("Niche deleted.");
+        await loadSeriesPacks();
+        await loadNicheStyleSettings();
+      } else {
+        alert("Failed to delete niche: " + (res.error || "unknown error"));
+      }
+    } catch (e) {
+      alert("Error deleting niche: " + e.message);
+    }
+  }
 }
-window.onPromptOverrideInput = onPromptOverrideInput;
+window.deleteNicheStyle = deleteNicheStyle;
+
+
+// ── Paste External Prompts & Numbered Folder Matching ────────────────────────
+
+function togglePastePromptsPanel() {
+  const panel = document.getElementById("paste-prompts-panel");
+  if (!panel) return;
+  if (panel.style.display === "none" || panel.classList.contains("hidden")) {
+    panel.style.display = "block";
+    panel.classList.remove("hidden");
+    const ta = document.getElementById("paste-prompts-textarea");
+    if (ta) ta.focus();
+  } else {
+    panel.style.display = "none";
+    panel.classList.add("hidden");
+  }
+}
+window.togglePastePromptsPanel = togglePastePromptsPanel;
+
+async function submitPastedPrompts() {
+  if (!currentScriptData) {
+    alert("Please plan or load a storyboard first.");
+    return;
+  }
+  const ta = document.getElementById("paste-prompts-textarea");
+  const text = (ta ? ta.value : "").trim();
+  if (!text) {
+    alert("Please paste one or more prompt blocks (separated by blank lines).");
+    return;
+  }
+
+  const workingFolder = (currentScriptData.project || {}).image_folder || "";
+  const btn = document.getElementById("btn-apply-pasted-prompts");
+  setButtonBusy(btn, "Matching…");
+
+  try {
+    if (!isWebMode && window.pywebview.api.apply_external_prompts) {
+      const res = await window.pywebview.api.apply_external_prompts(currentScriptData, text, workingFolder);
+      if (!res.success) {
+        alert(res.error || "Failed to apply prompts.");
+        return;
+      }
+
+      currentScriptData = res.script_data;
+      if (currentScriptPath) {
+        await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+      }
+
+      // Display summary line
+      const summaryEl = document.getElementById("paste-prompts-summary");
+      if (summaryEl) {
+        summaryEl.textContent = res.summary || "";
+      }
+
+      // Render mapping preview table
+      const tableWrap = document.getElementById("paste-prompts-table-wrap");
+      const tbody = document.getElementById("paste-prompts-table-body");
+      if (tableWrap && tbody && res.mapping_table) {
+        tbody.innerHTML = "";
+        res.mapping_table.forEach(row => {
+          const tr = document.createElement("tr");
+          tr.style.borderBottom = "1px solid var(--border, #2a3642)";
+          const isMatched = row.status === "matched";
+          tr.innerHTML = `
+            <td style="padding:6px 8px; font-family:var(--mono); font-weight:700">${row.slot}</td>
+            <td style="padding:6px 8px; color:var(--text, #e1e7ec)" title="${(row.prompt_full || '').replace(/"/g, '&quot;')}">${row.prompt_preview || ''}</td>
+            <td style="padding:6px 8px; font-family:var(--mono); font-size:11px; color:${isMatched ? 'var(--text)' : 'var(--ink-3)'}">${row.image_found || '—'}</td>
+            <td style="padding:6px 8px; font-family:var(--mono); font-weight:700; color:${isMatched ? 'var(--ok, #73c991)' : 'var(--gap, #e06c75)'}">
+              ${isMatched ? '✓' : 'missing'}
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+        tableWrap.style.display = "block";
+      }
+
+      // Re-render storyboard coverage and cards
+      await refreshStoryboardCoverage();
+    }
+  } catch (e) {
+    alert("Error applying prompts: " + e.message);
+  } finally {
+    clearButtonBusy(btn);
+  }
+}
+window.submitPastedPrompts = submitPastedPrompts;
 
 // ── Script Loading & Planning ────────────────────────────────────────────────
 /**
@@ -1361,12 +1523,6 @@ function renderStoryboardScreen() {
             ${gapBoxHtml}
             <div class="acts">
               <button type="button" onclick="openReplaceModal('${segId}', '${shotId}')">Replace</button>
-              <button type="button" class="ghost" onclick="toggleEditPrompt('${segId}', '${shotId}')">Edit prompt</button>
-            </div>
-            <div id="prompt-edit-${segId}-${shotId}" class="prompt-edit-wrap ${shot.prompt_override ? '' : 'hidden'}" style="margin-top:10px">
-              <label style="font-size:11px; font-weight:700; color:var(--ink-2); display:block; margin-bottom:4px; text-transform:uppercase">Custom prompt override</label>
-              <textarea rows="3" style="width:100%; font-family:var(--mono); font-size:12px; line-height:1.4" placeholder="${(rep.composed_prompt || shot.prompt || '').replace(/"/g, '&quot;')}" oninput="onPromptOverrideInput('${segId}', '${shotId}', this.value)">${shot.prompt_override || ''}</textarea>
-              <span class="hint" style="margin-top:3px; display:block">When filled, this replaces the composed prompt completely.</span>
             </div>
           </div>
         </div>

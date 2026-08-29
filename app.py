@@ -110,8 +110,9 @@ class Api:
         return {"success": True}
 
     def get_series_packs(self) -> list:
-        """Return all available series packs in config/series/."""
+        """Return all available series packs in config/series/ and user-created niches in config/series_overrides/."""
         packs = []
+        seen_slugs = set()
         series_dir = os.path.join(BASE_DIR, "config", "series")
         if os.path.exists(series_dir):
             for f in sorted(os.listdir(series_dir)):
@@ -122,29 +123,76 @@ class Api:
                             data = json.load(file)
                             slug = data.get("series_slug") or f[:-5]
                             name = data.get("display_name") or slug.replace("_", " ").title()
-                            packs.append({"series_slug": slug, "display_name": name, "file": f})
+                            packs.append({"series_slug": slug, "display_name": name, "file": f, "is_user_created": False})
+                            seen_slugs.add(slug)
                     except Exception:
                         pass
+
+        override_dir = os.path.join(BASE_DIR, "config", "series_overrides")
+        if os.path.exists(override_dir):
+            for f in sorted(os.listdir(override_dir)):
+                if f.endswith(".json"):
+                    slug_name = f[:-5]
+                    if slug_name not in seen_slugs:
+                        fp = os.path.join(override_dir, f)
+                        try:
+                            with open(fp, "r", encoding="utf-8") as file:
+                                data = json.load(file)
+                                slug = data.get("series_slug") or slug_name
+                                name = data.get("display_name") or slug.replace("_", " ").title()
+                                packs.append({"series_slug": slug, "display_name": name, "file": f, "is_user_created": True})
+                                seen_slugs.add(slug)
+                        except Exception:
+                            pass
         return packs
 
     def get_niche_style(self, series_slug: str = None) -> dict:
         """Return merged niche configuration and override status for the Settings editor."""
         try:
-            from pipeline.library import get_series_config, get_series_override
+            from pipeline.library import get_series_config, get_series_override, SERIES_CONFIG_DIR
             cfg = get_series_config(series_slug=series_slug)
             overrides = get_series_override(series_slug=series_slug)
+            slug = cfg.get("series_slug", series_slug or "default")
+            is_user_created = not os.path.exists(os.path.join(SERIES_CONFIG_DIR, f"{slug}.json"))
             return {
                 "success": True,
-                "series_slug": cfg.get("series_slug", series_slug or "default"),
+                "series_slug": slug,
                 "display_name": cfg.get("display_name", ""),
+                "brief_subject": cfg.get("brief_subject", ""),
                 "medium_block": cfg.get("medium_block", ""),
                 "palette_block": cfg.get("palette_block", ""),
                 "era_block": cfg.get("era_block", ""),
                 "negative_block": cfg.get("negative_block", ""),
                 "style_block": cfg.get("style_block", ""),
-                "is_overridden": bool(overrides),
+                "prompt_recipe": cfg.get("prompt_recipe", ""),
+                "is_overridden": bool(overrides) or is_user_created,
+                "is_user_created": is_user_created,
                 "overrides": overrides,
             }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def create_user_niche(self, series_slug: str, display_name: str, base_slug: str = "default") -> dict:
+        """Create a new user-defined niche seeded from default.json."""
+        try:
+            from pipeline.library import create_user_niche
+            return create_user_niche(series_slug=series_slug, display_name=display_name, base_slug=base_slug)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_user_niche(self, series_slug: str) -> dict:
+        """Delete a user-defined niche from config/series_overrides/."""
+        try:
+            from pipeline.library import delete_user_niche
+            return delete_user_niche(series_slug=series_slug)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def apply_external_prompts(self, script_data: dict, pasted_text: str, folder: str = None) -> dict:
+        """Apply pasted external prompts and match images from working folder by number."""
+        try:
+            from pipeline.library import apply_external_prompts
+            return apply_external_prompts(script_data=script_data, pasted_text=pasted_text, folder=folder)
         except Exception as e:
             return {"success": False, "error": str(e)}
 

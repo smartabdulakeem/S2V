@@ -102,6 +102,10 @@ def validate_series_pack(pack_data: dict) -> list[str]:
         errors.append("series_pack.palette_block: string required")
     if "era_block" in pack_data and not isinstance(pack_data["era_block"], str):
         errors.append("series_pack.era_block: string required")
+    if "brief_subject" in pack_data and pack_data["brief_subject"] is not None and not isinstance(pack_data["brief_subject"], str):
+        errors.append("series_pack.brief_subject: string required")
+    if "prompt_recipe" in pack_data and pack_data["prompt_recipe"] is not None and not isinstance(pack_data["prompt_recipe"], str):
+        errors.append("series_pack.prompt_recipe: string required")
 
     presets = pack_data.get("style_presets")
     if not isinstance(presets, dict) or not presets:
@@ -234,42 +238,76 @@ def save_series_override(series_slug: str, overrides: dict) -> dict:
         return {"success": False, "error": "series_slug required"}
     slug = series_slug.strip().lower().replace("-", "_")
     base_path = os.path.join(SERIES_CONFIG_DIR, f"{slug}.json")
-    base_data = {}
+    override_dir = os.path.join(ROOT, "config", "series_overrides")
+    os.makedirs(override_dir, exist_ok=True)
+    override_path = os.path.join(override_dir, f"{slug}.json")
+
+    allowed_keys = (
+        "display_name", "medium_block", "palette_block", "era_block",
+        "negative_block", "style_block", "brief_subject", "prompt_recipe",
+        "world_anchor"
+    )
+
     if os.path.exists(base_path):
+        base_data = {}
         try:
             with open(base_path, "r", encoding="utf-8") as f:
                 base_data = json.load(f)
         except Exception:
             pass
 
-    # Keep only modified keys
-    to_save = {}
-    allowed_keys = ("medium_block", "palette_block", "era_block", "negative_block", "style_block")
-    for k in allowed_keys:
-        if k in overrides:
-            val = overrides[k]
-            if val is not None and str(val).strip() != str(base_data.get(k, "")).strip():
-                to_save[k] = val
+        # Keep only modified keys
+        to_save = {}
+        for k in allowed_keys:
+            if k in overrides:
+                val = overrides[k]
+                if val is not None and str(val).strip() != str(base_data.get(k, "")).strip():
+                    to_save[k] = val
 
-    override_dir = os.path.join(ROOT, "config", "series_overrides")
-    os.makedirs(override_dir, exist_ok=True)
-    override_path = os.path.join(override_dir, f"{slug}.json")
+        if not to_save:
+            # No differences, delete override file if exists
+            if os.path.exists(override_path):
+                try:
+                    os.remove(override_path)
+                except Exception:
+                    pass
+            return {"success": True, "overrides": {}, "is_overridden": False, "is_user_created": False}
 
-    if not to_save:
-        # No differences, delete override file if exists
+        try:
+            with open(override_path, "w", encoding="utf-8") as f:
+                json.dump(to_save, f, indent=2, ensure_ascii=False)
+            return {"success": True, "overrides": to_save, "is_overridden": True, "is_user_created": False}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    else:
+        # User-created niche: full pack saved in override_path
+        user_pack = {}
         if os.path.exists(override_path):
             try:
-                os.remove(override_path)
+                with open(override_path, "r", encoding="utf-8") as f:
+                    user_pack = json.load(f)
             except Exception:
-                pass
-        return {"success": True, "overrides": {}, "is_overridden": False}
+                user_pack = {}
+        if not user_pack:
+            default_path = os.path.join(SERIES_CONFIG_DIR, "default.json")
+            if os.path.exists(default_path):
+                try:
+                    with open(default_path, "r", encoding="utf-8") as f:
+                        user_pack = json.load(f)
+                except Exception:
+                    user_pack = {}
 
-    try:
-        with open(override_path, "w", encoding="utf-8") as f:
-            json.dump(to_save, f, indent=2, ensure_ascii=False)
-        return {"success": True, "overrides": to_save, "is_overridden": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+        user_pack["series_slug"] = slug
+        for k in allowed_keys:
+            if k in overrides and overrides[k] is not None:
+                user_pack[k] = overrides[k]
+
+        try:
+            with open(override_path, "w", encoding="utf-8") as f:
+                json.dump(user_pack, f, indent=2, ensure_ascii=False)
+            return {"success": True, "overrides": user_pack, "is_overridden": True, "is_user_created": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 def reset_series_override(series_slug: str) -> dict:
@@ -286,6 +324,68 @@ def reset_series_override(series_slug: str) -> dict:
     return {"success": True, "is_overridden": False}
 
 
+def create_user_niche(series_slug: str, display_name: str, base_slug: str = "default") -> dict:
+    """Create a new user-defined niche seeded from default.json into config/series_overrides/."""
+    if not series_slug or not series_slug.strip():
+        return {"success": False, "error": "series_slug is required"}
+    slug = re.sub(r"[^\w\-]", "_", series_slug.strip().lower()).strip("_")
+    if not slug:
+        return {"success": False, "error": "Invalid series_slug"}
+
+    # Check collision with shipped packs
+    base_shipped = os.path.join(SERIES_CONFIG_DIR, f"{slug}.json")
+    if os.path.exists(base_shipped):
+        return {"success": False, "error": f"Niche '{slug}' already exists as a shipped pack"}
+
+    override_dir = os.path.join(ROOT, "config", "series_overrides")
+    os.makedirs(override_dir, exist_ok=True)
+    override_path = os.path.join(override_dir, f"{slug}.json")
+    if os.path.exists(override_path):
+        return {"success": False, "error": f"Niche '{slug}' already exists"}
+
+    base_template_path = os.path.join(SERIES_CONFIG_DIR, f"{base_slug}.json")
+    if not os.path.exists(base_template_path):
+        base_template_path = os.path.join(SERIES_CONFIG_DIR, "default.json")
+
+    template_data = {}
+    if os.path.exists(base_template_path):
+        try:
+            with open(base_template_path, "r", encoding="utf-8") as f:
+                template_data = json.load(f)
+        except Exception:
+            template_data = {}
+
+    template_data["series_slug"] = slug
+    template_data["display_name"] = display_name.strip() if (display_name and display_name.strip()) else slug.replace("_", " ").title()
+    template_data["prompt_recipe"] = ""
+
+    try:
+        with open(override_path, "w", encoding="utf-8") as f:
+            json.dump(template_data, f, indent=2, ensure_ascii=False)
+        return {"success": True, "series_slug": slug, "display_name": template_data["display_name"]}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def delete_user_niche(series_slug: str) -> dict:
+    """Delete a user-created niche from config/series_overrides/."""
+    if not series_slug:
+        return {"success": False, "error": "series_slug is required"}
+    slug = series_slug.strip().lower().replace("-", "_")
+    base_path = os.path.join(SERIES_CONFIG_DIR, f"{slug}.json")
+    if os.path.exists(base_path):
+        return {"success": False, "error": "Shipped niches cannot be deleted, only reset to default."}
+
+    override_path = os.path.join(ROOT, "config", "series_overrides", f"{slug}.json")
+    if os.path.exists(override_path):
+        try:
+            os.remove(override_path)
+            return {"success": True, "series_slug": slug}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    return {"success": False, "error": f"Niche '{slug}' not found."}
+
+
 def get_series_config(series_slug: str = None, project_title: str = None) -> dict:
     """
     Resolves per-series prompt configuration and pack defaults strictly from series_slug.
@@ -295,6 +395,11 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
     if os.path.exists(SERIES_CONFIG_DIR):
         for p in Path(SERIES_CONFIG_DIR).glob("*.json"):
             available_packs[p.stem] = p.name
+    override_dir = os.path.join(ROOT, "config", "series_overrides")
+    if os.path.exists(override_dir):
+        for p in Path(override_dir).glob("*.json"):
+            if p.stem not in available_packs:
+                available_packs[p.stem] = p.name
 
     if series_slug:
         slug_clean = series_slug.strip().lower().replace("-", "_")
@@ -311,10 +416,25 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
                 if isinstance(e, ValueError):
                     raise e
                 raise ValueError(f"Failed to read series pack '{slug_clean}.json': {e}")
-        
+
+        # Check user-created niche in series_overrides
+        user_override_path = os.path.join(override_dir, f"{slug_clean}.json")
+        if os.path.exists(user_override_path):
+            try:
+                with open(user_override_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                errors = validate_series_pack(data)
+                if errors:
+                    raise ValueError(f"Invalid user series pack '{slug_clean}.json': {'; '.join(errors)}")
+                return data
+            except Exception as e:
+                if isinstance(e, ValueError):
+                    raise e
+                raise ValueError(f"Failed to read user series pack '{slug_clean}.json': {e}")
+
         sorted_packs = sorted(list(available_packs.keys()))
         raise ValueError(
-            f"Unknown series_slug '{series_slug}'. Available series packs in config/series/: {', '.join(sorted_packs)}"
+            f"Unknown series_slug '{series_slug}'. Available series packs: {', '.join(sorted_packs)}"
         )
 
     # Missing series_slug -> emit warning naming project title and fall back to default
@@ -1097,6 +1217,147 @@ def match_shots_by_number(paths: list, shot_count: int, shot_prompts: dict = Non
 
         out[idx] = path
     return out
+
+
+def parse_external_prompts(pasted_text: str) -> list:
+    """
+    Split pasted text on blank lines.
+    Recipe (§31-33) emits each prompt as its own block without numbering or labels.
+    """
+    if not pasted_text or not str(pasted_text).strip():
+        return []
+    blocks = re.split(r"\n\s*\n", str(pasted_text).strip())
+    return [b.strip() for b in blocks if b.strip()]
+
+
+def match_folder_images_by_slot(image_paths: list, slot_count: int) -> tuple:
+    """
+    Match images from a working folder directly to 1-based shot slots (1..slot_count).
+    - An image whose filename starts with a number (e.g. 3_whatever.jpg, 3-whatever.jpg, 3.jpg)
+      belongs to slot 3 (0-based index 2).
+    - If NO images have leading numbers: fall back to sorted filename order.
+    - Never falls back to similarity scoring.
+    Returns (dict {slot_index: image_path}, is_fallback_to_sorted).
+    """
+    if not image_paths or slot_count <= 0:
+        return {}, False
+
+    clean_paths = sorted([str(p).replace("\\", "/") for p in image_paths])
+
+    # First pass: try leading number matching
+    numbered = {}
+    for p in clean_paths:
+        name = os.path.basename(p)
+        # Match leading number: e.g. "3_...", "3-...", "3....", "3.jpg", "03_..."
+        # Or optional project tag prefix e.g. "proj3_..."
+        m = re.match(r"^(?:[a-zA-Z]{0,10})?(\d+)[_\-\. ]", name)
+        if not m:
+            m = re.match(r"^(?:[a-zA-Z]{0,10})?(\d+)\.[a-zA-Z0-9]+$", name)
+        if m:
+            num = int(m.group(1))
+            if 1 <= num <= slot_count:
+                idx = num - 1
+                if idx not in numbered:
+                    numbered[idx] = p
+
+    if numbered:
+        return numbered, False
+
+    # Fallback: sorted filename order
+    sorted_matched = {}
+    for idx, p in enumerate(clean_paths):
+        if idx < slot_count:
+            sorted_matched[idx] = p
+    return sorted_matched, True
+
+
+def apply_external_prompts(script_data: dict, pasted_text: str, folder: str = None) -> dict:
+    """
+    Bind pasted external prompts to storyboard shots in order, match images from folder by number,
+    and return mapping table and status summary.
+    """
+    prompts = parse_external_prompts(pasted_text)
+    if not prompts:
+        return {"success": False, "error": "No prompts found in pasted text."}
+
+    all_shots = []
+    for seg in (script_data.get("segments") or []):
+        for shot in (seg.get("shots") or []):
+            all_shots.append(shot)
+
+    if not all_shots:
+        return {"success": False, "error": "No shots found in storyboard."}
+
+    total_prompts = len(prompts)
+    total_shots = len(all_shots)
+    count_to_bind = min(total_prompts, total_shots)
+
+    # Assign prompts to shots
+    for i in range(count_to_bind):
+        all_shots[i]["prompt_override"] = prompts[i]
+        all_shots[i]["prompt"] = prompts[i]
+
+    # Image matching if folder is provided or set on project
+    target_folder = folder or ((script_data.get("project") or {}).get("image_folder"))
+    matched_images = {}
+    fallback_used = False
+    if target_folder and os.path.isdir(target_folder):
+        img_files = folder_image_files(target_folder)
+        matched_images, fallback_used = match_folder_images_by_slot(img_files, count_to_bind)
+        for idx, img_path in matched_images.items():
+            all_shots[idx]["pin"] = img_path
+            all_shots[idx]["resolved"] = img_path
+            all_shots[idx]["resolved_score"] = 1.0
+            all_shots[idx]["source"] = "library"
+
+    # Build mapping table
+    mapping_table = []
+    missing_slots = []
+    matched_count = 0
+
+    for i in range(count_to_bind):
+        p_text = prompts[i]
+        p_preview = p_text[:60] + ("…" if len(p_text) > 60 else "")
+        img_path = matched_images.get(i)
+        img_name = os.path.basename(img_path) if img_path else "—"
+        status = "matched" if img_path else "missing"
+        if img_path:
+            matched_count += 1
+        else:
+            missing_slots.append(i + 1)
+
+        mapping_table.append({
+            "slot": i + 1,
+            "prompt_preview": p_preview,
+            "prompt_full": p_text,
+            "image_found": img_name,
+            "image_path": img_path,
+            "status": status,
+        })
+
+    # Summary line
+    if missing_slots:
+        if len(missing_slots) == 1:
+            missing_str = f"slot {missing_slots[0]} missing."
+        else:
+            missing_str = f"slots {', '.join(str(s) for s in missing_slots)} missing."
+    else:
+        missing_str = "all images matched."
+
+    summary_msg = f"{count_to_bind} prompt{'s' if count_to_bind != 1 else ''}, {matched_count} image{'s' if matched_count != 1 else ''} matched, {missing_str}"
+    if fallback_used and matched_count > 0:
+        summary_msg += " (Images had no leading numbers; matched by sorted filename order)."
+
+    return {
+        "success": True,
+        "script_data": script_data,
+        "mapping_table": mapping_table,
+        "summary": summary_msg,
+        "prompts_count": count_to_bind,
+        "matched_count": matched_count,
+        "missing_slots": missing_slots,
+        "fallback_to_sorted": fallback_used,
+    }
 
 
 def prompt_name_match(prompt: str, image_path: str, min_words: int = 3) -> int:

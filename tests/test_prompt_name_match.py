@@ -238,3 +238,101 @@ def test_a_project_tag_before_the_number_is_understood():
 
 def test_no_prompts_available_falls_back_to_the_number_alone():
     assert len(library.match_shots_by_number(NUMBERED, 48, shot_prompts=None)) == 4
+
+
+def test_parse_external_prompts_blank_lines():
+    raw_text = """
+    A wide establishing shot of the desert citadel at dawn.
+
+    
+    One adult male figure walking alone through the sands.
+
+
+    A close-up on the ancient manuscript and inkwell.
+    """
+    prompts = library.parse_external_prompts(raw_text)
+    assert len(prompts) == 3
+    assert prompts[0] == "A wide establishing shot of the desert citadel at dawn."
+    assert prompts[1] == "One adult male figure walking alone through the sands."
+    assert prompts[2] == "A close-up on the ancient manuscript and inkwell."
+
+
+def test_match_folder_images_by_slot_numbered_and_fallback():
+    # Numbered paths bind directly to slots
+    paths_numbered = [
+        "C:/work/3_oasis.jpg",
+        "C:/work/1_citadel.jpg",
+        "C:/work/2-manuscript.png"
+    ]
+    matched, is_fallback = library.match_folder_images_by_slot(paths_numbered, slot_count=3)
+    assert is_fallback is False
+    assert matched[0].endswith("1_citadel.jpg")
+    assert matched[1].endswith("2-manuscript.png")
+    assert matched[2].endswith("3_oasis.jpg")
+
+    # Unnumbered paths fall back to sorted alphabetical order
+    paths_unnumbered = [
+        "C:/work/oasis.jpg",
+        "C:/work/citadel.jpg",
+        "C:/work/manuscript.png"
+    ]
+    matched_sorted, is_fallback_sorted = library.match_folder_images_by_slot(paths_unnumbered, slot_count=3)
+    assert is_fallback_sorted is True
+    # Alphabetical: citadel, manuscript, oasis
+    assert matched_sorted[0].endswith("citadel.jpg")
+    assert matched_sorted[1].endswith("manuscript.png")
+    assert matched_sorted[2].endswith("oasis.jpg")
+
+
+def test_apply_external_prompts_full_storyboard(tmp_path):
+    from PIL import Image
+    work_dir = tmp_path / "work_folder"
+    work_dir.mkdir()
+    Image.new("RGB", (64, 64), color=(10, 10, 10)).save(work_dir / "1_citadel.jpg")
+    Image.new("RGB", (64, 64), color=(20, 20, 20)).save(work_dir / "3_oasis.jpg")
+
+    script = {
+        "project": {"title": "Test External Prompts", "image_folder": str(work_dir)},
+        "segments": [
+            {
+                "segment_id": 1,
+                "narration": "First line.",
+                "shots": [{"shot_id": "1a", "query": "old query 1"}]
+            },
+            {
+                "segment_id": 2,
+                "narration": "Second line.",
+                "shots": [{"shot_id": "2a", "query": "old query 2"}]
+            },
+            {
+                "segment_id": 3,
+                "narration": "Third line.",
+                "shots": [{"shot_id": "3a", "query": "old query 3"}]
+            }
+        ]
+    }
+
+    pasted = """
+    Prompt One: Desert citadel
+
+    Prompt Two: Lone figure
+
+    Prompt Three: Oasis
+    """
+
+    res = library.apply_external_prompts(script, pasted, folder=str(work_dir))
+    assert res["success"] is True
+    assert res["prompts_count"] == 3
+    assert res["matched_count"] == 2
+    assert res["missing_slots"] == [2]
+    assert "3 prompts, 2 images matched, slot 2 missing." in res["summary"]
+
+    # Verify shot prompt overrides
+    shots = [s for seg in res["script_data"]["segments"] for s in seg["shots"]]
+    assert shots[0]["prompt_override"] == "Prompt One: Desert citadel"
+    assert shots[0]["resolved"].endswith("1_citadel.jpg")
+    assert shots[1]["prompt_override"] == "Prompt Two: Lone figure"
+    assert "resolved" not in shots[1]
+    assert shots[2]["prompt_override"] == "Prompt Three: Oasis"
+    assert shots[2]["resolved"].endswith("3_oasis.jpg")
+
