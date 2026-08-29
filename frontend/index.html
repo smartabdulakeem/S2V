@@ -506,21 +506,21 @@
             </div>
 
             <!-- Single-line Display Name -->
-            <div class="row" style="margin-bottom:12px">
+            <div class="row mb-md">
               <label class="f f-full">Display Name <small class="mono">(shown in dropdowns)</small>
                 <input type="text" id="niche-display-name-input" placeholder="e.g. Islamic History &amp; Golden Age">
               </label>
             </div>
 
             <!-- Visual Types List Manager -->
-            <div class="form-stacked" style="margin-bottom:14px">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
-                <label style="font-size:11.5px; font-weight:700; color:var(--ink-2); text-transform:uppercase; letter-spacing:0.04em">Visual Types <small class="mono" style="font-weight:normal; text-transform:none">(Top row is the default style for this niche)</small></label>
+            <div class="form-stacked vt-block">
+              <div class="vt-head">
+                <label>Visual Types <small class="mono">(Top row is the default style for this niche)</small></label>
               </div>
-              <div id="niche-visual-types-list" style="display:flex; flex-direction:column; gap:8px">
+              <div id="niche-visual-types-list" class="vt-list">
                 <!-- Dynamically populated visual type rows -->
               </div>
-              <button type="button" class="ghost small" id="btn-add-visual-type" onclick="addNewVisualTypeRow()" style="align-self:flex-start; margin-top:8px">+ Add visual type</button>
+              <button type="button" class="ghost small vt-add" id="btn-add-visual-type" onclick="addNewVisualTypeRow()">+ Add visual type</button>
             </div>
 
             <!-- Era and Negative prompt in 2 columns -->

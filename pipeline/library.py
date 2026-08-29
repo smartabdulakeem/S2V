@@ -153,29 +153,6 @@ def validate_series_pack(pack_data: dict) -> list[str]:
     return errors
 
 
-# ── Calibration & Niche Overrides Helpers ─────────────────────────────────────
-
-def get_niche_calibration(series_slug: str, n_images: int) -> dict:
-    """Return calibration status and active thresholds for a niche."""
-    cfg = get_series_config(series_slug=series_slug)
-    calib = cfg.get("calibration", {})
-    min_score = calib.get("min_score")
-    weak_band = calib.get("weak_band")
-
-    if min_score is None or n_images < 200:
-        return {
-            "min_score": None,
-            "weak_band": None,
-            "status": "not calibrated — generation-first"
-        }
-
-    return {
-        "min_score": min_score,
-        "weak_band": weak_band,
-        "status": "calibrated"
-    }
-
-
 def get_calibration_config(series_slug: str = None) -> dict:
     """
     Returns per-pack calibration configuration.

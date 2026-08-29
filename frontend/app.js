@@ -832,7 +832,7 @@ function renderNicheVisualTypesList() {
   if (!container) return;
   
   if (!currentNicheVisualTypes || currentNicheVisualTypes.length === 0) {
-    container.innerHTML = `<p class="hint" style="margin:0; font-style:italic">No visual types defined yet. Click "+ Add visual type" below to create one.</p>`;
+    container.innerHTML = `<p class="hint vt-empty">No visual types defined yet. Click "+ Add visual type" below to create one.</p>`;
     return;
   }
 
@@ -842,24 +842,24 @@ function renderNicheVisualTypesList() {
   currentNicheVisualTypes.forEach((vt, idx) => {
     const isFirst = idx === 0;
     const isLast = idx === currentNicheVisualTypes.length - 1;
-    const isDefaultBadge = isFirst ? `<span class="pill p-ok" style="font-size:10px; padding:1px 6px">DEFAULT</span>` : "";
-    const treatmentBadge = vt.treatment && vt.treatment !== "none" ? `<span class="mono" style="font-size:11px; color:var(--ink-3)">[${escapeHtml(vt.treatment)}]</span>` : "";
+    const isDefaultBadge = isFirst ? `<span class="pill p-ok vt-badge">DEFAULT</span>` : "";
+    const treatmentBadge = vt.treatment && vt.treatment !== "none" ? `<span class="mono vt-treatment">[${escapeHtml(vt.treatment)}]</span>` : "";
 
     html += `
-      <div class="visual-type-row" style="display:flex; gap:8px; align-items:flex-start; background:var(--bg-card, #1e2630); padding:8px 10px; border-radius:6px; border:1px solid var(--border, #2d3846)">
-        <div style="display:flex; flex-direction:column; gap:3px; margin-top:3px">
-          <button type="button" class="ghost tiny icon-btn" title="Move Up" ${isFirst ? "disabled" : ""} onclick="moveVisualType(${idx}, -1)" style="padding:2px 5px; font-size:11px; line-height:1">▲</button>
-          <button type="button" class="ghost tiny icon-btn" title="Move Down" ${isLast ? "disabled" : ""} onclick="moveVisualType(${idx}, 1)" style="padding:2px 5px; font-size:11px; line-height:1">▼</button>
+      <div class="visual-type-row">
+        <div class="vt-move">
+          <button type="button" class="ghost tiny icon-btn" title="Move Up" ${isFirst ? "disabled" : ""} onclick="moveVisualType(${idx}, -1)">▲</button>
+          <button type="button" class="ghost tiny icon-btn" title="Move Down" ${isLast ? "disabled" : ""} onclick="moveVisualType(${idx}, 1)">▼</button>
         </div>
-        <div style="flex:1; display:flex; flex-direction:column; gap:6px">
-          <div style="display:flex; gap:8px; align-items:center">
-            <input type="text" value="${escapeHtml(vt.label)}" placeholder="Visual type name (e.g. 3D Realistic Photo)" oninput="onVisualTypeChange(${idx}, 'label', this.value)" style="flex:1; font-weight:600; font-size:13px">
+        <div class="vt-fields">
+          <div class="vt-name-row">
+            <input type="text" value="${escapeHtml(vt.label)}" placeholder="Visual type name (e.g. 3D Realistic Photo)" oninput="onVisualTypeChange(${idx}, 'label', this.value)">
             ${isDefaultBadge}
             ${treatmentBadge}
           </div>
           <textarea rows="2" class="compact" placeholder="Prompt instruction (e.g. 3D render, soft global illumination, physically based materials, shallow depth of field...)" oninput="onVisualTypeChange(${idx}, 'prompt', this.value)">${escapeHtml(vt.prompt)}</textarea>
         </div>
-        <button type="button" class="ghost tiny icon-btn danger" title="Remove" onclick="removeVisualType(${idx})" style="margin-top:3px; padding:2px 6px; font-size:13px; line-height:1">✕</button>
+        <button type="button" class="ghost tiny icon-btn danger vt-remove" title="Remove" onclick="removeVisualType(${idx})">✕</button>
       </div>
     `;
   });
@@ -1215,7 +1215,7 @@ async function submitPastedPrompts() {
         tbody.innerHTML = "";
         res.mapping_table.forEach(row => {
           const tr = document.createElement("tr");
-          tr.style.borderBottom = "1px solid var(--border, #2a3642)";
+          tr.style.borderBottom = "1px solid var(--line)";
           const isMatched = row.status === "matched";
           tr.innerHTML = `
             <td style="padding:6px 8px; font-family:var(--mono); font-weight:700">${row.slot}</td>
