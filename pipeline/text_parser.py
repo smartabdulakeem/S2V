@@ -835,8 +835,23 @@ def _http_request_with_backoff(req, timeout=90, max_retries=3):
 PLANNER_VERSION = 2
 
 
-def _get_planning_cache_key(text: str, title: str, voice: str, visual_style: str, ai_guideline: str, voice_dialect: str, narrative_tone: str, speaker_mode: str) -> str:
-    raw = f"v{PLANNER_VERSION}:{text}:{title}:{voice}:{visual_style}:{ai_guideline}:{voice_dialect}:{narrative_tone}:{speaker_mode}"
+def _get_planning_cache_key(text: str, title: str, voice: str, visual_style: str, ai_guideline: str, voice_dialect: str, narrative_tone: str, speaker_mode: str,
+                            series_slug: str = "", prompt_recipe: str = "") -> str:
+    """
+    The key for a cached plan.
+
+    The niche and its prompt recipe belong in here. Without them, editing the
+    recipe and re-planning the same script returned the plan the old recipe
+    produced - the whole point of the feature, silently doing nothing. The same
+    was true of the niche itself: planning one script under two niches gave one
+    answer.
+
+    The recipe is hashed rather than concatenated because it is a document, not
+    a setting - the owner's runs to tens of kilobytes.
+    """
+    recipe_fingerprint = hashlib.sha256((prompt_recipe or "").encode("utf-8")).hexdigest()[:16]
+    raw = (f"v{PLANNER_VERSION}:{text}:{title}:{voice}:{visual_style}:{ai_guideline}:"
+           f"{voice_dialect}:{narrative_tone}:{speaker_mode}:{series_slug or ''}:{recipe_fingerprint}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -943,7 +958,12 @@ def build_script_with_ai(
     resolved_voice = voice or pack_voice.get("id", "google:en-US-Neural2-D")
 
     # 3. Check planning cache (only if default provider is used)
-    cache_key = _get_planning_cache_key(text_clean, title, resolved_voice, visual_style, ai_guideline, voice_dialect, narrative_tone, speaker_mode)
+    cache_key = _get_planning_cache_key(
+        text_clean, title, resolved_voice, visual_style, ai_guideline, voice_dialect,
+        narrative_tone, speaker_mode,
+        series_slug=series_slug,
+        prompt_recipe=series_cfg.get("prompt_recipe") or "",
+    )
     if llm_provider is None:
         cached_plan = _get_cached_plan(cache_key)
         if cached_plan:
