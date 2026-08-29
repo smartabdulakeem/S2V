@@ -21,7 +21,7 @@ e0c97db fix(look): stop darkening the corners of every image
    … 16 earlier commits
 ```
 
-Suite verified after the last commit: **430 passed, 1 xfailed, 0 failures** in 9m03s.
+Suite verified after the last commit: **437 passed, 1 xfailed, 0 failures**.
 
 ### ✅ The vignette decision, settled
 
@@ -42,13 +42,13 @@ If the file shows as modified after a test run, **commit it, do not restore it.*
 
 | Item | Owner | State |
 |---|---|---|
-| **Visual types** — `ANTIGRAVITY-VISUAL-TYPES.md` | Antigravity | Briefed 29 Aug. Per-niche visual type list; Brief subject, Medium and Palette leave the panel |
 | **ORO SAS dictation** — `~/Documents/ORO-SAS-DICTATION-BRIEF.md` | Cloud tab | Briefed 28 Aug |
 
 ### Landed since the last review
 
 | Item | State |
 |---|---|
+| **Visual types** — `ANTIGRAVITY-VISUAL-TYPES.md` | Done, `a9b0437`. Engine changes verified. Three corrections needed in `6eca0b5`: the rows used two CSS variables that do not exist and painted dark boxes on the light theme; inline styles regressed 19 to 26; a dead `get_niche_calibration()` was added |
 | **Layout / arrangement** — `ANTIGRAVITY-LAYOUT.md` | Done, `743a77b`. Inline `style=` 111 → 19; settings and storyboard on grids. The report claimed the 190px basis was eliminated — it was only contained, and was properly re-scoped in `18222c8` |
 | **Visual control** — `ANTIGRAVITY-VISUAL-CONTROL.md` | Done. Era split, per-niche editor, prompt recipes |
 | **Video quality** — `ANTIGRAVITY-VIDEO-QUALITY.md` | Done. Items A and G measured-only, no change made |
