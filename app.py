@@ -149,22 +149,39 @@ class Api:
     def get_niche_style(self, series_slug: str = None) -> dict:
         """Return merged niche configuration and override status for the Settings editor."""
         try:
-            from pipeline.library import get_series_config, get_series_override, SERIES_CONFIG_DIR
+            from pipeline.library import get_series_config, get_series_override, style_presets_for, SERIES_CONFIG_DIR
             cfg = get_series_config(series_slug=series_slug)
             overrides = get_series_override(series_slug=series_slug)
             slug = cfg.get("series_slug", series_slug or "default")
             is_user_created = not os.path.exists(os.path.join(SERIES_CONFIG_DIR, f"{slug}.json"))
+            presets_list = []
+            for key, entry in style_presets_for(cfg).items():
+                if isinstance(entry, str):
+                    prompt = entry
+                    treatment = "none"
+                    label = self.STYLE_LABEL_OVERRIDES.get(key, key.replace("_", " ").title())
+                elif isinstance(entry, dict):
+                    prompt = entry.get("prompt", "")
+                    treatment = entry.get("treatment") or "none"
+                    label = entry.get("label") or self.STYLE_LABEL_OVERRIDES.get(key, key.replace("_", " ").title())
+                else:
+                    continue
+                presets_list.append({
+                    "key": key,
+                    "label": label,
+                    "prompt": prompt,
+                    "treatment": treatment,
+                })
+
             return {
                 "success": True,
                 "series_slug": slug,
                 "display_name": cfg.get("display_name", ""),
-                "brief_subject": cfg.get("brief_subject", ""),
-                "medium_block": cfg.get("medium_block", ""),
-                "palette_block": cfg.get("palette_block", ""),
                 "era_block": cfg.get("era_block", ""),
                 "negative_block": cfg.get("negative_block", ""),
                 "style_block": cfg.get("style_block", ""),
                 "prompt_recipe": cfg.get("prompt_recipe", ""),
+                "style_presets": presets_list,
                 "is_overridden": bool(overrides) or is_user_created,
                 "is_user_created": is_user_created,
                 "overrides": overrides,
@@ -212,30 +229,31 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def preview_niche_prompt(self, series_slug: str, medium_block: str = None, palette_block: str = None,
+    def preview_niche_prompt(self, series_slug: str, visual_type: str = None, visual_type_prompt: str = None,
                              era_block: str = None, negative_block: str = None,
                              shot_query: str = "A citadel at dawn", apply_era: bool = True) -> dict:
-        """Generate a live prompt preview using temporary blocks."""
+        """Generate a live prompt preview using visual type prompt and era."""
         try:
-            from pipeline.library import get_series_config
+            from pipeline.library import get_series_config, resolve_style_preset, style_presets_for
             cfg = get_series_config(series_slug=series_slug)
-            preview_cfg = dict(cfg)
-            if medium_block is not None:
-                preview_cfg["medium_block"] = medium_block
-            if palette_block is not None:
-                preview_cfg["palette_block"] = palette_block
-            if era_block is not None:
-                preview_cfg["era_block"] = era_block
-            if negative_block is not None:
-                preview_cfg["negative_block"] = negative_block
 
-            med = (preview_cfg.get("medium_block") or "").strip()
-            pal = (preview_cfg.get("palette_block") or "").strip()
-            if med or pal:
-                medium = ", ".join(p for p in (med, pal) if p)
-            else:
-                medium = (preview_cfg.get("style_block") or "").strip()
-            era = (preview_cfg.get("era_block") or "").strip() if apply_era else ""
+            medium = ""
+            if visual_type_prompt and visual_type_prompt.strip():
+                medium = visual_type_prompt.strip()
+            elif visual_type:
+                preset = resolve_style_preset(cfg, visual_type)
+                if preset:
+                    medium = preset.get("prompt", "")
+            if not medium:
+                all_p = style_presets_for(cfg)
+                if all_p:
+                    first_k = next(iter(all_p))
+                    preset = resolve_style_preset(cfg, first_k)
+                    if preset:
+                        medium = preset.get("prompt", "")
+
+            era = era_block if era_block is not None else cfg.get("era_block", "")
+            era = era.strip() if (apply_era and era) else ""
 
             parts = [shot_query, "wide establishing shot"]
             if medium:
@@ -243,7 +261,7 @@ class Api:
             if era and era.lower() not in ", ".join(parts).lower():
                 parts.append(era.rstrip(" ."))
             preview_text = ", ".join(p for p in parts if p).rstrip(" ,") + "."
-            neg = preview_cfg.get("negative_block")
+            neg = negative_block if negative_block is not None else cfg.get("negative_block")
             return {"success": True, "prompt": preview_text, "negative_prompt": neg}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -265,14 +283,19 @@ class Api:
         own = set((cfg.get("style_presets") or {}).keys())
         out = []
         for key, entry in style_presets_for(cfg).items():
-            prompt = entry if isinstance(entry, str) else (entry or {}).get("prompt", "")
+            if isinstance(entry, str):
+                prompt = entry
+                label = self.STYLE_LABEL_OVERRIDES.get(key, key.replace("_", " ").title())
+            elif isinstance(entry, dict):
+                prompt = entry.get("prompt", "")
+                label = entry.get("label") or self.STYLE_LABEL_OVERRIDES.get(key, key.replace("_", " ").title())
+            else:
+                prompt = ""
+                label = self.STYLE_LABEL_OVERRIDES.get(key, key.replace("_", " ").title())
             out.append({
                 "key": key,
-                "label": self.STYLE_LABEL_OVERRIDES.get(
-                    key, key.replace("_", " ").title()),
+                "label": label,
                 "prompt": prompt,
-                # Universal looks are grouped separately on the board so it is
-                # clear which are written for this niche and which suit any.
                 "universal": key in UNIVERSAL_STYLE_PRESETS and key not in own,
             })
         return out

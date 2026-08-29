@@ -163,7 +163,7 @@ def test_gap_detection_thresholds(tmp_path, monkeypatch):
     # printed the style's own name into the setting slot, immediately before the
     # style block said it again. The pack supplies the setting now.
     assert "historical documentary" not in composed
-    assert "cinematic documentary photography" in composed or "film" in composed
+    assert "cinematic documentary photograph" in composed.lower() or "film" in composed.lower()
     # Negative blocks are off by default: the image tools this is pasted into take
     # one prompt box, so "Negative prompt: no firearms" was read as a request for
     # firearms. Still available behind the flag — see the tests below.

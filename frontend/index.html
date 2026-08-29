@@ -505,28 +505,30 @@
               <button type="button" class="ghost small btn-new-niche" onclick="openNewNicheModal()">+ New niche</button>
             </div>
 
-            <!-- Single-line inputs in 2-column grid -->
-            <div class="form-grid-2">
-              <label class="f">Display Name <small class="mono">(shown in dropdowns)</small>
+            <!-- Single-line Display Name -->
+            <div class="row" style="margin-bottom:12px">
+              <label class="f f-full">Display Name <small class="mono">(shown in dropdowns)</small>
                 <input type="text" id="niche-display-name-input" placeholder="e.g. Islamic History &amp; Golden Age">
-              </label>
-              <label class="f">Brief Subject <small class="mono">(core topic anchor)</small>
-                <input type="text" id="niche-brief-subject-input" placeholder="e.g. seventh century Arabia and early Islamic history">
               </label>
             </div>
 
-            <!-- Compact 2-row textareas in 2 columns -->
+            <!-- Visual Types List Manager -->
+            <div class="form-stacked" style="margin-bottom:14px">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+                <label style="font-size:11.5px; font-weight:700; color:var(--ink-2); text-transform:uppercase; letter-spacing:0.04em">Visual Types <small class="mono" style="font-weight:normal; text-transform:none">(Top row is the default style for this niche)</small></label>
+              </div>
+              <div id="niche-visual-types-list" style="display:flex; flex-direction:column; gap:8px">
+                <!-- Dynamically populated visual type rows -->
+              </div>
+              <button type="button" class="ghost small" id="btn-add-visual-type" onclick="addNewVisualTypeRow()" style="align-self:flex-start; margin-top:8px">+ Add visual type</button>
+            </div>
+
+            <!-- Era and Negative prompt in 2 columns -->
             <div class="form-grid-2">
-              <label class="f">Medium <small class="mono">(camera &amp; light)</small>
-                <textarea id="niche-medium-input" class="compact" rows="2" placeholder="e.g. Shot on 35mm film, cinematic documentary photography..." oninput="updateNichePreview()"></textarea>
-              </label>
-              <label class="f">Palette <small class="mono">(colour, lighting, grain)</small>
-                <textarea id="niche-palette-input" class="compact" rows="2" placeholder="e.g. muted earth palette of ochre sand, dust grey..." oninput="updateNichePreview()"></textarea>
-              </label>
-              <label class="f">Era <small class="mono">(period &amp; historical setting)</small>
+              <label class="f">Era <small class="mono">(period &amp; historical setting &mdash; optional)</small>
                 <textarea id="niche-era-input" class="compact" rows="2" placeholder="e.g. historically accurate 7th century Arabian Peninsula..." oninput="updateNichePreview()"></textarea>
               </label>
-              <label class="f">Negative prompt <small class="mono">(what to exclude)</small>
+              <label class="f">Negative prompt <small class="mono">(what to exclude &mdash; optional)</small>
                 <textarea id="niche-negative-input" class="compact" rows="2" placeholder="e.g. No text, no watermark, no signature..." oninput="updateNichePreview()"></textarea>
               </label>
             </div>

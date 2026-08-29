@@ -825,6 +825,95 @@ async function loadNicheStyleSettings() {
 }
 window.loadNicheStyleSettings = loadNicheStyleSettings;
 
+let currentNicheVisualTypes = [];
+
+function renderNicheVisualTypesList() {
+  const container = document.getElementById("niche-visual-types-list");
+  if (!container) return;
+  
+  if (!currentNicheVisualTypes || currentNicheVisualTypes.length === 0) {
+    container.innerHTML = `<p class="hint" style="margin:0; font-style:italic">No visual types defined yet. Click "+ Add visual type" below to create one.</p>`;
+    return;
+  }
+
+  const escapeHtml = (str) => String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  let html = "";
+  currentNicheVisualTypes.forEach((vt, idx) => {
+    const isFirst = idx === 0;
+    const isLast = idx === currentNicheVisualTypes.length - 1;
+    const isDefaultBadge = isFirst ? `<span class="pill p-ok" style="font-size:10px; padding:1px 6px">DEFAULT</span>` : "";
+    const treatmentBadge = vt.treatment && vt.treatment !== "none" ? `<span class="mono" style="font-size:11px; color:var(--ink-3)">[${escapeHtml(vt.treatment)}]</span>` : "";
+
+    html += `
+      <div class="visual-type-row" style="display:flex; gap:8px; align-items:flex-start; background:var(--bg-card, #1e2630); padding:8px 10px; border-radius:6px; border:1px solid var(--border, #2d3846)">
+        <div style="display:flex; flex-direction:column; gap:3px; margin-top:3px">
+          <button type="button" class="ghost tiny icon-btn" title="Move Up" ${isFirst ? "disabled" : ""} onclick="moveVisualType(${idx}, -1)" style="padding:2px 5px; font-size:11px; line-height:1">▲</button>
+          <button type="button" class="ghost tiny icon-btn" title="Move Down" ${isLast ? "disabled" : ""} onclick="moveVisualType(${idx}, 1)" style="padding:2px 5px; font-size:11px; line-height:1">▼</button>
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px">
+          <div style="display:flex; gap:8px; align-items:center">
+            <input type="text" value="${escapeHtml(vt.label)}" placeholder="Visual type name (e.g. 3D Realistic Photo)" oninput="onVisualTypeChange(${idx}, 'label', this.value)" style="flex:1; font-weight:600; font-size:13px">
+            ${isDefaultBadge}
+            ${treatmentBadge}
+          </div>
+          <textarea rows="2" class="compact" placeholder="Prompt instruction (e.g. 3D render, soft global illumination, physically based materials, shallow depth of field...)" oninput="onVisualTypeChange(${idx}, 'prompt', this.value)">${escapeHtml(vt.prompt)}</textarea>
+        </div>
+        <button type="button" class="ghost tiny icon-btn danger" title="Remove" onclick="removeVisualType(${idx})" style="margin-top:3px; padding:2px 6px; font-size:13px; line-height:1">✕</button>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+window.renderNicheVisualTypesList = renderNicheVisualTypesList;
+
+function addNewVisualTypeRow() {
+  currentNicheVisualTypes.push({
+    key: "",
+    label: "",
+    prompt: "",
+    treatment: "none",
+  });
+  renderNicheVisualTypesList();
+  updateNichePreview();
+
+  const container = document.getElementById("niche-visual-types-list");
+  if (container) {
+    const inputs = container.querySelectorAll("input[type='text']");
+    if (inputs.length) {
+      inputs[inputs.length - 1].focus();
+    }
+  }
+}
+window.addNewVisualTypeRow = addNewVisualTypeRow;
+
+function moveVisualType(idx, dir) {
+  const targetIdx = idx + dir;
+  if (targetIdx < 0 || targetIdx >= currentNicheVisualTypes.length) return;
+  const temp = currentNicheVisualTypes[idx];
+  currentNicheVisualTypes[idx] = currentNicheVisualTypes[targetIdx];
+  currentNicheVisualTypes[targetIdx] = temp;
+  renderNicheVisualTypesList();
+  updateNichePreview();
+}
+window.moveVisualType = moveVisualType;
+
+function removeVisualType(idx) {
+  if (idx < 0 || idx >= currentNicheVisualTypes.length) return;
+  currentNicheVisualTypes.splice(idx, 1);
+  renderNicheVisualTypesList();
+  updateNichePreview();
+}
+window.removeVisualType = removeVisualType;
+
+function onVisualTypeChange(idx, field, value) {
+  if (idx < 0 || idx >= currentNicheVisualTypes.length) return;
+  currentNicheVisualTypes[idx][field] = value;
+  updateNichePreview();
+}
+window.onVisualTypeChange = onVisualTypeChange;
+
 async function onNicheSelectChange() {
   const sel = document.getElementById("niche-select");
   if (!sel) return;
@@ -836,20 +925,17 @@ async function onNicheSelectChange() {
       const data = await window.pywebview.api.get_niche_style(slug);
       if (data.success) {
         const nameEl = document.getElementById("niche-display-name-input");
-        const briefEl = document.getElementById("niche-brief-subject-input");
-        const medEl = document.getElementById("niche-medium-input");
-        const palEl = document.getElementById("niche-palette-input");
         const eraEl = document.getElementById("niche-era-input");
         const negEl = document.getElementById("niche-negative-input");
         const recipeEl = document.getElementById("niche-prompt-recipe-input");
 
         if (nameEl) nameEl.value = data.display_name || "";
-        if (briefEl) briefEl.value = data.brief_subject || "";
-        if (medEl) medEl.value = data.medium_block || "";
-        if (palEl) palEl.value = data.palette_block || "";
         if (eraEl) eraEl.value = data.era_block || "";
         if (negEl) negEl.value = data.negative_block || "";
         if (recipeEl) recipeEl.value = data.prompt_recipe || "";
+
+        currentNicheVisualTypes = (data.style_presets || []).map(p => ({ ...p }));
+        renderNicheVisualTypesList();
 
         const statusEl = document.getElementById("niche-override-status");
         if (statusEl) {
@@ -879,14 +965,15 @@ function updateNichePreview() {
   const previewEl = document.getElementById("niche-prompt-preview");
   if (!previewEl) return;
 
-  const med = (document.getElementById("niche-medium-input").value || "").trim();
-  const pal = (document.getElementById("niche-palette-input").value || "").trim();
-  const era = (document.getElementById("niche-era-input").value || "").trim();
-
   let medium = "";
-  if (med || pal) {
-    medium = [med, pal].filter(Boolean).join(", ");
+  if (currentNicheVisualTypes && currentNicheVisualTypes.length > 0) {
+    const firstType = currentNicheVisualTypes[0];
+    if (firstType && firstType.prompt) {
+      medium = firstType.prompt.trim();
+    }
   }
+
+  const era = (document.getElementById("niche-era-input") || {}).value ? document.getElementById("niche-era-input").value.trim() : "";
 
   const parts = ["A citadel at dawn", "wide establishing shot"];
   if (medium) parts.push(medium.replace(/\.+$/, ""));
@@ -904,14 +991,35 @@ async function saveNicheStyle() {
   const slug = sel.value;
   if (!slug) return;
 
+  const style_presets = {};
+  currentNicheVisualTypes.forEach((vt, i) => {
+    const label = (vt.label || "").trim();
+    const prompt = (vt.prompt || "").trim();
+    if (!label && !prompt) return;
+    let key = (vt.key || "").trim();
+    if (!key) {
+      key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      if (!key) key = "visual_type_" + (i + 1);
+    }
+    let finalKey = key;
+    let counter = 2;
+    while (style_presets[finalKey]) {
+      finalKey = `${key}_${counter}`;
+      counter++;
+    }
+    style_presets[finalKey] = {
+      label: label || finalKey.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+      prompt: prompt,
+      treatment: vt.treatment || "none"
+    };
+  });
+
   const overrides = {
     display_name: (document.getElementById("niche-display-name-input") || {}).value || "",
-    brief_subject: (document.getElementById("niche-brief-subject-input") || {}).value || "",
-    medium_block: document.getElementById("niche-medium-input").value.trim(),
-    palette_block: document.getElementById("niche-palette-input").value.trim(),
-    era_block: document.getElementById("niche-era-input").value.trim(),
-    negative_block: document.getElementById("niche-negative-input").value.trim(),
+    era_block: (document.getElementById("niche-era-input") || {}).value ? document.getElementById("niche-era-input").value.trim() : "",
+    negative_block: (document.getElementById("niche-negative-input") || {}).value ? document.getElementById("niche-negative-input").value.trim() : "",
     prompt_recipe: (document.getElementById("niche-prompt-recipe-input") || {}).value || "",
+    style_presets: style_presets,
   };
 
   if (!isWebMode && window.pywebview.api.save_niche_style) {
@@ -920,6 +1028,7 @@ async function saveNicheStyle() {
       if (res.success) {
         alert("Visual style saved for " + sel.options[sel.selectedIndex].text + ".\nStored in config/series_overrides/" + slug + ".json");
         await loadSeriesPacks();
+        await loadStylePresets();
         await loadNicheStyleSettings();
         if (currentScriptData) {
           await refreshStoryboardCoverage();
@@ -949,6 +1058,7 @@ async function resetNicheStyle() {
       const res = await window.pywebview.api.reset_niche_style(slug);
       if (res.success) {
         alert("Reset to default.");
+        await loadStylePresets();
         await onNicheSelectChange();
         if (currentScriptData) {
           await refreshStoryboardCoverage();

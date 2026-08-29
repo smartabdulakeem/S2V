@@ -123,8 +123,11 @@ def validate_series_pack(pack_data: dict) -> list[str]:
             prompt = entry.get("prompt")
             if not isinstance(prompt, str) or not prompt.strip():
                 errors.append(f"series_pack.style_presets.{key}.prompt: required non-empty string")
+            label = entry.get("label")
+            if label is not None and (not isinstance(label, str) or not label.strip()):
+                errors.append(f"series_pack.style_presets.{key}.label: expected non-empty string")
             treatment = entry.get("treatment")
-            if treatment is not None and treatment not in SINGLE_IMAGE_TREATMENTS:
+            if treatment is not None and treatment != "none" and treatment not in SINGLE_IMAGE_TREATMENTS:
                 errors.append(
                     f"series_pack.style_presets.{key}.treatment: "
                     f"unknown treatment '{treatment}'"
@@ -138,29 +141,39 @@ def validate_series_pack(pack_data: dict) -> list[str]:
     if not isinstance(calib, dict):
         errors.append("series_pack.calibration: expected dictionary object")
     else:
-        real_q = calib.get("real_queries")
-        if not isinstance(real_q, list) or len(real_q) < 10:
-            errors.append("series_pack.calibration.real_queries: expected array of at least 10 query strings")
-        fake_q = calib.get("fake_queries")
-        if not isinstance(fake_q, list) or len(fake_q) < 10:
-            errors.append("series_pack.calibration.fake_queries: expected array of at least 10 query strings")
+        for k in ("real_queries", "fake_queries"):
+            v = calib.get(k)
+            if not isinstance(v, list) or len(v) < 10:
+                errors.append(f"series_pack.calibration.{k}: required list of >= 10 strings")
+            else:
+                for idx, item in enumerate(v):
+                    if not isinstance(item, str) or not item.strip():
+                        errors.append(f"series_pack.calibration.{k}[{idx}]: empty string")
 
     return errors
 
 
-def save_calibration_config(min_score: float, weak_band: float):
-    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    cfg = {}
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-        except Exception:
-            cfg = {}
-    cfg["min_score"] = round(float(min_score), 4)
-    cfg["weak_band"] = round(float(weak_band), 4)
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
+# ── Calibration & Niche Overrides Helpers ─────────────────────────────────────
+
+def get_niche_calibration(series_slug: str, n_images: int) -> dict:
+    """Return calibration status and active thresholds for a niche."""
+    cfg = get_series_config(series_slug=series_slug)
+    calib = cfg.get("calibration", {})
+    min_score = calib.get("min_score")
+    weak_band = calib.get("weak_band")
+
+    if min_score is None or n_images < 200:
+        return {
+            "min_score": None,
+            "weak_band": None,
+            "status": "not calibrated — generation-first"
+        }
+
+    return {
+        "min_score": min_score,
+        "weak_band": weak_band,
+        "status": "calibrated"
+    }
 
 
 def get_calibration_config(series_slug: str = None) -> dict:
@@ -207,6 +220,8 @@ def _apply_series_overrides(data: dict) -> dict:
             if isinstance(overrides, dict):
                 data = dict(data)
                 data.update(overrides)
+                if "style_presets" in overrides:
+                    data["style_presets_is_override"] = True
         except Exception:
             pass
     return data
@@ -245,7 +260,7 @@ def save_series_override(series_slug: str, overrides: dict) -> dict:
     allowed_keys = (
         "display_name", "medium_block", "palette_block", "era_block",
         "negative_block", "style_block", "brief_subject", "prompt_recipe",
-        "world_anchor"
+        "world_anchor", "style_presets"
     )
 
     if os.path.exists(base_path):
@@ -261,7 +276,10 @@ def save_series_override(series_slug: str, overrides: dict) -> dict:
         for k in allowed_keys:
             if k in overrides:
                 val = overrides[k]
-                if val is not None and str(val).strip() != str(base_data.get(k, "")).strip():
+                if k == "style_presets":
+                    if isinstance(val, dict):
+                        to_save[k] = val
+                elif val is not None and str(val).strip() != str(base_data.get(k, "")).strip():
                     to_save[k] = val
 
         if not to_save:
@@ -358,6 +376,7 @@ def create_user_niche(series_slug: str, display_name: str, base_slug: str = "def
     template_data["series_slug"] = slug
     template_data["display_name"] = display_name.strip() if (display_name and display_name.strip()) else slug.replace("_", " ").title()
     template_data["prompt_recipe"] = ""
+    template_data["style_presets"] = style_presets_for(template_data)
 
     try:
         with open(override_path, "w", encoding="utf-8") as f:
@@ -1857,11 +1876,15 @@ def style_presets_for(series_cfg: dict) -> dict:
     """
     Every visual type this niche offers: its own first, then the universal ones.
 
+    When the pack comes from an override, its style_presets list is authoritative and no merge occurs.
     A pack wins any key collision, so a niche can give "cartoon" its own wording
     without losing the rest of the shared set.
     """
+    presets = (series_cfg or {}).get("style_presets") or {}
+    if (series_cfg or {}).get("style_presets_is_override"):
+        return dict(presets)
     merged = {}
-    for key, entry in ((series_cfg or {}).get("style_presets") or {}).items():
+    for key, entry in presets.items():
         merged[key] = entry
     for key, entry in UNIVERSAL_STYLE_PRESETS.items():
         merged.setdefault(key, entry)
@@ -1970,6 +1993,13 @@ def compose_gap_prompt(
     blob = f"{shot_query or ''} {script_context or ''}"
 
     preset = resolve_style_preset(series_cfg, visual_type)
+    if not preset:
+        # Pack default: if visual_type is empty, resolve to the first entry in style_presets_for
+        all_presets = style_presets_for(series_cfg)
+        if all_presets:
+            first_key = next(iter(all_presets))
+            preset = resolve_style_preset(series_cfg, first_key)
+
     if preset:
         medium = preset["prompt"]
     else:

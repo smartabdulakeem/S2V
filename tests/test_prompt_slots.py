@@ -121,9 +121,9 @@ def test_the_picked_preset_supplies_the_medium():
     assert "muqarnas" in out
 
 
-def test_no_visual_type_falls_back_to_style_block():
+def test_no_visual_type_resolves_to_first_style_preset():
     out = _prompt(visual_type=None)
-    assert "35mm film" in out
+    assert "illuminated manuscript" in out.lower()
 
 
 def test_light_and_ground_slots_are_present():
@@ -301,15 +301,16 @@ def test_apply_era_false_omits_era_block():
     )
     assert "7th century arabian peninsula" not in out.lower()
     assert "early islamic era" not in out.lower()
-    assert "35mm film" in out
+    assert "illuminated manuscript" in out.lower()
 
 
 def test_fallback_to_style_block_when_unsplit():
-    # If custom series pack has only style_block and no medium_block/palette_block/era_block
+    # If custom series pack has only style_block and empty style_presets override
     custom_cfg = {
         "series_slug": "custom_unsplit",
         "style_block": "Custom 16mm film style, warm golden tones, heavy grain.",
         "style_presets": {},
+        "style_presets_is_override": True,
     }
     from unittest.mock import patch
     with patch("pipeline.library.get_series_config", return_value=custom_cfg):
