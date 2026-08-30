@@ -3,7 +3,7 @@
 Everything raised and not finished. Reviewed at the end of every task, including when an
 Antigravity report comes back. Newest decisions at the top of each section.
 
-Last reviewed: 29 Aug 2026
+Last reviewed: 30 Aug 2026
 
 ---
 
@@ -21,7 +21,7 @@ e0c97db fix(look): stop darkening the corners of every image
    … 16 earlier commits
 ```
 
-Suite verified after the last commit: **437 passed, 1 xfailed, 0 failures**.
+Suite verified after the last commit: **443 passed, 1 xfailed, 0 failures**.
 
 ### ✅ The vignette decision, settled
 
@@ -43,6 +43,29 @@ If the file shows as modified after a test run, **commit it, do not restore it.*
 | Item | Owner | State |
 |---|---|---|
 | **ORO SAS dictation** — `~/Documents/ORO-SAS-DICTATION-BRIEF.md` | Cloud tab | Briefed 28 Aug |
+
+### The image problem, closed 30 Aug
+
+The owner configured a 5,277-character recipe and got generic pictures anyway. Four causes, all
+measured, none of them the model ignoring instructions:
+
+1. **His project pointed at the wrong niche.** `series_slug: 'islamic_history'` — a shipped pack
+   whose recipe is empty. **Still true of that project; it is a dropdown on the Script screen.**
+2. **A re-cut erased the AI's work.** `apply_shot_rhythm` and `plan_image_budget` rebuilt every shot
+   without `visual_description`, replacing the planner's query with `extract_keyword`. Fixed in
+   `b23f973`; a chunk covering unchanged narration now carries both forward.
+3. **The recipe governed nothing that reached a picture.** It is read by the batch planner, which
+   runs when a script is built with AI; the board's plan calls `plan_shots`, which never touched it.
+   Descriptions came from a fixed brief capped at "12 to 25 words" that also bans "cinematic".
+   Fixed in `b23f973` — a recipe now *is* the instruction, and its output is judged by what it asked
+   for. Antigravity's `573e8bf` made the pass niche-*aware*; that was necessary and not sufficient.
+4. **The era block was a syllabus.** 136 characters of date range appended verbatim to every image.
+   Emptied for that niche — it spans pre-human antiquity to 6th-century Arabia, so no fixed era line
+   is true for most shots, and the recipe grounds each shot itself.
+
+Measured on six segments of his own script: descriptions went from one in six missing and 17 plain
+words, to six of six at 21–26 words. Four of the six now open with a framing phrase the old filter
+rejected outright.
 
 ### Landed since the last review
 

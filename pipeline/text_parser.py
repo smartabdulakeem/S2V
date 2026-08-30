@@ -456,6 +456,13 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                     "run_position": pos,
                 }
 
+                # Only the description carries here. `query` is deliberately the
+                # run's, not this segment's: several segments share one image and
+                # it is retrieved for the run as a whole.
+                prior = _carryable_by_scene(old_shots).get(" ".join(narration.split()))
+                if prior and prior.get("visual_description"):
+                    shot["visual_description"] = prior["visual_description"]
+
                 if old_shots and old_shots[0].get("pin"):
                     for k in ("source", "pin", "resolved", "resolved_score"):
                         if k in old_shots[0]:
