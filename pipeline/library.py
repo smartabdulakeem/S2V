@@ -1228,6 +1228,27 @@ def parse_external_prompts(pasted_text: str) -> list:
     return [b.strip() for b in blocks if b.strip()]
 
 
+def picture_owning_shots(script_data: dict) -> list:
+    """
+    Every shot that owns a distinct picture, in film order, as (segment, shot).
+
+    The single list that pasted prompts, numbered folder images and
+    `image_prompts.txt` all count from. When the image budget is reduced,
+    `plan_image_budget` merges segments into runs and marks the shots that do
+    not get their own picture with `share_with`. Counting every shot instead
+    bound prompt 1..12 to the first twelve *shots* — of which ten were sharing —
+    so ten real pictures received no prompt and ten prompts were discarded in
+    silence. Slot *n* means the *n*th picture the film actually makes, nothing
+    else, and every caller has to agree on that or the mismatch simply moves.
+    """
+    owning = []
+    for seg in (script_data.get("segments") or []):
+        for shot in (seg.get("shots") or []):
+            if not shot.get("share_with"):
+                owning.append((seg, shot))
+    return owning
+
+
 def match_folder_images_by_slot(image_paths: list, slot_count: int) -> tuple:
     """
     Match images from a working folder directly to 1-based shot slots (1..slot_count).
@@ -1278,22 +1299,23 @@ def apply_external_prompts(script_data: dict, pasted_text: str, folder: str = No
     if not prompts:
         return {"success": False, "error": "No prompts found in pasted text."}
 
-    all_shots = []
-    for seg in (script_data.get("segments") or []):
-        for shot in (seg.get("shots") or []):
-            all_shots.append(shot)
+    # Only shots that own a picture. A shot marked `share_with` is drawn from
+    # another shot's image and can never carry a prompt of its own.
+    owning = picture_owning_shots(script_data)
+    picture_shots = [shot for _, shot in owning]
 
-    if not all_shots:
+    total_shots = sum(len(seg.get("shots") or []) for seg in (script_data.get("segments") or []))
+    if not picture_shots:
         return {"success": False, "error": "No shots found in storyboard."}
 
     total_prompts = len(prompts)
-    total_shots = len(all_shots)
-    count_to_bind = min(total_prompts, total_shots)
+    total_pictures = len(picture_shots)
+    count_to_bind = min(total_prompts, total_pictures)
 
-    # Assign prompts to shots
+    # Assign prompts to the shots that actually make a picture
     for i in range(count_to_bind):
-        all_shots[i]["prompt_override"] = prompts[i]
-        all_shots[i]["prompt"] = prompts[i]
+        picture_shots[i]["prompt_override"] = prompts[i]
+        picture_shots[i]["prompt"] = prompts[i]
 
     # Image matching if folder is provided or set on project
     target_folder = folder or ((script_data.get("project") or {}).get("image_folder"))
@@ -1303,10 +1325,10 @@ def apply_external_prompts(script_data: dict, pasted_text: str, folder: str = No
         img_files = folder_image_files(target_folder)
         matched_images, fallback_used = match_folder_images_by_slot(img_files, count_to_bind)
         for idx, img_path in matched_images.items():
-            all_shots[idx]["pin"] = img_path
-            all_shots[idx]["resolved"] = img_path
-            all_shots[idx]["resolved_score"] = 1.0
-            all_shots[idx]["source"] = "library"
+            picture_shots[idx]["pin"] = img_path
+            picture_shots[idx]["resolved"] = img_path
+            picture_shots[idx]["resolved_score"] = 1.0
+            picture_shots[idx]["source"] = "library"
 
     # Build mapping table
     mapping_table = []
@@ -1342,7 +1364,27 @@ def apply_external_prompts(script_data: dict, pasted_text: str, folder: str = No
     else:
         missing_str = "all images matched."
 
-    summary_msg = f"{count_to_bind} prompt{'s' if count_to_bind != 1 else ''}, {matched_count} image{'s' if matched_count != 1 else ''} matched, {missing_str}"
+    # Both counts, always, before anything else. A mismatch between what the
+    # film needs and what was pasted is the failure this whole route is prone
+    # to, and it used to happen without a word on screen.
+    def _plural(n, word):
+        return f"{n} {word}{'' if n == 1 else 's'}"
+
+    counts_msg = (f"This film needs {_plural(total_pictures, 'picture')} "
+                  f"across {_plural(total_shots, 'shot')}. "
+                  f"You pasted {_plural(total_prompts, 'prompt')}.")
+
+    unprompted = total_pictures - count_to_bind
+    unused = total_prompts - count_to_bind
+    if unprompted:
+        counts_msg += (f" {_plural(unprompted, 'picture')} will fall back to "
+                       f"library search.")
+    elif unused:
+        counts_msg += (f" {_plural(unused, 'prompt')} more than this film has "
+                       f"pictures — the extra was ignored.")
+
+    summary_msg = (f"{counts_msg} "
+                   f"{_plural(matched_count, 'image')} matched, {missing_str}")
     if fallback_used and matched_count > 0:
         summary_msg += " (Images had no leading numbers; matched by sorted filename order)."
 
@@ -1351,7 +1393,13 @@ def apply_external_prompts(script_data: dict, pasted_text: str, folder: str = No
         "script_data": script_data,
         "mapping_table": mapping_table,
         "summary": summary_msg,
+        "counts": counts_msg,
         "prompts_count": count_to_bind,
+        "pasted_count": total_prompts,
+        "total_pictures": total_pictures,
+        "total_shots": total_shots,
+        "unprompted_pictures": unprompted,
+        "unused_prompts": unused,
         "matched_count": matched_count,
         "missing_slots": missing_slots,
         "fallback_to_sorted": fallback_used,

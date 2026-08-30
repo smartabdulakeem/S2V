@@ -1346,6 +1346,15 @@ async function submitPastedPrompts() {
         summaryEl.textContent = res.summary || "";
       }
 
+      // Both counts, named out loud. Over-supply and under-supply each get a
+      // sentence; silence here is what let a mismatch pass unnoticed.
+      const countsEl = document.getElementById("paste-prompts-counts");
+      if (countsEl) {
+        const mismatch = (res.unprompted_pictures || 0) > 0 || (res.unused_prompts || 0) > 0;
+        countsEl.textContent = res.counts || "";
+        countsEl.className = "prompt-counts" + (res.counts ? " shown" : "") + (mismatch ? " mismatch" : "");
+      }
+
       // Render mapping preview table
       const tableWrap = document.getElementById("paste-prompts-table-wrap");
       const tbody = document.getElementById("paste-prompts-table-body");

@@ -325,7 +325,10 @@ def test_apply_external_prompts_full_storyboard(tmp_path):
     assert res["prompts_count"] == 3
     assert res["matched_count"] == 2
     assert res["missing_slots"] == [2]
-    assert "3 prompts, 2 images matched, slot 2 missing." in res["summary"]
+    # The summary now leads with both counts — how many pictures the film needs
+    # and how many prompts were pasted — before the match result.
+    assert "This film needs 3 pictures across 3 shots. You pasted 3 prompts." in res["summary"]
+    assert "2 images matched, slot 2 missing." in res["summary"]
 
     # Verify shot prompt overrides
     shots = [s for seg in res["script_data"]["segments"] for s in seg["shots"]]

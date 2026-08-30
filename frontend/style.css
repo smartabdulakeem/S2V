@@ -1898,3 +1898,23 @@ tbody tr:last-child td {
   margin-bottom: 3px;
 }
 
+
+/* The picture/prompt counts, stated whether or not they agree. A silent
+   mismatch here is what let twelve pasted prompts land on two pictures. */
+.prompt-counts {
+  display: none;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--line);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  background: rgba(127, 127, 127, 0.06);
+}
+.prompt-counts.shown { display: block; }
+.prompt-counts.mismatch {
+  border-left-color: var(--gap, #e06c75);
+  color: var(--text, #e1e7ec);
+}

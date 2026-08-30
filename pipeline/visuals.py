@@ -894,44 +894,12 @@ def fetch_visual(
                 except Exception:
                     shutil.copy(manual_path, output_path)
 
-    # Create/update the project-specific visual prompts text file
-    prompts_file = os.path.join(project_dir, "image_prompts.txt")
-    if prompt_override and prompt_override.strip():
-        prompt_desc = prompt_override.strip()
-    else:
-        prompt_desc = library.compose_gap_prompt(
-            shot_query=keyword,
-            world_anchor=world_anchor,
-            character_bible=character_bible,
-            script_context=narration,
-            series_slug=series_slug,
-            project_title=video_title,
-            visual_type=style_preset,
-            project_brief=project_brief,
-            visual_description=visual_description,
-            apply_era=apply_era,
-        )
-    
-    existing_lines = {}
-    if os.path.exists(prompts_file):
-        try:
-            with open(prompts_file, "r", encoding="utf-8") as pf:
-                for line in pf:
-                    match = re.match(r"^Segment\s+(\d+)\s*:", line)
-                    if match:
-                        existing_lines[int(match.group(1))] = line.strip()
-        except Exception:
-            pass
-            
-    existing_lines[segment_id] = f"Segment {segment_id}: {prompt_desc}"
-    
-    try:
-        with open(prompts_file, "w", encoding="utf-8") as pf:
-            for seg_id in sorted(existing_lines.keys()):
-                pf.write(existing_lines[seg_id] + "\n")
-    except Exception as e:
-        if on_progress:
-            on_progress(f"Failed to write prompts file: {e}")
+    # `image_prompts.txt` is written by `initialize_project_sourcing`, once, at
+    # plan and save time — one line per picture, numbered in film order. This
+    # function used to rewrite the same file per segment as it rendered,
+    # numbering by segment. Two writers with two different numbering schemes
+    # cannot both be right, and the render-time one overwrote the numbering the
+    # manual route depends on.
 
     return output_path
 
@@ -969,10 +937,7 @@ def initialize_project_sourcing(script_dict: dict) -> str:
         keyword = segment_keyword(seg)
         narration = seg.get("narration", "")
         magick_filter = seg.get("magick_filter", "vignette")
-        v_desc = seg.get("visual_description")
-        if not v_desc and seg.get("shots"):
-            v_desc = seg["shots"][0].get("visual_description")
-        
+
         # 1. Generate placeholder if neither jpg nor png exists
         if magick_filter in ["diptych", "collage"]:
             base_a = seg.get("use_base_image_a", f"{segment_id}a.jpg")
@@ -1002,14 +967,21 @@ def initialize_project_sourcing(script_dict: dict) -> str:
             if not os.path.exists(jpg_path) and not os.path.exists(png_path):
                 _generate_placeholder_image(jpg_path, f"Base ({base_img})", keyword, narration, width, height)
             
-        # 2. Build rich prompt for image_prompts.txt
-        series_slug = proj.get("series_slug")
-        prompt_override = seg.get("prompt_override") or (seg.get("shots") and seg["shots"][0].get("prompt_override"))
+    # 2. One line per picture the film actually makes, numbered from 1 in film
+    #    order. It used to be one line per segment, so a 200-segment script cut
+    #    to 40 images produced 200 prompts for 40 pictures and the numbering
+    #    meant nothing. Same list `apply_external_prompts` binds from, so
+    #    prompt n, n.jpg and the nth picture are the same shot.
+    series_slug = proj.get("series_slug")
+    for idx, (seg, shot) in enumerate(library.picture_owning_shots(script_dict)):
+        narration = seg.get("narration", "") or ""
+        prompt_override = (shot.get("prompt_override")
+                           or seg.get("prompt_override"))
         if prompt_override and prompt_override.strip():
             prompt_desc = prompt_override.strip()
         else:
             prompt_desc = library.compose_gap_prompt(
-                shot_query=keyword,
+                shot_query=shot.get("query") or segment_keyword(seg),
                 world_anchor=world_anchor,
                 character_bible=character_bible,
                 script_context=narration,
@@ -1017,11 +989,16 @@ def initialize_project_sourcing(script_dict: dict) -> str:
                 project_title=title,
                 visual_type=proj.get("visual_type", ""),
                 project_brief=proj.get("project_brief", ""),
-                visual_description=v_desc,
+                # The shot's own description leads the prompt. Reading it off
+                # the segment found nothing on the shots that carry it.
+                visual_description=shot.get("visual_description"),
+                # The picture's index across the whole film, so the framing
+                # cycle varies instead of returning entry one every time.
+                shot_position=idx,
                 apply_era=apply_era,
             )
-        lines.append(f"Segment {segment_id}: {prompt_desc}")
-        
+        lines.append(f"{idx + 1}. {prompt_desc}")
+
     # Write image_prompts.txt
     try:
         with open(prompts_file, "w", encoding="utf-8") as pf:
