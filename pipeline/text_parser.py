@@ -1015,7 +1015,59 @@ def build_script_with_ai(
         if cached_plan:
             return cached_plan
 
-    # 4. Resolve LLM provider
+    # 4. Check if LLM planning is enabled (defaults to False).
+    # If disabled and no explicit provider was injected, use rule-based planning.
+    from pipeline.library import _setting
+    llm_planning_enabled = _setting("llm_planning_enabled", False)
+    if llm_provider is None and not llm_planning_enabled:
+        total_segments = len(segments_narration)
+        planned_segments = []
+        for i, seg_text in enumerate(segments_narration):
+            seg_id = i + 1
+            shots_list = [{
+                "shot_id": f"{seg_id}a",
+                "duration": None,
+                "source": "library",
+                "query": extract_keyword(seg_text),
+                "min_score": 0.26,
+                "motion": {
+                    "kind": "ken_burns",
+                    "effect": KEN_BURNS_CYCLE[seg_id % len(KEN_BURNS_CYCLE)]
+                },
+                "treatment": {
+                    "filter": series_cfg.get("grade", "none"),
+                    "grade": None
+                }
+            }]
+            planned_segments.append({
+                "segment_id": seg_id,
+                "type": "hook" if seg_id == 1 else ("conclusion" if seg_id == total_segments else "body"),
+                "narration": seg_text,
+                "voice_steering": None,
+                "shots": shots_list
+            })
+
+        safe_name = sanitize_output_filename(output_filename or title)
+        result = {
+            "project": {
+                "title": title.strip() or "My Video",
+                "output_filename": safe_name,
+                "voice": resolved_voice,
+                "voice_rate": "+0%",
+                "voice_pitch": "+0Hz",
+                "background_music": None,
+                "visual_style": visual_style.strip(),
+                "series_slug": series_slug,
+                "ai_guideline": ai_guideline,
+                "voice_dialect": voice_dialect,
+                "narrative_tone": narrative_tone,
+                "speaker_mode": speaker_mode
+            },
+            "segments": planned_segments
+        }
+        return result
+
+    # 5. Resolve LLM provider
     provider = llm_provider or get_llm_provider()
 
     # Stable system prompt prefix for prompt caching

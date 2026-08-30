@@ -71,14 +71,26 @@ class Api:
     #: front end is a key in the DOM, in any devtools session, and in any future
     #: web build. The UI only ever needs to know whether a key is present.
     SECRET_SETTING_KEYS = (
-        "google_api_key", "google_tts_api_key", "deepseek_api_key", "elevenlabs_api_key",
+        "google_api_key", "google_tts_api_key", "deepseek_api_key",
+        "anthropic_api_key", "openai_api_key", "elevenlabs_api_key",
     )
 
     def get_settings(self) -> dict:
         """Settings for the UI, with secrets reduced to a set/not-set flag."""
         safe = {k: v for k, v in self._settings.items() if k not in self.SECRET_SETTING_KEYS}
         for key in self.SECRET_SETTING_KEYS:
-            safe[f"{key}_set"] = bool(str(self._settings.get(key, "")).strip())
+            key_val = str(self._settings.get(key, "")).strip()
+            safe[f"{key}_set"] = bool(key_val)
+            safe[f"{key}_len"] = len(key_val) if key_val else 0
+
+        safe.setdefault("prompt_writer_mode", self._settings.get("prompt_writer_mode", "auto"))
+        safe.setdefault("prompt_writer_providers", self._settings.get("prompt_writer_providers", {
+            "anthropic": {"enabled": bool(self._settings.get("anthropic_api_key")), "model": "claude-sonnet-4"},
+            "openai": {"enabled": bool(self._settings.get("openai_api_key")), "model": "gpt-4o"},
+            "gemini": {"enabled": True, "model": "gemini-2.5-flash"},
+            "deepseek": {"enabled": False, "model": "deepseek-chat"},
+        }))
+        safe.setdefault("llm_planning_enabled", self._settings.get("llm_planning_enabled", False))
         return safe
 
     def save_ai_shot_descriptions(self, enabled: bool) -> dict:
@@ -86,7 +98,19 @@ class Api:
         _save_settings(self._settings)
         return {"success": True}
 
+    def save_llm_planning_enabled(self, enabled: bool) -> dict:
+        self._settings["llm_planning_enabled"] = bool(enabled)
+        _save_settings(self._settings)
+        return {"success": True}
 
+    def save_prompt_writer_settings(self, settings_data: dict) -> dict:
+        if isinstance(settings_data, dict):
+            if "prompt_writer_mode" in settings_data:
+                self._settings["prompt_writer_mode"] = str(settings_data["prompt_writer_mode"]).strip().lower()
+            if "prompt_writer_providers" in settings_data and isinstance(settings_data["prompt_writer_providers"], dict):
+                self._settings["prompt_writer_providers"] = settings_data["prompt_writer_providers"]
+            _save_settings(self._settings)
+        return {"success": True}
 
     def save_google_key(self, key: str) -> dict:
         self._settings["google_api_key"] = key.strip()
@@ -102,6 +126,29 @@ class Api:
         self._settings["deepseek_api_key"] = key.strip()
         _save_settings(self._settings)
         return {"success": True}
+
+    def save_anthropic_key(self, key: str) -> dict:
+        self._settings["anthropic_api_key"] = key.strip()
+        _save_settings(self._settings)
+        return {"success": True}
+
+    def save_openai_key(self, key: str) -> dict:
+        self._settings["openai_api_key"] = key.strip()
+        _save_settings(self._settings)
+        return {"success": True}
+
+    def test_llm_provider(self, provider: str, model: str = "", key: str = "") -> dict:
+        from pipeline.llm.factory import test_provider
+        prov = (provider or "").strip().lower()
+        key_to_use = key.strip() if key and key.strip() else (
+            self._settings.get(f"{prov}_api_key") or
+            (self._settings.get("google_api_key") if prov in ("gemini", "google") else "")
+        )
+        return test_provider(provider_name=prov, model=model if model else None, api_key=key_to_use)
+
+    def get_provider_status(self) -> dict:
+        from pipeline.llm.factory import get_last_provider_status
+        return get_last_provider_status()
 
     def save_elevenlabs_key(self, key: str) -> dict:
         """Optional — only set by users who choose to pay for ElevenLabs."""

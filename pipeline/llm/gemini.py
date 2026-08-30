@@ -47,3 +47,39 @@ class GeminiProvider(BaseLLMProvider):
             res_data = json.loads(response.read().decode("utf-8"))
             raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
             return json.loads(raw_text)
+
+    def complete_text(
+        self,
+        system: str,
+        user: str = "",
+        max_tokens: int = 2048
+    ) -> str:
+        headers = {"Content-Type": "application/json"}
+        full_text = f"{system}\n\nUSER INPUT:\n{user}" if user and user.strip() else system
+        payload = {
+            "contents": [
+                {
+                    "parts": [{"text": full_text}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": max_tokens
+            }
+        }
+        req = urllib.request.Request(
+            self.endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=60) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            candidates = res_data.get("candidates") or []
+            if not candidates:
+                return ""
+            parts = (candidates[0].get("content") or {}).get("parts") or []
+            if not parts:
+                return ""
+            return parts[0].get("text", "")
+

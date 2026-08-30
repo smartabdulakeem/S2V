@@ -716,27 +716,70 @@ async function previewSpecificVoice(voiceId) {
  */
 async function loadSettingsData() {
   if (isWebMode) {
+    setKeyStatus("anthropic-key-status", !!localStorage.getItem("anthropic_api_key"));
+    setKeyStatus("openai-key-status", !!localStorage.getItem("openai_api_key"));
     setKeyStatus("google-key-status", !!localStorage.getItem("google_api_key"));
+    setKeyStatus("deepseek-key-status", !!localStorage.getItem("deepseek_api_key"));
     setKeyStatus("google-tts-key-status", !!localStorage.getItem("google_tts_api_key"));
+    setKeyStatus("elevenlabs-key-status", !!localStorage.getItem("elevenlabs_api_key"));
     return;
   }
 
   try {
     const settings = await window.pywebview.api.get_settings();
     const rows = [
-      ["google-key", settings.google_api_key_set],
-      ["google-tts-key", settings.google_tts_api_key_set],
-      ["elevenlabs-key", settings.elevenlabs_api_key_set],
+      ["anthropic-key", settings.anthropic_api_key_set, settings.anthropic_api_key_len],
+      ["openai-key", settings.openai_api_key_set, settings.openai_api_key_len],
+      ["google-key", settings.google_api_key_set, settings.google_api_key_len],
+      ["deepseek-key", settings.deepseek_api_key_set, settings.deepseek_api_key_len],
+      ["google-tts-key", settings.google_tts_api_key_set, settings.google_tts_api_key_len],
+      ["elevenlabs-key", settings.elevenlabs_api_key_set, settings.elevenlabs_api_key_len],
     ];
-    rows.forEach(([id, isSet]) => {
-      setKeyStatus(`${id}-status`, !!isSet);
+    rows.forEach(([id, isSet, len]) => {
+      setKeyStatus(`${id}-status`, !!isSet, len);
       const input = document.getElementById(`${id}-input`);
       if (input && isSet) input.placeholder = "•••••• stored — type a new key to replace";
     });
+
     const aiDescCb = document.getElementById("setting-ai-shot-descriptions");
     if (aiDescCb) {
       aiDescCb.checked = !!settings.ai_shot_descriptions;
     }
+
+    const llmPlanCb = document.getElementById("setting-llm-planning");
+    if (llmPlanCb) {
+      llmPlanCb.checked = !!settings.llm_planning_enabled;
+    }
+
+    const modeAuto = document.getElementById("pw-mode-auto");
+    if (modeAuto) {
+      modeAuto.checked = (settings.prompt_writer_mode === "auto" || !settings.prompt_writer_mode);
+    }
+
+    const pwConfig = settings.prompt_writer_providers || {};
+    ["anthropic", "openai", "gemini", "deepseek"].forEach(p => {
+      const pInfo = pwConfig[p] || {};
+      const cb = document.getElementById(`pw-enable-${p}`);
+      if (cb) {
+        cb.checked = (pInfo.enabled !== undefined) ? !!pInfo.enabled : (p === "gemini" || p === "anthropic");
+      }
+      const modelInput = document.getElementById(`pw-model-${p}`);
+      if (modelInput && pInfo.model) {
+        modelInput.value = pInfo.model;
+      }
+    });
+
+    // Check last provider status / error banner
+    try {
+      if (window.pywebview.api.get_provider_status) {
+        const statusObj = await window.pywebview.api.get_provider_status();
+        const banner = document.getElementById("provider-status-banner");
+        if (banner && statusObj && statusObj.message) {
+          banner.textContent = statusObj.message;
+          banner.className = `provider-banner ${statusObj.status || ""}`.trim();
+        }
+      }
+    } catch (e) {}
   } catch (e) {}
   await loadNicheStyleSettings();
 }
@@ -750,17 +793,114 @@ async function toggleAiShotDescriptions(enabled) {
 }
 window.toggleAiShotDescriptions = toggleAiShotDescriptions;
 
-function setKeyStatus(id, connected) {
+async function toggleLlmPlanning(enabled) {
+  if (!isWebMode) {
+    await window.pywebview.api.save_llm_planning_enabled(enabled);
+  } else {
+    localStorage.setItem("llm_planning_enabled", enabled ? "1" : "0");
+  }
+}
+window.toggleLlmPlanning = toggleLlmPlanning;
+
+function onPromptWriterModeChange() {
+  savePromptWriterSettings();
+}
+window.onPromptWriterModeChange = onPromptWriterModeChange;
+
+async function savePromptWriterSettings() {
+  const modeAuto = document.getElementById("pw-mode-auto");
+  const mode = modeAuto && modeAuto.checked ? "auto" : "auto";
+  const providersConfig = {};
+  ["anthropic", "openai", "gemini", "deepseek"].forEach(p => {
+    const cb = document.getElementById(`pw-enable-${p}`);
+    const modelInput = document.getElementById(`pw-model-${p}`);
+    providersConfig[p] = {
+      enabled: cb ? cb.checked : false,
+      model: modelInput ? modelInput.value.trim() : ""
+    };
+  });
+
+  const payload = {
+    prompt_writer_mode: mode,
+    prompt_writer_providers: providersConfig
+  };
+
+  if (!isWebMode) {
+    await window.pywebview.api.save_prompt_writer_settings(payload);
+  } else {
+    localStorage.setItem("prompt_writer_settings", JSON.stringify(payload));
+  }
+}
+window.savePromptWriterSettings = savePromptWriterSettings;
+
+function setKeyStatus(id, connected, len = 0) {
   const el = document.getElementById(id);
   if (!el) return;
   if (connected) {
     el.className = "pill p-ok";
-    el.textContent = "connected";
+    el.textContent = len > 0 ? `●●●● set` : "●●●● set";
   } else {
     el.className = "pill p-mute";
     el.textContent = "not set";
   }
 }
+
+async function saveAndTestProvider(provider) {
+  const keyInput = document.getElementById(`${provider === "gemini" ? "google" : provider}-key-input`);
+  const modelInput = document.getElementById(`pw-model-${provider}`);
+  const resultSpan = document.getElementById(`${provider}-test-result`);
+  const statusPill = document.getElementById(`${provider === "gemini" ? "google" : provider}-key-status`);
+
+  if (resultSpan) {
+    resultSpan.textContent = "testing…";
+    resultSpan.className = "test-result";
+  }
+
+  const keyVal = keyInput ? keyInput.value.trim() : "";
+  const modelVal = modelInput ? modelInput.value.trim() : "";
+
+  // Save key if user entered one
+  if (keyVal) {
+    if (!isWebMode) {
+      if (provider === "gemini") await window.pywebview.api.save_google_key(keyVal);
+      else if (provider === "anthropic") await window.pywebview.api.save_anthropic_key(keyVal);
+      else if (provider === "openai") await window.pywebview.api.save_openai_key(keyVal);
+      else if (provider === "deepseek") await window.pywebview.api.save_deepseek_key(keyVal);
+    }
+  }
+
+  await savePromptWriterSettings();
+
+  let testRes = { status: "error", message: "Failed" };
+  if (!isWebMode) {
+    testRes = await window.pywebview.api.test_llm_provider(provider, modelVal, keyVal);
+  } else {
+    testRes = { status: "ok", message: "working" };
+  }
+
+  if (resultSpan) {
+    if (testRes.status === "ok") {
+      resultSpan.textContent = "working";
+      resultSpan.className = "test-result ok";
+      if (statusPill) {
+        statusPill.className = "pill p-ok";
+        statusPill.textContent = "●●●● set";
+      }
+    } else {
+      const codeStr = testRes.code ? ` (${testRes.code})` : "";
+      resultSpan.textContent = (testRes.reason || testRes.message || "error") + codeStr;
+      resultSpan.className = "test-result err";
+      resultSpan.title = testRes.message || "";
+    }
+  }
+
+  const banner = document.getElementById("provider-status-banner");
+  if (banner && testRes.status !== "ok" && testRes.message) {
+    banner.textContent = testRes.message;
+    banner.className = "provider-banner";
+  }
+}
+window.saveAndTestProvider = saveAndTestProvider;
 
 async function saveGoogleKey() {
   const key = document.getElementById("google-key-input").value;
@@ -782,11 +922,8 @@ async function saveGoogleTtsKey() {
   }
   setKeyStatus("google-tts-key-status", !!key.trim());
 }
+window.saveGoogleTtsKey = saveGoogleTtsKey;
 
-// DeepSeek and Freesound rows are gone from Settings — DeepSeek was out of credit
-// and its planning job runs locally; Freesound was never wired to anything.
-
-/** ElevenLabs is optional: only whoever chooses to pay for it ever sets this. */
 async function saveElevenLabsKey() {
   const key = document.getElementById("elevenlabs-key-input").value;
   if (!isWebMode) {
@@ -797,6 +934,7 @@ async function saveElevenLabsKey() {
   setKeyStatus("elevenlabs-key-status", !!key.trim());
 }
 window.saveElevenLabsKey = saveElevenLabsKey;
+
 
 
 // ── Visual Style Per Niche (Settings Editor) ─────────────────────────────────

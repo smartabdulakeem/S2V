@@ -586,46 +586,132 @@
             <h3>Keys &amp; services</h3>
           </button>
           <div class="card-body" id="card-body-keys" hidden>
-            <div class="tbl">
-              <table>
-                <thead>
-                  <tr><th>Service</th><th>Used for</th><th>Key / Secret</th><th>Status</th><th></th></tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Google AI</td>
-                    <td>Imagen, Gemini, Lyria music</td>
-                    <td><input type="password" id="google-key-input" placeholder="AIzaSy…" class="input-mono-sm"></td>
-                    <td><span class="pill p-mute" id="google-key-status">not set</span></td>
-                    <td><button type="button" class="ghost" onclick="saveGoogleKey()">Test &amp; Save</button></td>
-                  </tr>
-                  <tr>
-                    <td>Google Cloud TTS</td>
-                    <td>Narration + word timings</td>
-                    <td><input type="password" id="google-tts-key-input" placeholder="AIzaSy…" class="input-mono-sm"></td>
-                    <td><span class="pill p-mute" id="google-tts-key-status">not set</span></td>
-                    <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Test &amp; Save</button></td>
-                  </tr>
-                  <tr>
-                    <td>ElevenLabs</td>
-                    <td>Premium voice &mdash; optional</td>
-                    <td><input type="password" id="elevenlabs-key-input" placeholder="optional" class="input-mono-sm"></td>
-                    <td><span class="pill p-mute" id="elevenlabs-key-status">not set</span></td>
-                    <td><button type="button" class="ghost" onclick="saveElevenLabsKey()">Test &amp; Save</button></td>
-                  </tr>
-                </tbody>
-              </table>
+            
+            <div id="provider-status-banner" class="provider-banner hidden"></div>
+
+            <div class="pw-section">
+              <div class="pw-header">
+                <h4>Prompt writer</h4>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="setting-ai-shot-descriptions" onchange="toggleAiShotDescriptions(this.checked)">
+                  <span>Write descriptive image prompts with AI</span>
+                </label>
+              </div>
+
+              <div class="pw-auto-row">
+                <input type="radio" id="pw-mode-auto" name="prompt_writer_mode" value="auto" onchange="onPromptWriterModeChange()">
+                <label for="pw-mode-auto"><strong>Automatic</strong> &mdash; use the first working provider below</label>
+              </div>
+
+              <div class="pw-table-wrap">
+                <table class="pw-table">
+                  <thead>
+                    <tr>
+                      <th class="pw-col-switch"></th>
+                      <th class="pw-col-provider">Provider</th>
+                      <th class="pw-col-model">Model</th>
+                      <th class="pw-col-key">API Key</th>
+                      <th class="pw-col-status">Status</th>
+                      <th class="pw-col-action"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="pw-col-switch"><input type="checkbox" id="pw-enable-anthropic" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-provider">Anthropic</td>
+                      <td class="pw-col-model"><input type="text" id="pw-model-anthropic" class="input-mono-sm" placeholder="claude-sonnet-4" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-key"><input type="password" id="anthropic-key-input" placeholder="sk-ant-…" class="input-mono-sm"></td>
+                      <td class="pw-col-status"><span class="pill p-mute" id="anthropic-key-status">not set</span></td>
+                      <td class="pw-col-action">
+                        <button type="button" class="ghost" onclick="saveAndTestProvider('anthropic')">Test</button>
+                        <span class="test-result" id="anthropic-test-result"></span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="pw-col-switch"><input type="checkbox" id="pw-enable-openai" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-provider">OpenAI</td>
+                      <td class="pw-col-model"><input type="text" id="pw-model-openai" class="input-mono-sm" placeholder="gpt-4o" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-key"><input type="password" id="openai-key-input" placeholder="sk-proj-…" class="input-mono-sm"></td>
+                      <td class="pw-col-status"><span class="pill p-mute" id="openai-key-status">not set</span></td>
+                      <td class="pw-col-action">
+                        <button type="button" class="ghost" onclick="saveAndTestProvider('openai')">Test</button>
+                        <span class="test-result" id="openai-test-result"></span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="pw-col-switch"><input type="checkbox" id="pw-enable-gemini" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-provider">Google</td>
+                      <td class="pw-col-model"><input type="text" id="pw-model-gemini" class="input-mono-sm" placeholder="gemini-2.5-flash" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-key"><input type="password" id="google-key-input" placeholder="AIzaSy…" class="input-mono-sm"></td>
+                      <td class="pw-col-status"><span class="pill p-mute" id="google-key-status">not set</span></td>
+                      <td class="pw-col-action">
+                        <button type="button" class="ghost" onclick="saveAndTestProvider('gemini')">Test</button>
+                        <span class="test-result" id="gemini-test-result"></span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="pw-col-switch"><input type="checkbox" id="pw-enable-deepseek" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-provider">DeepSeek</td>
+                      <td class="pw-col-model"><input type="text" id="pw-model-deepseek" class="input-mono-sm" placeholder="deepseek-chat" onchange="savePromptWriterSettings()"></td>
+                      <td class="pw-col-key"><input type="password" id="deepseek-key-input" placeholder="sk-…" class="input-mono-sm"></td>
+                      <td class="pw-col-status"><span class="pill p-mute" id="deepseek-key-status">not set</span></td>
+                      <td class="pw-col-action">
+                        <button type="button" class="ghost" onclick="saveAndTestProvider('deepseek')">Test</button>
+                        <span class="test-result" id="deepseek-test-result"></span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div class="checkbox-row">
+
+            <!-- VOICE & AUDIO SERVICES -->
+            <div class="pw-section mt-md">
+              <h4>Voice &amp; Audio Keys</h4>
+              <div class="tbl">
+                <table>
+                  <thead>
+                    <tr><th>Service</th><th>Used for</th><th>Key / Secret</th><th>Status</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Google Cloud TTS</td>
+                      <td>Narration + word timings</td>
+                      <td><input type="password" id="google-tts-key-input" placeholder="AIzaSy…" class="input-mono-sm"></td>
+                      <td><span class="pill p-mute" id="google-tts-key-status">not set</span></td>
+                      <td><button type="button" class="ghost" onclick="saveGoogleTtsKey()">Save</button></td>
+                    </tr>
+                    <tr>
+                      <td>ElevenLabs</td>
+                      <td>Premium voice &mdash; optional</td>
+                      <td><input type="password" id="elevenlabs-key-input" placeholder="optional" class="input-mono-sm"></td>
+                      <td><span class="pill p-mute" id="elevenlabs-key-status">not set</span></td>
+                      <td><button type="button" class="ghost" onclick="saveElevenLabsKey()">Save</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- LLM SCRIPT PLANNING (JOB 3) -->
+            <div class="llm-planning-box">
               <label class="checkbox-label">
-                <input type="checkbox" id="setting-ai-shot-descriptions" onchange="toggleAiShotDescriptions(this.checked)">
-                <span>Write descriptive image prompts with AI</span>
+                <input type="checkbox" id="setting-llm-planning" onchange="toggleLlmPlanning(this.checked)">
+                <strong>Enable LLM Script Planning</strong> <span class="mono">(Optional / Disabled by default)</span>
               </label>
+              <p class="hint mt-xs">When disabled (recommended), script narration is split in Python with zero LLM calls. Here is what is affected:</p>
+              <ul>
+                <li><strong><code>voice_steering</code> per segment is lost.</strong> This is the only real loss.</li>
+                <li><strong>Shot <code>query</code> falls back to keyword extraction</strong> (2&ndash;3 words). Image retrieval prefers <code>visual_description</code> when present, so the visual impact is minimal.</li>
+                <li><strong>Shots per segment falls back to the rhythm slider</strong>, which you control directly.</li>
+                <li><strong>Segmentation is completely unaffected.</strong></li>
+              </ul>
             </div>
-            <p class="mono">
+
+            <p class="mono mt-sm">
               Keys are stored on this machine only, in <code>config/settings.json</code>, and never
-              travel with the app. Everything except Google runs offline and needs no key at all:
-              narration, image retrieval, captions and rendering are all local.
+              travel with the app. Everything except cloud prompt writing and cloud TTS runs offline
+              and needs no key at all: local narration, image retrieval, captions, and rendering are all local.
             </p>
           </div>
         </div>

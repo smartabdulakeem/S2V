@@ -1,14 +1,14 @@
-import json
+﻿import json
 import urllib.request
 import urllib.error
 from typing import Optional, Dict, Any
 from pipeline.llm.interface import BaseLLMProvider
 
-class DeepSeekProvider(BaseLLMProvider):
-    def __init__(self, api_key: str, model: str = "deepseek-chat"):
+class OpenAIProvider(BaseLLMProvider):
+    def __init__(self, api_key: str, model: str = "gpt-4o"):
         self.api_key = api_key
         self.model = model
-        self.endpoint = "https://api.deepseek.com/chat/completions"
+        self.endpoint = "https://api.openai.com/v1/chat/completions"
 
     def complete(
         self,
@@ -21,17 +21,27 @@ class DeepSeekProvider(BaseLLMProvider):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
-        
-        payload = {
+
+        payload: Dict[str, Any] = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user}
             ],
-            "response_format": {"type": "json_object"},
             "temperature": 0.3,
             "max_tokens": max_tokens
         }
+
+        if json_schema:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_response",
+                    "schema": json_schema
+                }
+            }
+        else:
+            payload["response_format"] = {"type": "json_object"}
 
         req = urllib.request.Request(
             self.endpoint,
@@ -48,29 +58,31 @@ class DeepSeekProvider(BaseLLMProvider):
     def complete_text(
         self,
         system: str,
-        user: str = "",
+        user: str,
         max_tokens: int = 2048
     ) -> str:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
-        messages = [{"role": "system", "content": system}]
-        if user and user.strip():
-            messages.append({"role": "user", "content": user})
+
         payload = {
             "model": self.model,
-            "messages": messages,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user}
+            ],
             "temperature": 0.2,
             "max_tokens": max_tokens
         }
+
         req = urllib.request.Request(
             self.endpoint,
             data=json.dumps(payload).encode("utf-8"),
             headers=headers,
             method="POST"
         )
+
         with urllib.request.urlopen(req, timeout=60) as response:
             res_data = json.loads(response.read().decode("utf-8"))
             return res_data["choices"][0]["message"]["content"]
-

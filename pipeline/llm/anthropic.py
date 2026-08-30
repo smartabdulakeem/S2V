@@ -74,3 +74,36 @@ class AnthropicProvider(BaseLLMProvider):
                     elif block.get("type") == "json":
                         return block["json"]
                 raise ValueError("No text or JSON block in Anthropic response")
+
+    def complete_text(
+        self,
+        system: str,
+        user: str = "",
+        max_tokens: int = 2048
+    ) -> str:
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [
+                {"role": "user", "content": user if user and user.strip() else "Please execute the instructions."}
+            ]
+        }
+        req = urllib.request.Request(
+            self.endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=90) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            for block in res_data.get("content", []):
+                if block.get("type") == "text":
+                    return block["text"]
+            return ""
+

@@ -2157,8 +2157,8 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 (seg.get("narration") or "").strip()
                 for seg in (script_data.get("segments") or [])
             ]
-            descriptions = describe_shots(shots_for_desc, api_key=google_key,
-                                          series_cfg=series_cfg, script_context=script_context)
+            descriptions = describe_shots(shots_for_desc, series_cfg=series_cfg,
+                                          script_context=script_context)
             for s in all_shots:
                 if s["shot_id"] in descriptions:
                     s["visual_description"] = descriptions[s["shot_id"]]

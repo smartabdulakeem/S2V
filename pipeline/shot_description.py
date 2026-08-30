@@ -1,4 +1,4 @@
-"""
+﻿"""
 pipeline/shot_description.py
 
 Planning-time pass that writes one visual sentence per shot, stored on the shot
@@ -13,7 +13,7 @@ import time
 import hashlib
 import urllib.request
 import urllib.error
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(ROOT, "cache", "planning")
@@ -76,34 +76,24 @@ def _script_fingerprint(script_context) -> str:
 
 
 def _scene_hash(scene: str, series_slug: str = "", prompt_recipe: str = "",
-                era_block: str = "", script_context=None, model: str = "") -> str:
-    """Stable hash of the scene, the niche configuration, and the film it is in."""
+                era_block: str = "", script_context=None, model: str = "",
+                provider: str = "") -> str:
+    """Stable hash of the scene, the niche configuration, model, provider, and the film it is in."""
     cleaned_scene = " ".join((scene or "").strip().split())
     recipe_hash = hashlib.sha256((prompt_recipe or "").strip().encode("utf-8")).hexdigest()[:12] if prompt_recipe else ""
     slug_part = (series_slug or "").strip().lower()
     era_part = " ".join((era_block or "").strip().split())
-    # v3: a niche's recipe governs the instruction.
-    # v4: the whole script travels with the batch, so the same sentence inside a
-    #     different film is a different picture and must not be served from cache.
-    # v5: the model is part of the key. Without it, switching models served the
-    #     previous model's answer back and the two looked identical — which is
-    #     exactly what happened when flash and pro were first compared.
-    raw = (f"v5|{slug_part}|{recipe_hash}|{era_part}|{_script_fingerprint(script_context)}"
-           f"|{(model or '').strip()}|{cleaned_scene}")
+    prov_part = (provider or "gemini").strip().lower()
+    model_part = (model or "gemini-2.5-flash").strip().lower()
+    # v6: provider and model are part of the key alongside niche, recipe, era and script.
+    raw = (f"v6|{prov_part}|{model_part}|{slug_part}|{recipe_hash}|{era_part}|{_script_fingerprint(script_context)}"
+           f"|{cleaned_scene}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _build_instruction(series_cfg: Optional[dict] = None) -> str:
     """
     The instruction sent to the description model.
-
-    A niche with a recipe gets the recipe, plus the period and the output
-    contract. Appending the recipe to the built-in brief instead would leave
-    "12 to 25 words" and the banned style words in force, which is how a five
-    thousand word recipe still produced seventeen plain words a shot.
-
-    A niche without a recipe keeps the built-in brief exactly as before, with
-    its era and subject appended as context.
     """
     if not series_cfg:
         return INSTRUCTION
@@ -139,26 +129,11 @@ def _build_instruction(series_cfg: Optional[dict] = None) -> str:
     return f"{INSTRUCTION}\n\nProject Context:\n{context_section}"
 
 
-#: How much narration is worth sending. Every script this app has produced fits
-#: inside this with room to spare; a runaway transcript is trimmed rather than
-#: allowed to blow up the request.
 MAX_SCRIPT_CONTEXT_CHARS = 60000
 
 
 def _build_batch_prompt(instruction: str, batch: list, script_context=None) -> str:
-    """
-    The text sent for one batch of shots.
-
-    A bare narration fragment is not enough to illustrate. "Before Adam ever
-    walked upon the earth, something had already happened." names no place, no
-    person and no event, so a model asked to picture it can only reach for a
-    vague landscape. Given the film around it, the same line is placeable: the
-    lines that follow say the earth was already inhabited and that there had
-    been bloodshed.
-
-    So the whole narration goes with every batch, and each excerpt is tagged
-    with its line number inside it.
-    """
+    """The text sent for one batch of shots."""
     if not script_context:
         lines = [instruction, ""]
         for idx, s in enumerate(batch, 1):
@@ -220,18 +195,7 @@ def _save_disk_cache(cache: Dict[str, str]):
 
 
 def is_valid_description(sentence: str, allow_rich: bool = False) -> bool:
-    """
-    Validate a sentence against the rules that produced it.
-
-    The 40-word cap and the banned style words belong to the built-in
-    instruction, which asks for 12 to 25 plain words. When a niche's recipe is
-    the instruction instead, judging its output by those limits throws away
-    exactly what the recipe asked for — a recipe that says "write cinematic
-    descriptions" would have every line it produced rejected.
-
-    `allow_rich` keeps only the checks that still mean something: a description
-    has to exist, and it has to stop somewhere.
-    """
+    """Validate a sentence against the rules that produced it."""
     if not sentence or not sentence.strip():
         return False
     words = sentence.strip().split()
@@ -302,15 +266,11 @@ def _call_gemini_batch(prompt_text: str, api_key: str, model: str = "gemini-2.5-
     return parts[0].get("text", "")
 
 
-def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash",
-                   series_cfg: Optional[dict] = None, script_context=None) -> dict:
+def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
+                   series_cfg: Optional[dict] = None, script_context=None,
+                   provider: Optional[Any] = None, provider_name: Optional[str] = None) -> dict:
     """
     One visual sentence per shot, keyed by shot_id.
-
-    `shots` is a list of {"shot_id": str, "scene": str} - `scene` is the slice of
-    narration that shot covers. Returns {shot_id: description}. Shots that come
-    back empty or unparseable are simply absent from the result; the caller falls
-    back to the search query for those.
     """
     global _MEMORY_CACHE
     if not shots:
@@ -319,6 +279,28 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash",
     # Initialize disk cache if memory cache is empty
     if not _MEMORY_CACHE:
         _MEMORY_CACHE.update(_load_disk_cache())
+
+    from pipeline.llm.factory import get_llm_provider, get_single_llm_provider, is_permanent_error, set_last_provider_status
+
+    # Resolve LLM provider
+    prov_instance = provider
+    if prov_instance is None:
+        if api_key is not None and not str(api_key).strip():
+            # Explicit empty key passed
+            sys.stderr.write("[shot_description] No Google API key configured, falling back to query\n")
+            return {}
+        elif api_key:
+            # Explicit non-empty key passed
+            p_name = provider_name or "gemini"
+            m_name = model or "gemini-2.5-flash"
+            prov_instance = get_single_llm_provider(p_name, model=m_name, api_key=api_key)
+        else:
+            # Resolve from settings / Automatic mode
+            prov_instance = get_llm_provider(provider_name=provider_name, model=model)
+
+    prov_type = getattr(prov_instance, "__class__", type(prov_instance)).__name__.lower()
+    prov_key = "gemini" if "gemini" in prov_type else ("anthropic" if "anthropic" in prov_type else ("openai" if "openai" in prov_type else ("deepseek" if "deepseek" in prov_type else prov_type)))
+    model_name = getattr(prov_instance, "model", model or "gemini-2.5-flash")
 
     series_slug = (series_cfg or {}).get("series_slug", "")
     prompt_recipe = (series_cfg or {}).get("prompt_recipe", "")
@@ -336,7 +318,8 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash",
             continue
 
         h = _scene_hash(scene, series_slug=series_slug, prompt_recipe=prompt_recipe,
-                        era_block=era_block, script_context=script_context, model=model)
+                        era_block=era_block, script_context=script_context,
+                        model=model_name, provider=prov_key)
         existing_desc = shot.get("visual_description")
         if existing_desc:
             if has_recipe or is_valid_description(existing_desc):
@@ -351,10 +334,6 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash",
     if not uncached_shots:
         return results
 
-    if not api_key or not str(api_key).strip():
-        sys.stderr.write("[shot_description] No Google API key configured, falling back to query\n")
-        return results
-
     # 2. Batch 20 shots per request
     BATCH_SIZE = 20
     cache_updated = False
@@ -365,7 +344,12 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash",
         prompt_text = _build_batch_prompt(instruction_prompt, batch, script_context=script_context)
 
         try:
-            reply_text = _call_gemini_batch(prompt_text, api_key=api_key.strip(), model=model)
+            if prov_key == "gemini":
+                key_to_use = getattr(prov_instance, "api_key", api_key or "")
+                reply_text = _call_gemini_batch(prompt_text, api_key=key_to_use, model=model_name)
+            else:
+                reply_text = prov_instance.complete_text(system=prompt_text, user="", max_tokens=2048)
+
             if not reply_text:
                 continue
 
@@ -392,16 +376,19 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash",
                         results[s_id] = clean_sentence
                         _MEMORY_CACHE[_scene_hash(s_scene, series_slug=series_slug,
                                                   prompt_recipe=prompt_recipe, era_block=era_block,
-                                                  script_context=script_context, model=model)] = clean_sentence
+                                                  script_context=script_context, model=model_name,
+                                                  provider=prov_key)] = clean_sentence
                         cache_updated = True
         except urllib.error.HTTPError as err:
-            sys.stderr.write(f"[shot_description] HTTP error {err.code} calling Gemini: {err}, falling back to query\n")
+            is_perm, code, explanation = is_permanent_error(err)
+            sys.stderr.write(f"[shot_description] HTTP error {err.code} calling LLM provider: {err}, falling back to query\n")
             continue
         except urllib.error.URLError as err:
-            sys.stderr.write(f"[shot_description] URL error calling Gemini: {err}, falling back to query\n")
+            sys.stderr.write(f"[shot_description] URL error calling LLM provider: {err}, falling back to query\n")
             continue
         except Exception as err:
-            sys.stderr.write(f"[shot_description] Error calling Gemini: {err}, falling back to query\n")
+            is_perm, code, explanation = is_permanent_error(err)
+            sys.stderr.write(f"[shot_description] Error calling LLM provider: {err}, falling back to query\n")
             continue
 
     if cache_updated:
