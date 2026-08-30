@@ -541,7 +541,8 @@ class RenderOrchestrator:
                 script_data=self.script_data,
                 audio_paths_map=audio_paths_map,
                 durations_map=durations_map,
-                project_dir=self.output_dir
+                project_dir=self.output_dir,
+                on_progress=self._log
             )
             self._log(f"Exported WolfCut project timeline: {wolfcut_path}")
         except Exception as e:

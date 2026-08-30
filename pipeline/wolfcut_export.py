@@ -22,6 +22,23 @@ from pipeline.validator import resolve_shot_durations
 from pipeline.captions import parse_srt
 
 
+def _shot_image(shot: dict, project_dir: str, slot_number: int) -> Optional[str]:
+    """
+    The picture this shot renders, or None if it does not have one yet.
+    """
+    for key in ("resolved", "pin"):
+        value = shot.get(key)
+        if value and str(value).strip() and os.path.exists(str(value)):
+            return str(value)
+
+    for candidate in (f"{slot_number}.jpg", f"{slot_number}.png",
+                      f"{shot.get('shot_id')}.jpg", f"{shot.get('shot_id')}.png"):
+        path = os.path.join(project_dir, candidate)
+        if os.path.exists(path):
+            return path
+    return None
+
+
 def _clean_slug(name: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9_\-]", "_", (name or "project").strip())
     slug = re.sub(r"_+", "_", slug).strip("_")
@@ -32,7 +49,8 @@ def write_wolfcut_project(
     script_data: dict,
     audio_paths_map: dict,
     durations_map: dict,
-    project_dir: str
+    project_dir: str,
+    on_progress=None
 ) -> str:
     """
     Exports a rendered film into a WolfCut timeline project file (.wolfcut).
@@ -46,24 +64,22 @@ def write_wolfcut_project(
     Matches jub0t/WolfCut DOCUMENT_VERSION = 1 format.
     """
     os.makedirs(project_dir, exist_ok=True)
-    slug = _clean_slug(
-        script_data.get("slug")
-        or script_data.get("project_name")
-        or script_data.get("title")
-        or "project"
-    )
+
+    # The title and the aspect ratio live on `project`, not at the top level.
+    # Read from the top level and every film is called "Project" and comes out
+    # 1920x1080 whatever format was picked — a 9:16 short exports landscape.
+    proj = script_data.get("project") or {}
+    title = (proj.get("title") or script_data.get("title") or "My Video").strip()
+    slug = _clean_slug(proj.get("slug") or script_data.get("slug") or title)
     output_path = os.path.join(project_dir, f"{slug}.wolfcut")
 
-    # Dimensions
-    width = int(script_data.get("width") or 1920)
-    height = int(script_data.get("height") or 1080)
-    format_str = str(script_data.get("format") or "").strip()
-    if format_str == "9:16":
-        width, height = 1080, 1920
-    elif format_str == "1:1":
-        width, height = 1080, 1080
-    elif format_str == "4:5":
-        width, height = 1080, 1350
+    # One source of truth for dimensions: the same table the renderer uses.
+    from pipeline.visuals import _get_dimensions
+    aspect_ratio = (proj.get("aspect_ratio")
+                    or script_data.get("aspect_ratio")
+                    or script_data.get("format")
+                    or "16:9")
+    width, height = _get_dimensions(aspect_ratio)
 
     segments = script_data.get("segments") or []
 
@@ -140,24 +156,7 @@ def write_wolfcut_project(
             owner_shot = shot
             owner_id = shot.get("shot_id")
 
-            img_path = (
-                owner_shot.get("resolved_image_path")
-                or owner_shot.get("image_path")
-                or owner_shot.get("library_image")
-                or owner_shot.get("image_file")
-            )
-            if not img_path or not str(img_path).strip():
-                cand_jpg = os.path.join(project_dir, f"{slot_counter}.jpg")
-                cand_png = os.path.join(project_dir, f"{slot_counter}.png")
-                cand_shot = os.path.join(project_dir, f"{owner_id}.jpg")
-                if os.path.exists(cand_jpg):
-                    img_path = cand_jpg
-                elif os.path.exists(cand_png):
-                    img_path = cand_png
-                elif os.path.exists(cand_shot):
-                    img_path = cand_shot
-                else:
-                    img_path = cand_jpg
+            img_path = _shot_image(owner_shot, project_dir, slot_counter)
 
             if current_run is not None:
                 picture_runs.append(current_run)
@@ -176,13 +175,7 @@ def write_wolfcut_project(
                 current_run["shots"].append(shot)
             else:
                 owner_shot = picture_owner_map.get(share_target, shot)
-                img_path = (
-                    owner_shot.get("resolved_image_path")
-                    or owner_shot.get("image_path")
-                    or owner_shot.get("library_image")
-                    or owner_shot.get("image_file")
-                    or os.path.join(project_dir, f"{share_target}.jpg")
-                )
+                img_path = _shot_image(owner_shot, project_dir, max(slot_counter - 1, 1))
                 if current_run is not None:
                     picture_runs.append(current_run)
 
@@ -198,16 +191,18 @@ def write_wolfcut_project(
         picture_runs.append(current_run)
 
     running_pic_start = 0.0
+    missing_pictures = []
     for run in picture_runs:
-        img_p = os.path.abspath(run["image_path"])
-        if not os.path.exists(img_p):
-            try:
-                os.makedirs(os.path.dirname(img_p), exist_ok=True)
-                with open(img_p, "wb") as f:
-                    f.write(b"")
-            except Exception:
-                pass
+        # A picture with no image is skipped and named in the return value.
+        # Writing a zero-byte file so the path exists made the export look
+        # complete, satisfied a test that asserted every media path exists, and
+        # handed WolfCut a timeline of blank frames.
+        if not run["image_path"]:
+            missing_pictures.append(run["slot_number"])
+            running_pic_start += run["duration"]
+            continue
 
+        img_p = os.path.abspath(run["image_path"])
         m_id = get_or_create_media(img_p, kind="image", duration=None)
         run_dur = round(run["duration"], 3)
 
@@ -384,5 +379,17 @@ def write_wolfcut_project(
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=2)
+
+    if on_progress:
+        placed = len([c for c in clips_list if c["trackId"] == "T1"])
+        if missing_pictures:
+            listed = ", ".join(str(n) for n in missing_pictures[:10])
+            more = "…" if len(missing_pictures) > 10 else ""
+            on_progress(
+                f"WolfCut timeline: {placed} of {placed + len(missing_pictures)} "
+                f"pictures placed. No image yet for picture {listed}{more} — "
+                f"those leave a gap in the timeline.")
+        else:
+            on_progress(f"WolfCut timeline: all {placed} pictures placed.")
 
     return os.path.abspath(output_path)
