@@ -2593,6 +2593,35 @@ function openOutputFolder() {
   }
 }
 
+async function openInWolfCut() {
+  if (isWebMode || !window.pywebview || !window.pywebview.api || !window.pywebview.api.open_in_wolfcut) {
+    alert("WolfCut export is available in desktop app mode after rendering.");
+    return;
+  }
+
+  try {
+    const res = await window.pywebview.api.open_in_wolfcut();
+    if (res.success) {
+      return;
+    }
+
+    if (!res.installed) {
+      const msg = `${res.error || "WolfCut is not installed on this machine."}\n\nYou can download WolfCut free from:\n${res.releases_url || "https://github.com/jub0t/WolfCut/releases"}\n\nWould you like to show the exported .wolfcut file in your folder?`;
+      if (confirm(msg)) {
+        if (window.pywebview.api.show_wolfcut_file) {
+          window.pywebview.api.show_wolfcut_file(res.path);
+        }
+      }
+    } else if (res.error) {
+      alert(`Could not open WolfCut: ${res.error}`);
+    }
+  } catch (e) {
+    console.error("openInWolfCut error:", e);
+    alert(`Failed to open WolfCut: ${e}`);
+  }
+}
+window.openInWolfCut = openInWolfCut;
+
 // ── Library Screen Management ────────────────────────────────────────────────
 function switchLibTab(tab) {
   document.getElementById("tab-lib-images").className = `lib-tab ${tab === 'images' ? 'active' : ''}`;

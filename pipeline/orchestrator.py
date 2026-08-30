@@ -533,9 +533,23 @@ class RenderOrchestrator:
         # 1,811 files by the second real episode.
         self._cleanup_intermediates()
 
+        # Write WolfCut timeline project (.wolfcut)
+        wolfcut_path = None
+        try:
+            from pipeline.wolfcut_export import write_wolfcut_project
+            wolfcut_path = write_wolfcut_project(
+                script_data=self.script_data,
+                audio_paths_map=audio_paths_map,
+                durations_map=durations_map,
+                project_dir=self.output_dir
+            )
+            self._log(f"Exported WolfCut project timeline: {wolfcut_path}")
+        except Exception as e:
+            self._log(f"Warning: WolfCut project export failed: {e}")
+
         # Done
-        self._emit("complete", output_path=output_path)
-        return {"success": True, "output": output_path}
+        self._emit("complete", output_path=output_path, wolfcut_path=wolfcut_path)
+        return {"success": True, "output": output_path, "wolfcut_path": wolfcut_path}
 
     def _fail_render(self, errors_map: dict) -> dict:
         # Keys are segment ids (int) for handled failures and stage labels (str)

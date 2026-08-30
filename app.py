@@ -1255,6 +1255,92 @@ class Api:
         subprocess.Popen(["explorer", os.path.normpath(folder)])
         return {"success": True}
 
+    def _find_wolfcut_binary(self) -> str | None:
+        """Finds the installed WolfCut executable on Windows."""
+        import shutil
+        on_path = shutil.which("WolfCut") or shutil.which("wolfcut")
+        if on_path and os.path.exists(on_path):
+            return on_path
+
+        candidates = [
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\WolfCut\WolfCut.exe"),
+            os.path.expandvars(r"%LOCALAPPDATA%\WolfCut\WolfCut.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\WolfCut\WolfCut.exe"),
+            os.path.expandvars(r"%PROGRAMFILES(X86)%\WolfCut\WolfCut.exe"),
+            os.path.expandvars(r"%APPDATA%\WolfCut\WolfCut.exe"),
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+        return None
+
+    def open_in_wolfcut(self, project_path_or_slug: str | None = None) -> dict:
+        """
+        Launches WolfCut with the .wolfcut project timeline file, or surfaces file location if not installed.
+        """
+        wolfcut_file = None
+        output_dir = os.path.join(BASE_DIR, self._settings.get("output_dir", "output"))
+
+        if project_path_or_slug and os.path.isfile(project_path_or_slug) and project_path_or_slug.endswith(".wolfcut"):
+            wolfcut_file = os.path.abspath(project_path_or_slug)
+        elif project_path_or_slug:
+            cand = os.path.join(output_dir, f"{project_path_or_slug}.wolfcut")
+            if os.path.exists(cand):
+                wolfcut_file = cand
+
+        if not wolfcut_file and os.path.exists(output_dir):
+            cands = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(".wolfcut")]
+            if cands:
+                cands.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                wolfcut_file = cands[0]
+
+        if not wolfcut_file or not os.path.exists(wolfcut_file):
+            return {
+                "success": False,
+                "installed": bool(self._find_wolfcut_binary()),
+                "error": "No .wolfcut project file found. Render a video first to export the timeline.",
+                "path": None,
+                "releases_url": "https://github.com/jub0t/WolfCut/releases"
+            }
+
+        wolfcut_exe = self._find_wolfcut_binary()
+        if wolfcut_exe:
+            try:
+                subprocess.Popen([wolfcut_exe, os.path.normpath(wolfcut_file)])
+                return {"success": True, "installed": True, "path": wolfcut_file}
+            except Exception as e:
+                return {
+                    "success": False,
+                    "installed": True,
+                    "error": f"Failed to launch WolfCut: {e}",
+                    "path": wolfcut_file,
+                    "releases_url": "https://github.com/jub0t/WolfCut/releases"
+                }
+
+        return {
+            "success": False,
+            "installed": False,
+            "error": "WolfCut is not installed on this machine.",
+            "path": wolfcut_file,
+            "releases_url": "https://github.com/jub0t/WolfCut/releases"
+        }
+
+    def show_wolfcut_file(self, path: str | None = None) -> dict:
+        """Reveals the .wolfcut file in Windows Explorer."""
+        target = path
+        if not target or not os.path.exists(target):
+            output_dir = os.path.join(BASE_DIR, self._settings.get("output_dir", "output"))
+            if os.path.exists(output_dir):
+                cands = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(".wolfcut")]
+                if cands:
+                    cands.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                    target = cands[0]
+
+        if target and os.path.exists(target):
+            subprocess.Popen(["explorer", f"/select,{os.path.normpath(target)}"])
+            return {"success": True, "path": target}
+        return {"success": False, "error": "File not found."}
+
     def get_version(self) -> str:
         return "2.0.0"
 

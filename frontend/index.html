@@ -197,6 +197,7 @@
             <span class="mono" id="working-folder-label-board" title="">whole library</span>
             <button type="button" id="btn-copy-prompts" onclick="copyAllPrompts()">Copy all prompts</button>
             <button type="button" id="btn-paste-prompts-board" onclick="togglePastePromptsPanel()">Paste external prompts…</button>
+            <button type="button" id="btn-open-wolfcut-board" onclick="openInWolfCut()">Open in WolfCut</button>
             <button type="button" id="btn-refresh-library" onclick="refreshLibraryAndReplan()">Refresh library</button>
             <button type="button" id="btn-fill-gaps" onclick="fillAllGaps()">Use nearest image for all gaps</button>
             <button type="button" class="primary" id="btn-start-render-board" onclick="startRenderFromBoard()">Render video →</button>
@@ -308,6 +309,7 @@
         </div>
         <div class="row mt-sm">
           <button type="button" class="primary" id="btn-render-action" onclick="toggleRenderExecution()">Start Render</button>
+          <button type="button" class="ghost" id="btn-open-wolfcut-render" onclick="openInWolfCut()">Open in WolfCut</button>
           <button type="button" class="ghost" onclick="openOutputFolder()">Open Output Folder</button>
           <button type="button" class="ghost" onclick="toggleRawLogs()">Show raw logs</button>
         </div>
