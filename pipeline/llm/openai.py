@@ -1,14 +1,18 @@
-﻿import json
+import json
 import urllib.request
 import urllib.error
 from typing import Optional, Dict, Any
 from pipeline.llm.interface import BaseLLMProvider
 
 class OpenAIProvider(BaseLLMProvider):
-    def __init__(self, api_key: str, model: str = "gpt-4o"):
+    def __init__(self, api_key: str, model: str = "gpt-4o", base_url: Optional[str] = None):
         self.api_key = api_key
         self.model = model
-        self.endpoint = "https://api.openai.com/v1/chat/completions"
+        if base_url and str(base_url).strip():
+            b = str(base_url).strip().rstrip("/")
+            self.endpoint = f"{b}/chat/completions" if not b.endswith("/chat/completions") else b
+        else:
+            self.endpoint = "https://api.openai.com/v1/chat/completions"
 
     def complete(
         self,
@@ -19,7 +23,8 @@ class OpenAIProvider(BaseLLMProvider):
     ) -> Dict[str, Any]:
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
+            "Authorization": f"Bearer {self.api_key}",
+            "User-Agent": "SmartStudio/1.0"
         }
 
         payload: Dict[str, Any] = {
@@ -63,7 +68,8 @@ class OpenAIProvider(BaseLLMProvider):
     ) -> str:
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
+            "Authorization": f"Bearer {self.api_key}",
+            "User-Agent": "SmartStudio/1.0"
         }
 
         payload = {

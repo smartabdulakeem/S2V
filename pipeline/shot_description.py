@@ -9,10 +9,7 @@ import os
 import re
 import sys
 import json
-import time
 import hashlib
-import urllib.request
-import urllib.error
 from typing import Dict, List, Optional, Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -208,64 +205,6 @@ def is_valid_description(sentence: str, allow_rich: bool = False) -> bool:
     return True
 
 
-def _http_request_with_backoff(req: urllib.request.Request, timeout: int = 60, max_retries: int = 3) -> bytes:
-    """Make HTTP request with exponential backoff on 429/503."""
-    for attempt in range(max_retries):
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                data = resp.read()
-                if isinstance(data, (bytes, bytearray)):
-                    return data
-                elif isinstance(data, str):
-                    return data.encode("utf-8")
-                return bytes(data) if data else b""
-        except urllib.error.HTTPError as e:
-            if e.code in (429, 503) and attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            raise
-    return b""
-
-
-def _call_gemini_batch(prompt_text: str, api_key: str, model: str = "gemini-2.5-flash") -> Optional[str]:
-    """Execute Gemini request for one batch."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    payload = {
-        "contents": [
-            {
-                "parts": [{"text": prompt_text}]
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.2,
-            "maxOutputTokens": 2048,
-        }
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
-
-    resp_bytes = _http_request_with_backoff(req, timeout=60)
-    if isinstance(resp_bytes, (bytes, bytearray)):
-        raw_text = resp_bytes.decode("utf-8")
-    elif isinstance(resp_bytes, str):
-        raw_text = resp_bytes
-    else:
-        raw_text = "{}"
-
-    data = json.loads(raw_text)
-    candidates = data.get("candidates") or []
-    if not candidates:
-        return None
-    parts = (candidates[0].get("content") or {}).get("parts") or []
-    if not parts:
-        return None
-    return parts[0].get("text", "")
-
-
 def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
                    series_cfg: Optional[dict] = None, script_context=None,
                    provider: Optional[Any] = None, provider_name: Optional[str] = None) -> dict:
@@ -280,7 +219,9 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
     if not _MEMORY_CACHE:
         _MEMORY_CACHE.update(_load_disk_cache())
 
-    from pipeline.llm.factory import get_llm_provider, get_single_llm_provider, is_permanent_error, set_last_provider_status
+    from pipeline.llm.factory import (get_llm_provider, get_single_llm_provider,
+                                      is_permanent_error, set_last_provider_status,
+                                      get_last_provider_status, PROVIDER_DISPLAY_NAMES)
 
     # Resolve LLM provider
     prov_instance = provider
@@ -298,9 +239,11 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
             # Resolve from settings / Automatic mode
             prov_instance = get_llm_provider(provider_name=provider_name, model=model)
 
-    prov_type = getattr(prov_instance, "__class__", type(prov_instance)).__name__.lower()
-    prov_key = "gemini" if "gemini" in prov_type else ("anthropic" if "anthropic" in prov_type else ("openai" if "openai" in prov_type else ("deepseek" if "deepseek" in prov_type else prov_type)))
-    model_name = getattr(prov_instance, "model", model or "gemini-2.5-flash")
+    # The provider says who it is. Sniffing the class name and reading .model
+    # off it worked for a single provider and quietly failed for Automatic,
+    # which has neither — every description then cached under the same name
+    # whichever provider had actually written it.
+    prov_key, model_name = prov_instance.identity()
 
     series_slug = (series_cfg or {}).get("series_slug", "")
     prompt_recipe = (series_cfg or {}).get("prompt_recipe", "")
@@ -344,11 +287,10 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
         prompt_text = _build_batch_prompt(instruction_prompt, batch, script_context=script_context)
 
         try:
-            if prov_key == "gemini":
-                key_to_use = getattr(prov_instance, "api_key", api_key or "")
-                reply_text = _call_gemini_batch(prompt_text, api_key=key_to_use, model=model_name)
-            else:
-                reply_text = prov_instance.complete_text(system=prompt_text, user="", max_tokens=2048)
+            # Every provider goes through the seam, Gemini included. Gemini used
+            # to take a direct HTTP path here, so the one provider writing all
+            # of the prompts was the one the seam never covered.
+            reply_text = prov_instance.complete_text(system=prompt_text, user="", max_tokens=2048)
 
             if not reply_text:
                 continue
@@ -379,16 +321,23 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
                                                   script_context=script_context, model=model_name,
                                                   provider=prov_key)] = clean_sentence
                         cache_updated = True
-        except urllib.error.HTTPError as err:
-            is_perm, code, explanation = is_permanent_error(err)
-            sys.stderr.write(f"[shot_description] HTTP error {err.code} calling LLM provider: {err}, falling back to query\n")
-            continue
-        except urllib.error.URLError as err:
-            sys.stderr.write(f"[shot_description] URL error calling LLM provider: {err}, falling back to query\n")
-            continue
         except Exception as err:
+            # A dead provider has to reach the screen. Classifying the error and
+            # then writing it to stderr — where no user looks — before dropping
+            # silently to keyword planning is exactly how a months-dead DeepSeek
+            # key went unnoticed. Automatic reports its own chain failure in
+            # more detail, so leave that message standing when it is there.
             is_perm, code, explanation = is_permanent_error(err)
-            sys.stderr.write(f"[shot_description] Error calling LLM provider: {err}, falling back to query\n")
+            display = PROVIDER_DISPLAY_NAMES.get(prov_key, prov_key.title())
+            if is_perm:
+                message = (f"{display} refused the request: {explanation}. "
+                           f"Shot descriptions fell back to keyword search.")
+            else:
+                message = (f"{display} could not be reached: {err}. "
+                           f"Shot descriptions fell back to keyword search.")
+            if prov_key != "auto" or get_last_provider_status().get("status") != "error":
+                set_last_provider_status("error", message, answering_provider="")
+            sys.stderr.write(f"[shot_description] {message}\n")
             continue
 
     if cache_updated:

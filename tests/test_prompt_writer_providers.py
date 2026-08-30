@@ -38,9 +38,9 @@ def _mock_http_response(status=200, json_data=None, raw_data=b""):
 
 def test_factory_builds_all_providers_and_unknown_raises():
     """Each provider is built by the factory from its name; an unknown name raises."""
-    p_anthropic = get_single_llm_provider("anthropic", model="claude-sonnet-4", api_key="test-key")
+    p_anthropic = get_single_llm_provider("anthropic", model="claude-sonnet-5", api_key="test-key")
     assert isinstance(p_anthropic, AnthropicProvider)
-    assert p_anthropic.model == "claude-sonnet-4"
+    assert p_anthropic.model == "claude-sonnet-5"
 
     p_openai = get_single_llm_provider("openai", model="gpt-4o", api_key="test-key")
     assert isinstance(p_openai, OpenAIProvider)
@@ -92,7 +92,7 @@ def test_provider_switched_off_is_never_called_under_automatic():
     mock_settings = {
         "prompt_writer_mode": "auto",
         "prompt_writer_providers": {
-            "anthropic": {"enabled": False, "model": "claude-sonnet-4"},
+            "anthropic": {"enabled": False, "model": "claude-sonnet-5"},
             "openai": {"enabled": False, "model": "gpt-4o"},
             "gemini": {"enabled": True, "model": "gemini-2.5-flash"},
             "deepseek": {"enabled": False, "model": "deepseek-chat"},
@@ -127,7 +127,7 @@ def test_automatic_skips_402_and_moves_to_next_enabled_provider():
     mock_settings = {
         "prompt_writer_mode": "auto",
         "prompt_writer_providers": {
-            "anthropic": {"enabled": True, "model": "claude-sonnet-4"},
+            "anthropic": {"enabled": True, "model": "claude-sonnet-5"},
             "openai": {"enabled": True, "model": "gpt-4o"},
             "gemini": {"enabled": False, "model": "gemini-2.5-flash"},
             "deepseek": {"enabled": False, "model": "deepseek-chat"},
@@ -166,7 +166,7 @@ def test_description_pass_honours_selected_provider():
     shots = [{"shot_id": "1a", "scene": "The morning sun rose over the ancient temple."}]
 
     class MockAnthropic(BaseLLMProvider):
-        model = "claude-sonnet-4"
+        model = "claude-sonnet-5"
         def complete(self, *args, **kwargs): return {}
         def complete_text(self, *args, **kwargs):
             return "1. Warm sunlight illuminates the stone columns of a mountaintop temple."
@@ -268,3 +268,142 @@ def test_provider_test_diagnostics():
         res_200 = run_provider_test("openai", api_key="sk-valid")
         assert res_200["status"] == "ok"
         assert res_200["message"] == "working"
+
+# ---------------------------------------------------------------------------
+# Regressions for four faults found reviewing the first pass of this feature.
+# ---------------------------------------------------------------------------
+
+_CHAIN_SETTINGS = {
+    "prompt_writer_mode": "auto",
+    "prompt_writer_providers": {
+        "anthropic": {"enabled": True, "model": "claude-sonnet-5"},
+        "openai": {"enabled": True, "model": "gpt-4o"},
+        "gemini": {"enabled": False, "model": "gemini-2.5-flash"},
+        "deepseek": {"enabled": False, "model": "deepseek-chat"},
+    },
+    "anthropic_api_key": "sk-ant-x",
+    "openai_api_key": "sk-oa-x",
+}
+
+
+def test_automatic_identity_names_the_chain_not_a_hardcoded_gemini():
+    """
+    Automatic has no single model. Reading `.model` off it found nothing and
+    fell back to "gemini-2.5-flash", so every description cached under that name
+    whichever provider had actually answered.
+    """
+    auto = AutomaticLLMProvider(settings=_CHAIN_SETTINGS)
+    prov_key, model = auto.identity()
+
+    assert prov_key == "auto"
+    assert model == "anthropic:claude-sonnet-5>openai:gpt-4o"
+    assert "gemini" not in model, "Automatic still reports a provider that is switched off"
+
+
+def test_changing_the_chain_changes_the_description_cache_key():
+    """A different chain must not be served the previous chain's descriptions."""
+    scene = "The army stood motionless on the ridge at dawn."
+
+    both = AutomaticLLMProvider(settings=_CHAIN_SETTINGS).identity()
+
+    openai_only = dict(_CHAIN_SETTINGS)
+    openai_only["prompt_writer_providers"] = dict(_CHAIN_SETTINGS["prompt_writer_providers"])
+    openai_only["prompt_writer_providers"]["anthropic"] = {"enabled": False, "model": "claude-sonnet-5"}
+    one = AutomaticLLMProvider(settings=openai_only).identity()
+
+    remodelled = dict(_CHAIN_SETTINGS)
+    remodelled["prompt_writer_providers"] = dict(_CHAIN_SETTINGS["prompt_writer_providers"])
+    remodelled["prompt_writer_providers"]["openai"] = {"enabled": True, "model": "gpt-4o-mini"}
+    other_model = AutomaticLLMProvider(settings=remodelled).identity()
+
+    keys = {
+        _scene_hash(scene, provider=both[0], model=both[1]),
+        _scene_hash(scene, provider=one[0], model=one[1]),
+        _scene_hash(scene, provider=other_model[0], model=other_model[1]),
+    }
+    assert len(keys) == 3, "two different chains share one cache key"
+
+
+def test_a_single_provider_still_keys_on_its_own_model():
+    """The single-provider key is unchanged — same writer, same text, reusable."""
+    assert GeminiProvider(api_key="k", model="gemini-2.5-flash").identity() == (
+        "gemini", "gemini-2.5-flash")
+    assert AnthropicProvider(api_key="k", model="claude-sonnet-5").identity() == (
+        "anthropic", "claude-sonnet-5")
+    assert OpenAIProvider(api_key="k", model="gpt-4o").identity() == ("openai", "gpt-4o")
+    assert DeepSeekProvider(api_key="k", model="deepseek-chat").identity() == (
+        "deepseek", "deepseek-chat")
+
+
+def test_gemini_reaches_the_model_through_the_provider_seam():
+    """
+    Gemini took a private HTTP path inside shot_description, so the one provider
+    writing every prompt was the one the seam did not cover.
+    """
+    import pipeline.shot_description as sd
+    sd._MEMORY_CACHE.clear()
+
+    seen = {}
+
+    def _spy(self, system, user="", max_tokens=2048):
+        seen["called"] = True
+        seen["model"] = self.model
+        return "1. A hall of bowed figures beneath a shaft of pale light"
+
+    shots = [{"shot_id": "1a", "scene": "The hall fell silent as the envoy entered."}]
+    with patch.object(GeminiProvider, "complete_text", _spy),          patch.object(sd, "_load_disk_cache", return_value={}),          patch.object(sd, "_save_disk_cache"):
+        res = describe_shots(shots, provider=GeminiProvider(api_key="k", model="gemini-2.5-flash"))
+
+    assert seen.get("called") is True, "Gemini bypassed the provider seam"
+    assert res["1a"].startswith("A hall of bowed figures")
+
+
+def test_a_dead_provider_reaches_the_ui_instead_of_stderr():
+    """
+    A 402 was classified, written to stderr where no user looks, and dropped
+    silently to keyword planning. That is how a dead key went unnoticed.
+    """
+    import pipeline.shot_description as sd
+    sd._MEMORY_CACHE.clear()
+    clear_provider_status()
+
+    def _dead(self, system, user="", max_tokens=2048):
+        raise urllib.error.HTTPError("https://x", 402, "Payment Required", {}, BytesIO(b"no credit"))
+
+    shots = [{"shot_id": "1a", "scene": "A refused batch must leave no description behind."}]
+    with patch.object(GeminiProvider, "complete_text", _dead),          patch.object(sd, "_load_disk_cache", return_value={}),          patch.object(sd, "_save_disk_cache"):
+        res = describe_shots(shots, provider=GeminiProvider(api_key="k", model="gemini-2.5-flash"))
+
+    assert res == {}, "a refused request must not invent descriptions"
+    status = get_last_provider_status()
+    assert status["status"] == "error"
+    assert "Google" in status["message"]
+    assert "402 Payment Required" in status["message"]
+
+
+def test_automatic_keeps_the_documented_order_whatever_the_settings_list():
+    """
+    The order was derived from which keys happened to be present, so a settings
+    file naming only DeepSeek tried the provider known to be dead first.
+    """
+    keys = {"anthropic_api_key": "a", "openai_api_key": "o",
+            "deepseek_api_key": "d", "google_api_key": "g"}
+    on = {"enabled": True}
+
+    def chain(cfg):
+        s = {"prompt_writer_mode": "auto", "prompt_writer_providers": cfg}
+        s.update(keys)
+        return [c[0] for c in AutomaticLLMProvider(settings=s)._get_enabled_chain()]
+
+    assert chain({"anthropic": on, "openai": on, "gemini": on, "deepseek": on}) == [
+        "anthropic", "openai", "gemini", "deepseek"]
+    assert chain({"deepseek": on, "gemini": on, "openai": on, "anthropic": on}) == [
+        "anthropic", "openai", "gemini", "deepseek"]
+    assert chain({"deepseek": on})[0] != "deepseek", "the dead provider is tried first"
+
+
+def test_the_default_anthropic_model_is_a_real_model_id():
+    """`claude-sonnet-4` 404s. A wrong default reads as a dead provider."""
+    from pipeline.llm.factory import DEFAULT_MODELS
+    assert DEFAULT_MODELS["anthropic"] == "claude-sonnet-5"
+    assert get_single_llm_provider("anthropic", api_key="k").model == "claude-sonnet-5"

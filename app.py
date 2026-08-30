@@ -85,7 +85,7 @@ class Api:
 
         safe.setdefault("prompt_writer_mode", self._settings.get("prompt_writer_mode", "auto"))
         safe.setdefault("prompt_writer_providers", self._settings.get("prompt_writer_providers", {
-            "anthropic": {"enabled": bool(self._settings.get("anthropic_api_key")), "model": "claude-sonnet-4"},
+            "anthropic": {"enabled": bool(self._settings.get("anthropic_api_key")), "model": "claude-sonnet-5"},
             "openai": {"enabled": bool(self._settings.get("openai_api_key")), "model": "gpt-4o"},
             "gemini": {"enabled": True, "model": "gemini-2.5-flash"},
             "deepseek": {"enabled": False, "model": "deepseek-chat"},

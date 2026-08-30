@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pipeline.shot_description as shot_desc_module
 from pipeline.shot_description import describe_shots, _scene_hash, _build_batch_prompt
+from pipeline.llm.gemini import GeminiProvider
 
 
 SCRIPT = [
@@ -106,11 +107,13 @@ def test_the_script_reaches_the_model_through_describe_shots():
     shots = [{"shot_id": "4a", "scene": SCRIPT[3]}]
     captured = {}
 
-    def _capture(prompt_text, api_key, model="gemini-2.5-flash"):
-        captured["prompt"] = prompt_text
+    def _capture(self, system, user="", max_tokens=2048):
+        captured["prompt"] = system
         return "1. A hall of bowed figures beneath a shaft of pale light"
 
-    with patch.object(shot_desc_module, "_call_gemini_batch", side_effect=_capture):
+    # Gemini reaches the model through the provider seam now, not through a
+    # private HTTP call inside this module. Same assertion, one layer over.
+    with patch.object(GeminiProvider, "complete_text", _capture):
         res = describe_shots(shots, api_key="dummy", series_cfg=CFG, script_context=SCRIPT)
 
     assert res["4a"] == "A hall of bowed figures beneath a shaft of pale light"

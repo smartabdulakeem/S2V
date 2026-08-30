@@ -29,7 +29,7 @@ PROVIDER_DISPLAY_NAMES = {
 }
 
 DEFAULT_MODELS = {
-    "anthropic": "claude-sonnet-4",
+    "anthropic": "claude-sonnet-5",
     "openai": "gpt-4o",
     "gemini": "gemini-2.5-flash",
     "deepseek": "deepseek-chat"
@@ -110,11 +110,13 @@ class AutomaticLLMProvider(BaseLLMProvider):
         chain = []
         providers_cfg = self.settings.get("prompt_writer_providers") or {}
 
-        # Look in order
-        configured_keys = list(providers_cfg.keys())
-        order = [k for k in DEFAULT_PROVIDERS_ORDER if k in configured_keys] + [k for k in DEFAULT_PROVIDERS_ORDER if k not in configured_keys]
-        # Also include any custom keys from providers_cfg in order
-        for k in configured_keys:
+        # The documented order, always, whatever the settings file happens to
+        # list. Deriving the order from which keys were present put whichever
+        # provider was configured first at the head of the chain — a settings
+        # file naming only DeepSeek tried the one provider known to be dead
+        # before it tried anything else. Unknown keys follow, in their own order.
+        order = list(DEFAULT_PROVIDERS_ORDER)
+        for k in providers_cfg.keys():
             if k not in order:
                 order.append(k)
 
@@ -139,6 +141,21 @@ class AutomaticLLMProvider(BaseLLMProvider):
             except Exception:
                 continue
         return chain
+
+    def identity(self) -> tuple:
+        """
+        ("auto", "<the whole chain>") — Automatic has no single model.
+
+        Reading `.model` off this class found nothing and fell back to a
+        hardcoded "gemini-2.5-flash", so every description cached under the same
+        name no matter which provider wrote it, and a failover served the other
+        model's answer straight back. The chain is the honest identity: change a
+        provider, its model, or its switch, and the key changes with it.
+        """
+        chain = self._get_enabled_chain()
+        if not chain:
+            return "auto", "none"
+        return "auto", ">".join(f"{k}:{getattr(p, 'model', '')}" for k, _, p in chain)
 
     def complete(
         self,
@@ -224,24 +241,28 @@ def get_single_llm_provider(
     st = settings if settings is not None else load_settings()
     prov = (provider_name or "").lower().strip()
 
+    p_cfg = (st.get("prompt_writer_providers") or {}).get(prov, {})
+
     if prov in ("gemini", "google"):
         key = api_key if api_key is not None else (st.get("google_api_key") or os.getenv("GOOGLE_API_KEY", ""))
-        model_name = model or st.get("google_model") or st.get("gemini_model") or DEFAULT_MODELS["gemini"]
+        model_name = model or st.get("google_model") or st.get("gemini_model") or p_cfg.get("model") or DEFAULT_MODELS["gemini"]
         return GeminiProvider(api_key=key, model=model_name)
 
     elif prov in ("anthropic", "claude"):
         key = api_key if api_key is not None else (st.get("anthropic_api_key") or os.getenv("ANTHROPIC_API_KEY", ""))
-        model_name = model or st.get("anthropic_model") or DEFAULT_MODELS["anthropic"]
-        return AnthropicProvider(api_key=key, model=model_name)
+        model_name = model or st.get("anthropic_model") or p_cfg.get("model") or DEFAULT_MODELS["anthropic"]
+        base_url = st.get("anthropic_base_url") or st.get("custom_base_url") or st.get("llm_base_url") or os.getenv("ANTHROPIC_BASE_URL")
+        return AnthropicProvider(api_key=key, model=model_name, base_url=base_url)
 
     elif prov in ("openai", "gpt"):
         key = api_key if api_key is not None else (st.get("openai_api_key") or os.getenv("OPENAI_API_KEY", ""))
-        model_name = model or st.get("openai_model") or DEFAULT_MODELS["openai"]
-        return OpenAIProvider(api_key=key, model=model_name)
+        model_name = model or st.get("openai_model") or p_cfg.get("model") or DEFAULT_MODELS["openai"]
+        base_url = st.get("openai_base_url") or st.get("custom_base_url") or st.get("llm_base_url") or os.getenv("OPENAI_BASE_URL")
+        return OpenAIProvider(api_key=key, model=model_name, base_url=base_url)
 
     elif prov == "deepseek":
         key = api_key if api_key is not None else (st.get("deepseek_api_key") or os.getenv("DEEPSEEK_API_KEY", ""))
-        model_name = model or st.get("deepseek_model") or DEFAULT_MODELS["deepseek"]
+        model_name = model or st.get("deepseek_model") or p_cfg.get("model") or DEFAULT_MODELS["deepseek"]
         return DeepSeekProvider(api_key=key, model=model_name)
 
     else:

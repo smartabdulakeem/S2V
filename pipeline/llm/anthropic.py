@@ -5,10 +5,14 @@ from typing import Optional, Dict, Any
 from pipeline.llm.interface import BaseLLMProvider
 
 class AnthropicProvider(BaseLLMProvider):
-    def __init__(self, api_key: str, model: str = "claude-sonnet-5"):
+    def __init__(self, api_key: str, model: str = "claude-sonnet-5", base_url: Optional[str] = None):
         self.api_key = api_key
         self.model = model
-        self.endpoint = "https://api.anthropic.com/v1/messages"
+        if base_url and str(base_url).strip():
+            b = str(base_url).strip().rstrip("/")
+            self.endpoint = f"{b}/messages" if not b.endswith("/messages") else b
+        else:
+            self.endpoint = "https://api.anthropic.com/v1/messages"
 
     def complete(
         self,
@@ -19,8 +23,10 @@ class AnthropicProvider(BaseLLMProvider):
     ) -> Dict[str, Any]:
         headers = {
             "x-api-key": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
             "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
+            "content-type": "application/json",
+            "User-Agent": "SmartStudio/1.0"
         }
 
         payload: Dict[str, Any] = {
@@ -83,8 +89,10 @@ class AnthropicProvider(BaseLLMProvider):
     ) -> str:
         headers = {
             "x-api-key": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
             "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
+            "content-type": "application/json",
+            "User-Agent": "SmartStudio/1.0"
         }
         payload: Dict[str, Any] = {
             "model": self.model,

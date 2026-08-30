@@ -3,6 +3,7 @@ import urllib.request
 import urllib.error
 from typing import Optional, Dict, Any
 from pipeline.llm.interface import BaseLLMProvider
+from pipeline.llm.http import urlopen_with_backoff
 
 class GeminiProvider(BaseLLMProvider):
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
@@ -43,10 +44,9 @@ class GeminiProvider(BaseLLMProvider):
             method="POST"
         )
 
-        with urllib.request.urlopen(req, timeout=60) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(raw_text)
+        res_data = json.loads(urlopen_with_backoff(req, timeout=60).decode("utf-8"))
+        raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+        return json.loads(raw_text)
 
     def complete_text(
         self,
@@ -73,13 +73,13 @@ class GeminiProvider(BaseLLMProvider):
             headers=headers,
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=60) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            candidates = res_data.get("candidates") or []
-            if not candidates:
-                return ""
-            parts = (candidates[0].get("content") or {}).get("parts") or []
-            if not parts:
-                return ""
-            return parts[0].get("text", "")
+        raw = urlopen_with_backoff(req, timeout=60)
+        res_data = json.loads(raw.decode("utf-8")) if raw else {}
+        candidates = res_data.get("candidates") or []
+        if not candidates:
+            return ""
+        parts = (candidates[0].get("content") or {}).get("parts") or []
+        if not parts:
+            return ""
+        return parts[0].get("text", "")
 
