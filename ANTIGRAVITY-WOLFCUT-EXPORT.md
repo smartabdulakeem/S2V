@@ -2,11 +2,11 @@
 
 Hand this whole file to Antigravity.
 
+**Read `ANTIGRAVITY-RULES.md` first — its standing rules apply to this brief.**
+
 **Repo:** `C:\Users\HomePC\Documents\GitHub\Smart-Studio`
-**Branch:** `feat/image-budget` — stay on it. **Commit** when done. **Do not push.**
-**Never** run `git add -A` — it stages ~816 MB including two 310 MB ONNX models.
-**Never** run `git checkout -- library/index.npz`. If it shows as modified, **commit it**.
-**Do not work in a git worktree** — no gitignored assets, so render tests always fail there.
+**Branch:** `feat/image-budget` — stay on it. **Do not commit. Do not push. Stop when the report is
+written.** Claude reviews the working tree, fixes what is wrong, and commits.
 
 ---
 
