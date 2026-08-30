@@ -106,6 +106,7 @@ broken was the *content* of the prompts, never their placement.
 
 | Item | Where | State |
 |---|---|---|
+| **Manual image route** | `ANTIGRAVITY-MANUAL-IMAGES.md` | Briefed 30 Aug. **Do this first** — no API key needed |
 | **Prompt-writer providers** | `ANTIGRAVITY-PROMPT-PROVIDERS.md` | Briefed 30 Aug, not started |
 
 That brief: bring his own OpenAI / Anthropic / Google / DeepSeek keys, a switch on each, **Automatic
@@ -123,7 +124,24 @@ images elsewhere → drops them in a folder → app places them. Most of this ex
   shot *i* and matching folder images by leading number, using the prompt **verbatim**
 - the Script screen already has a working-folder picker
 
-Two known defects in that export, not yet briefed:
+### The bug that breaks it, measured
+
+The moment he reduces the image count, `plan_image_budget` merges segments into runs and marks the
+non-owning shots with `share_with`. `apply_external_prompts` does not know that: it binds prompt *i*
+to `all_shots[i]`, shared shots included.
+
+Measured on 60 segments of his own script, asking for 12 images:
+
+```
+12 distinct images, 60 shots, 48 sharing
+pasted 12 prompts -> 10 landed on shared shots and were ignored
+                     10 of the 12 real pictures got no prompt at all
+                     2 of 12 landed correctly
+```
+
+He predicted this before it was tested. It is Job 1 of `ANTIGRAVITY-MANUAL-IMAGES.md`.
+
+Two further defects in the export, same brief:
 
 - **every line carries the same framing** — `compose_gap_prompt` is called at `visuals.py` ~902
   without `shot_position`, so the four-entry cycle always returns entry one
