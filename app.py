@@ -1026,7 +1026,8 @@ class Api:
         voice_dialect: str = "",
         narrative_tone: str = "",
         speaker_mode: str = "single",
-        motion_style: str = ""
+        motion_style: str = "",
+        series_slug: str = ""
     ) -> dict:
         """
         Start plain-text parsing using the AI storyboard planner in a background thread.
@@ -1065,7 +1066,8 @@ class Api:
                     voice_dialect=voice_dialect,
                     narrative_tone=narrative_tone,
                     speaker_mode=speaker_mode,
-                    motion_style=motion_style
+                    motion_style=motion_style,
+                    series_slug=series_slug
                 )
 
                 if not res.get("success"):

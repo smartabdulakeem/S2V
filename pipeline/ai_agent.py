@@ -43,7 +43,8 @@ def generate_storyboard_plan(
     voice_dialect: str = "",
     narrative_tone: str = "",
     speaker_mode: str = "single",
-    motion_style: str = ""
+    motion_style: str = "",
+    series_slug: str = ""
 ) -> dict:
     """
     Parse a plain script using AI (DeepSeek + Gemini Oversight, falling back to Gemini-only) into a storyboard.
@@ -92,7 +93,8 @@ def generate_storyboard_plan(
                 deepseek_model=deepseek_model,
                 voice_dialect=voice_dialect,
                 narrative_tone=narrative_tone,
-                speaker_mode=speaker_mode
+                speaker_mode=speaker_mode,
+                **({"series_slug": series_slug} if series_slug else {})
             )
             script_dict["project"]["aspect_ratio"] = aspect_ratio
             script_dict["project"]["voice_dialect"] = voice_dialect
@@ -101,6 +103,8 @@ def generate_storyboard_plan(
             # The camera moves are the motion style's to deal out, not the
             # planner's: a cached plan carries the moves it was first given.
             script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+            if series_slug:
+                script_dict["project"]["series_slug"] = series_slug
             assign_effects(script_dict, motion_style)
             
             # Initialize project sourcing workspace (folders, placeholders, image_prompts.txt)
@@ -130,6 +134,8 @@ def generate_storyboard_plan(
             # The camera moves are the motion style's to deal out, not the
             # planner's: a cached plan carries the moves it was first given.
             script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+            if series_slug:
+                script_dict["project"]["series_slug"] = series_slug
             assign_effects(script_dict, motion_style)
             for s in script_dict["segments"]:
                 s["voice_steering"] = ai_guideline

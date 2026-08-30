@@ -1351,7 +1351,8 @@ async function planStoryboard() {
       "",
       tone,
       "single",
-      motionStyle
+      motionStyle,
+      seriesSlug
     );
 
     if (res.started) {
