@@ -3,7 +3,7 @@
 Everything raised and not finished. Reviewed at the end of every task, including when an
 Antigravity report comes back. Newest decisions at the top of each section.
 
-Last reviewed: 30 Aug 2026
+Last reviewed: 30 Aug 2026 (evening)
 
 ---
 
@@ -39,6 +39,10 @@ If the file shows as modified after a test run, **commit it, do not restore it.*
 ---
 
 ## In flight
+
+| Item | Owner | State |
+|---|---|---|
+| **Prompt-writer providers** — `ANTIGRAVITY-PROMPT-PROVIDERS.md` | Antigravity | Briefed 30 Aug |
 
 | Item | Owner | State |
 |---|---|---|
