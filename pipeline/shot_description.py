@@ -67,15 +67,29 @@ BANNED_PATTERN = re.compile(
 )
 
 
-def _scene_hash(scene: str, series_slug: str = "", prompt_recipe: str = "", era_block: str = "") -> str:
-    """Stable hash of normalized scene text and niche configuration."""
+def _script_fingerprint(script_context) -> str:
+    """A stable short hash of the whole narration this shot sits inside."""
+    if not script_context:
+        return ""
+    joined = " ".join(" ".join((line or "").split()) for line in script_context)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
+
+
+def _scene_hash(scene: str, series_slug: str = "", prompt_recipe: str = "",
+                era_block: str = "", script_context=None, model: str = "") -> str:
+    """Stable hash of the scene, the niche configuration, and the film it is in."""
     cleaned_scene = " ".join((scene or "").strip().split())
     recipe_hash = hashlib.sha256((prompt_recipe or "").strip().encode("utf-8")).hexdigest()[:12] if prompt_recipe else ""
     slug_part = (series_slug or "").strip().lower()
     era_part = " ".join((era_block or "").strip().split())
-    # v3: a niche's recipe now governs the instruction, so the same scene under
-    # the same recipe yields different text than it did under the built-in brief.
-    raw = f"v3|{slug_part}|{recipe_hash}|{era_part}|{cleaned_scene}"
+    # v3: a niche's recipe governs the instruction.
+    # v4: the whole script travels with the batch, so the same sentence inside a
+    #     different film is a different picture and must not be served from cache.
+    # v5: the model is part of the key. Without it, switching models served the
+    #     previous model's answer back and the two looked identical — which is
+    #     exactly what happened when flash and pro were first compared.
+    raw = (f"v5|{slug_part}|{recipe_hash}|{era_part}|{_script_fingerprint(script_context)}"
+           f"|{(model or '').strip()}|{cleaned_scene}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -123,6 +137,67 @@ def _build_instruction(series_cfg: Optional[dict] = None) -> str:
 
     context_section = "\n".join(context_parts)
     return f"{INSTRUCTION}\n\nProject Context:\n{context_section}"
+
+
+#: How much narration is worth sending. Every script this app has produced fits
+#: inside this with room to spare; a runaway transcript is trimmed rather than
+#: allowed to blow up the request.
+MAX_SCRIPT_CONTEXT_CHARS = 60000
+
+
+def _build_batch_prompt(instruction: str, batch: list, script_context=None) -> str:
+    """
+    The text sent for one batch of shots.
+
+    A bare narration fragment is not enough to illustrate. "Before Adam ever
+    walked upon the earth, something had already happened." names no place, no
+    person and no event, so a model asked to picture it can only reach for a
+    vague landscape. Given the film around it, the same line is placeable: the
+    lines that follow say the earth was already inhabited and that there had
+    been bloodshed.
+
+    So the whole narration goes with every batch, and each excerpt is tagged
+    with its line number inside it.
+    """
+    if not script_context:
+        lines = [instruction, ""]
+        for idx, s in enumerate(batch, 1):
+            lines.append(f"{idx}. {s.get('scene', '').strip()}")
+        return "\n".join(lines)
+
+    numbered, total = [], 0
+    for i, line in enumerate(script_context, 1):
+        text = " ".join((line or "").split())
+        if not text:
+            continue
+        total += len(text)
+        if total > MAX_SCRIPT_CONTEXT_CHARS:
+            numbered.append("[...script trimmed...]")
+            break
+        numbered.append(f"[{i}] {text}")
+
+    position = {}
+    for i, line in enumerate(script_context, 1):
+        position.setdefault(" ".join((line or "").split()), i)
+
+    lines = [
+        instruction,
+        "",
+        "THE FULL SCRIPT",
+        "Read all of it before you write anything. Each excerpt below is one",
+        "moment inside this film. Place the moment in the story first — what has",
+        "just happened, what is about to — and describe that moment, not the",
+        "sentence on its own.",
+        "",
+    ]
+    lines.extend(numbered)
+    lines.extend(["", "THE MOMENTS TO DESCRIBE", ""])
+    for idx, s in enumerate(batch, 1):
+        scene = " ".join((s.get("scene") or "").split())
+        at = position.get(scene)
+        where = f" (script line {at})" if at else ""
+        lines.append(f"{idx}.{where} {scene}")
+    return "\n".join(lines)
 
 
 def _load_disk_cache() -> Dict[str, str]:
@@ -227,7 +302,8 @@ def _call_gemini_batch(prompt_text: str, api_key: str, model: str = "gemini-2.5-
     return parts[0].get("text", "")
 
 
-def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash", series_cfg: Optional[dict] = None) -> dict:
+def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash",
+                   series_cfg: Optional[dict] = None, script_context=None) -> dict:
     """
     One visual sentence per shot, keyed by shot_id.
 
@@ -259,7 +335,8 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash", s
         if not shot_id or not scene:
             continue
 
-        h = _scene_hash(scene, series_slug=series_slug, prompt_recipe=prompt_recipe, era_block=era_block)
+        h = _scene_hash(scene, series_slug=series_slug, prompt_recipe=prompt_recipe,
+                        era_block=era_block, script_context=script_context, model=model)
         existing_desc = shot.get("visual_description")
         if existing_desc:
             if has_recipe or is_valid_description(existing_desc):
@@ -285,10 +362,7 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash", s
 
     for batch_start in range(0, len(uncached_shots), BATCH_SIZE):
         batch = uncached_shots[batch_start:batch_start + BATCH_SIZE]
-        prompt_lines = [instruction_prompt, ""]
-        for idx, s in enumerate(batch, 1):
-            prompt_lines.append(f"{idx}. {s.get('scene', '').strip()}")
-        prompt_text = "\n".join(prompt_lines)
+        prompt_text = _build_batch_prompt(instruction_prompt, batch, script_context=script_context)
 
         try:
             reply_text = _call_gemini_batch(prompt_text, api_key=api_key.strip(), model=model)
@@ -316,7 +390,9 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash", s
                     if is_valid_description(sentence, allow_rich=has_recipe):
                         clean_sentence = sentence.rstrip(" .")
                         results[s_id] = clean_sentence
-                        _MEMORY_CACHE[_scene_hash(s_scene, series_slug=series_slug, prompt_recipe=prompt_recipe, era_block=era_block)] = clean_sentence
+                        _MEMORY_CACHE[_scene_hash(s_scene, series_slug=series_slug,
+                                                  prompt_recipe=prompt_recipe, era_block=era_block,
+                                                  script_context=script_context, model=model)] = clean_sentence
                         cache_updated = True
         except urllib.error.HTTPError as err:
             sys.stderr.write(f"[shot_description] HTTP error {err.code} calling Gemini: {err}, falling back to query\n")

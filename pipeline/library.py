@@ -2151,7 +2151,14 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     "scene": scene_text,
                     "visual_description": s.get("visual_description") or (s.get("_shot") and s["_shot"].get("visual_description")),
                 })
-            descriptions = describe_shots(shots_for_desc, api_key=google_key, series_cfg=series_cfg)
+            # The whole narration, in order, so a shot can be placed in its film
+            # before it is described. A lone clause is not enough to illustrate.
+            script_context = [
+                (seg.get("narration") or "").strip()
+                for seg in (script_data.get("segments") or [])
+            ]
+            descriptions = describe_shots(shots_for_desc, api_key=google_key,
+                                          series_cfg=series_cfg, script_context=script_context)
             for s in all_shots:
                 if s["shot_id"] in descriptions:
                     s["visual_description"] = descriptions[s["shot_id"]]

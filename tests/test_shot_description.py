@@ -176,7 +176,9 @@ def test_4_cache_skips_unchanged_scene():
     ]
 
     # Pre-populate memory cache for shot 2's scene
-    shot_desc_module._MEMORY_CACHE[_scene_hash(shots[1]["scene"])] = "Horses galloping in formation across a dry riverbed"
+    shot_desc_module._MEMORY_CACHE[
+        _scene_hash(shots[1]["scene"], model="gemini-2.5-flash")
+    ] = "Horses galloping in formation across a dry riverbed"
 
     mock_urlopen = MagicMock()
     with patch("urllib.request.urlopen", mock_urlopen):
@@ -304,12 +306,14 @@ def test_8_same_narration_under_different_niches_produces_different_cache_entrie
         series_slug=cfg_islamic["series_slug"],
         prompt_recipe=cfg_islamic["prompt_recipe"],
         era_block=cfg_islamic["era_block"],
+        model="gemini-2.5-flash",
     )
     hash_space = _scene_hash(
         scene,
         series_slug=cfg_space["series_slug"],
         prompt_recipe=cfg_space["prompt_recipe"],
         era_block=cfg_space["era_block"],
+        model="gemini-2.5-flash",
     )
 
     assert hash_islamic != hash_space
