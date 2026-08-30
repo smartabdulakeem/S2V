@@ -422,6 +422,8 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
                 errors = validate_series_pack(data)
                 if errors:
                     raise ValueError(f"Invalid user series pack '{slug_clean}.json': {'; '.join(errors)}")
+                if "style_presets" in data:
+                    data["style_presets_is_override"] = True
                 return data
             except Exception as e:
                 if isinstance(e, ValueError):
@@ -2140,6 +2142,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
         try:
             from pipeline.shot_description import describe_shots
             google_key = _setting("google_api_key", "")
+            series_cfg = get_series_config(series_slug=series_slug, project_title=title)
             shots_for_desc = []
             for s in all_shots:
                 scene_text = s.get("narration") or (s.get("_shot") and s["_shot"].get("scene")) or ""
@@ -2148,7 +2151,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                     "scene": scene_text,
                     "visual_description": s.get("visual_description") or (s.get("_shot") and s["_shot"].get("visual_description")),
                 })
-            descriptions = describe_shots(shots_for_desc, api_key=google_key)
+            descriptions = describe_shots(shots_for_desc, api_key=google_key, series_cfg=series_cfg)
             for s in all_shots:
                 if s["shot_id"] in descriptions:
                     s["visual_description"] = descriptions[s["shot_id"]]

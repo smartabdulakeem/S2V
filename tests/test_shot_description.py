@@ -1,4 +1,4 @@
-﻿"""
+"""
 tests/test_shot_description.py
 
 Unit tests for AI-powered visual shot descriptions with mocked HTTP layer.
@@ -244,3 +244,174 @@ def test_6_compose_gap_prompt_subject_slot():
         project_title="Islamic History",
     )
     assert shot_query in prompt_empty_desc
+
+
+def test_7_recipe_authored_long_cinematic_description_survives():
+    """
+    When the niche has a non-empty prompt_recipe, an existing visual_description on a shot
+    survives untouched even if it is over 40 words and contains banned words like 'cinematic'.
+    """
+    long_cinematic_desc = (
+        "A cinematic panoramic vista showing ancient warriors in ornate armor marching across "
+        "the desert dunes under a dramatic sunset, cinematic lighting casting deep shadows over "
+        "the caravan, highly detailed documentary photography style with magnificent atmospheric "
+        "haze and historical accuracy throughout the majestic ancient landscape."
+    )
+    assert len(long_cinematic_desc.split()) > 40
+    assert "cinematic" in long_cinematic_desc.lower()
+
+    shots = [{
+        "shot_id": "shot_recipe_1",
+        "scene": "The soldiers crossed the vast empty quarter.",
+        "visual_description": long_cinematic_desc,
+    }]
+
+    series_cfg = {
+        "series_slug": "pre_islamic_prophetic___global_history",
+        "prompt_recipe": "Produce epic historical documentary descriptions emphasizing authenticity.",
+        "era_block": "Ancient Near East and Arabia",
+    }
+
+    mock_urlopen = MagicMock()
+    with patch("urllib.request.urlopen", mock_urlopen):
+        result = describe_shots(shots, api_key="dummy-key", series_cfg=series_cfg)
+
+    # Must NOT call API and must preserve the recipe's exact description
+    assert mock_urlopen.call_count == 0
+    assert result["shot_recipe_1"] == long_cinematic_desc.strip().rstrip(".")
+
+
+def test_8_same_narration_under_different_niches_produces_different_cache_entries():
+    """
+    The same scene text under two different niches produces two distinct cache keys,
+    verifying that the cache key is niche-aware.
+    """
+    scene = "A lone horseman approaches the gates of the city at dusk"
+
+    cfg_islamic = {
+        "series_slug": "islamic_history",
+        "prompt_recipe": "7th century Arabian historical visuals",
+        "era_block": "7th century Arabian Peninsula",
+    }
+    cfg_space = {
+        "series_slug": "space_science",
+        "prompt_recipe": "Deep space scientific visualization",
+        "era_block": "Modern space exploration",
+    }
+
+    hash_islamic = _scene_hash(
+        scene,
+        series_slug=cfg_islamic["series_slug"],
+        prompt_recipe=cfg_islamic["prompt_recipe"],
+        era_block=cfg_islamic["era_block"],
+    )
+    hash_space = _scene_hash(
+        scene,
+        series_slug=cfg_space["series_slug"],
+        prompt_recipe=cfg_space["prompt_recipe"],
+        era_block=cfg_space["era_block"],
+    )
+
+    assert hash_islamic != hash_space
+    assert len(hash_islamic) == 16
+    assert len(hash_space) == 16
+
+    # Verify memory cache differentiation
+    shot_desc_module._MEMORY_CACHE[hash_islamic] = "A rider in wool robes dismounting before mudbrick walls"
+    shot_desc_module._MEMORY_CACHE[hash_space] = "An astronaut walking toward an airlock module"
+
+    shots = [{"shot_id": "shot_s", "scene": scene}]
+    res_islamic = describe_shots(shots, api_key="dummy", series_cfg=cfg_islamic)
+    res_space = describe_shots(shots, api_key="dummy", series_cfg=cfg_space)
+
+    assert res_islamic["shot_s"] == "A rider in wool robes dismounting before mudbrick walls"
+    assert res_space["shot_s"] == "An astronaut walking toward an airlock module"
+
+
+def test_9_editing_prompt_recipe_invalidates_cache():
+    """
+    Changing the niche's prompt_recipe produces a new hash, invalidating old cached descriptions.
+    """
+    scene = "The scholar writes on parchment in a candlelit room"
+    h1 = _scene_hash(scene, series_slug="biography", prompt_recipe="Recipe version A", era_block="")
+    h2 = _scene_hash(scene, series_slug="biography", prompt_recipe="Recipe version B with edits", era_block="")
+
+    assert h1 != h2
+
+
+def test_10_series_cfg_none_backward_compatible():
+    """
+    Passing series_cfg=None produces identical behavior and hashes as default legacy calls.
+    """
+    scene = "A caravan passing through mountain pass"
+    h_none = _scene_hash(scene)
+    h_explicit_empty = _scene_hash(scene, series_slug="", prompt_recipe="", era_block="")
+    assert h_none == h_explicit_empty
+
+    shots = [{
+        "shot_id": "shot_leg",
+        "scene": scene,
+        "visual_description": "A train of camels traversing a rocky mountain defile",
+    }]
+    result = describe_shots(shots, api_key="dummy", series_cfg=None)
+    assert result["shot_leg"] == "A train of camels traversing a rocky mountain defile"
+
+
+def test_11_niche_with_no_recipe_still_generates_and_enforces_gates():
+    """
+    When a niche has no recipe, newly generated descriptions still undergo the 40-word and banned-word gates.
+    """
+    shots = [
+        {"shot_id": "shot_banned", "scene": "Narration with banned word"},
+        {"shot_id": "shot_ok", "scene": "Narration valid"},
+    ]
+    reply = """
+    1. A cinematic wide view of the ancient valley
+    2. A line of pack mules resting near an oasis spring
+    """
+    mock_resp = _create_mock_response(_make_gemini_response(reply))
+
+    series_cfg_no_recipe = {
+        "series_slug": "nature_wildlife",
+        "prompt_recipe": "",
+        "era_block": "",
+    }
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        result = describe_shots(shots, api_key="dummy-key", series_cfg=series_cfg_no_recipe)
+
+    assert "shot_banned" not in result
+    assert result["shot_ok"] == "A line of pack mules resting near an oasis spring"
+
+
+def test_12_user_created_niche_style_presets_is_override():
+    """
+    A user-created niche sets style_presets_is_override=True so deleted universal types stay deleted.
+    """
+    from pipeline.library import (
+        create_user_niche,
+        delete_user_niche,
+        get_series_config,
+        save_series_override,
+        style_presets_for,
+    )
+    user_slug = "test_custom_desc_niche"
+    try:
+        create_user_niche(user_slug, "Test Custom Desc Niche", base_slug="biography")
+        cfg = get_series_config(series_slug=user_slug)
+        assert cfg.get("style_presets_is_override") is True
+
+        # Delete photoreal and verify it is not re-merged
+        presets = style_presets_for(cfg)
+        assert "photoreal" in presets
+        del presets["photoreal"]
+
+        save_series_override(user_slug, {"style_presets": presets})
+        reloaded_cfg = get_series_config(series_slug=user_slug)
+        reloaded_presets = style_presets_for(reloaded_cfg)
+
+        assert "photoreal" not in reloaded_presets
+        assert reloaded_cfg.get("style_presets_is_override") is True
+    finally:
+        delete_user_niche(user_slug)
+

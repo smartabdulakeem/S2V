@@ -352,8 +352,9 @@ def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height
     # v6: prompt_override support, apply_era separation, medium/palette/era split.
     # v7: prompt_recipe support, external prompt binding, and numbered slot matching.
     # v8: empty visual_type resolves to top style preset; style_presets override whitelist.
+    # v9: visual_description in shot description pass obeys niche prompt_recipe, era, and cache.
     style_key = resolve_motion_style(motion_style)
-    raw = (f"v8|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
+    raw = (f"v9|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
            f"{default_treatment or ''}|{style_key}")
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 

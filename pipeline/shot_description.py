@@ -1,4 +1,4 @@
-﻿"""
+"""
 pipeline/shot_description.py
 
 Planning-time pass that writes one visual sentence per shot, stored on the shot
@@ -49,10 +49,41 @@ BANNED_PATTERN = re.compile(
 )
 
 
-def _scene_hash(scene: str) -> str:
-    """Stable hash of normalized scene text."""
-    cleaned = " ".join((scene or "").strip().split())
-    return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:16]
+def _scene_hash(scene: str, series_slug: str = "", prompt_recipe: str = "", era_block: str = "") -> str:
+    """Stable hash of normalized scene text and niche configuration."""
+    cleaned_scene = " ".join((scene or "").strip().split())
+    recipe_hash = hashlib.sha256((prompt_recipe or "").strip().encode("utf-8")).hexdigest()[:12] if prompt_recipe else ""
+    slug_part = (series_slug or "").strip().lower()
+    era_part = " ".join((era_block or "").strip().split())
+    raw = f"v2|{slug_part}|{recipe_hash}|{era_part}|{cleaned_scene}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _build_instruction(series_cfg: Optional[dict] = None) -> str:
+    """Construct shot designer prompt, incorporating niche era, world anchor, and recipe context if present."""
+    if not series_cfg:
+        return INSTRUCTION
+
+    context_parts = []
+    anchor = (series_cfg.get("brief_subject") or series_cfg.get("display_name") or "").strip()
+    era = (series_cfg.get("era_block") or "").strip()
+    recipe = (series_cfg.get("prompt_recipe") or "").strip()
+
+    if anchor:
+        context_parts.append(f"- Setting / Subject Anchor: {anchor}")
+    if era:
+        context_parts.append(f"- Historical Era / Period: {era}")
+    if recipe:
+        recipe_lines = [line.strip() for line in recipe.splitlines() if line.strip()]
+        recipe_lead = "\n  ".join(recipe_lines[:6])
+        if recipe_lead:
+            context_parts.append(f"- Style & Content Directives:\n  {recipe_lead}")
+
+    if not context_parts:
+        return INSTRUCTION
+
+    context_section = "\n".join(context_parts)
+    return f"{INSTRUCTION}\n\nProject Context:\n{context_section}"
 
 
 def _load_disk_cache() -> Dict[str, str]:
@@ -144,7 +175,7 @@ def _call_gemini_batch(prompt_text: str, api_key: str, model: str = "gemini-2.5-
     return parts[0].get("text", "")
 
 
-def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash") -> dict:
+def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash", series_cfg: Optional[dict] = None) -> dict:
     """
     One visual sentence per shot, keyed by shot_id.
 
@@ -161,6 +192,11 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash") -
     if not _MEMORY_CACHE:
         _MEMORY_CACHE.update(_load_disk_cache())
 
+    series_slug = (series_cfg or {}).get("series_slug", "")
+    prompt_recipe = (series_cfg or {}).get("prompt_recipe", "")
+    era_block = (series_cfg or {}).get("era_block", "")
+    has_recipe = bool((prompt_recipe or "").strip())
+
     results = {}
     uncached_shots = []
 
@@ -171,12 +207,14 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash") -
         if not shot_id or not scene:
             continue
 
-        h = _scene_hash(scene)
+        h = _scene_hash(scene, series_slug=series_slug, prompt_recipe=prompt_recipe, era_block=era_block)
         existing_desc = shot.get("visual_description")
-        if existing_desc and is_valid_description(existing_desc):
-            results[shot_id] = existing_desc.strip().rstrip(".")
-            _MEMORY_CACHE[h] = results[shot_id]
-        elif h in _MEMORY_CACHE and is_valid_description(_MEMORY_CACHE[h]):
+        if existing_desc:
+            if has_recipe or is_valid_description(existing_desc):
+                clean_desc = existing_desc.strip().rstrip(".")
+                results[shot_id] = clean_desc
+                _MEMORY_CACHE[h] = clean_desc
+        elif h in _MEMORY_CACHE and (has_recipe or is_valid_description(_MEMORY_CACHE[h])):
             results[shot_id] = _MEMORY_CACHE[h]
         else:
             uncached_shots.append(shot)
@@ -191,10 +229,11 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash") -
     # 2. Batch 20 shots per request
     BATCH_SIZE = 20
     cache_updated = False
+    instruction_prompt = _build_instruction(series_cfg)
 
     for batch_start in range(0, len(uncached_shots), BATCH_SIZE):
         batch = uncached_shots[batch_start:batch_start + BATCH_SIZE]
-        prompt_lines = [INSTRUCTION, ""]
+        prompt_lines = [instruction_prompt, ""]
         for idx, s in enumerate(batch, 1):
             prompt_lines.append(f"{idx}. {s.get('scene', '').strip()}")
         prompt_text = "\n".join(prompt_lines)
@@ -225,7 +264,7 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash") -
                     if is_valid_description(sentence):
                         clean_sentence = sentence.rstrip(" .")
                         results[s_id] = clean_sentence
-                        _MEMORY_CACHE[_scene_hash(s_scene)] = clean_sentence
+                        _MEMORY_CACHE[_scene_hash(s_scene, series_slug=series_slug, prompt_recipe=prompt_recipe, era_block=era_block)] = clean_sentence
                         cache_updated = True
         except urllib.error.HTTPError as err:
             sys.stderr.write(f"[shot_description] HTTP error {err.code} calling Gemini: {err}, falling back to query\n")

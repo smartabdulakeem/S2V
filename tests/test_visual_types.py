@@ -195,8 +195,8 @@ def test_user_created_niche_seeded_with_base_list():
         delete_user_niche(user_slug)
 
 
-def test_shot_cache_key_v8():
-    """Shot cache key is at version v8."""
+def test_shot_cache_key_v9():
+    """Shot cache key is at version v9."""
     shot = {"query": "A citadel at dawn"}
     key = _get_shot_cache_key(shot, 4.0, 1920, 1080)
     assert isinstance(key, str)
