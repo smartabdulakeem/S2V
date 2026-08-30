@@ -43,6 +43,24 @@ Output exactly one line per excerpt, formatted as:
 
 Return nothing else - no preamble, no blank lines, no commentary."""
 
+#: Kept when a niche's recipe takes over the instruction. The recipe decides how
+#: a shot is described; these four lines decide only that the reply can be parsed
+#: and that nothing unreadable ends up drawn into the picture.
+RECIPE_OUTPUT_CONTRACT = """Write ONE image description for each numbered narration excerpt below,
+following the directives above.
+
+These requirements override anything above that conflicts with them:
+- Describe only what a camera could see. Never restate the narration, and never
+  address the viewer.
+- Nothing written may appear in the scene: no text, letters, captions, numbers,
+  signage or inscriptions.
+- Output exactly one line per excerpt, formatted as:
+  <number>. <description>
+- Return nothing else - no preamble, no blank lines, no commentary."""
+
+#: A recipe may ask for a paragraph. It may not ask for a runaway.
+RICH_WORD_CAP = 150
+
 BANNED_PATTERN = re.compile(
     r"\b(cinematic|illustration|photograph|painting|render|35mm|close-up|close\s+up|wide\s+shot|caption|title|text|sign|signs|signage)\b",
     re.IGNORECASE
@@ -55,14 +73,35 @@ def _scene_hash(scene: str, series_slug: str = "", prompt_recipe: str = "", era_
     recipe_hash = hashlib.sha256((prompt_recipe or "").strip().encode("utf-8")).hexdigest()[:12] if prompt_recipe else ""
     slug_part = (series_slug or "").strip().lower()
     era_part = " ".join((era_block or "").strip().split())
-    raw = f"v2|{slug_part}|{recipe_hash}|{era_part}|{cleaned_scene}"
+    # v3: a niche's recipe now governs the instruction, so the same scene under
+    # the same recipe yields different text than it did under the built-in brief.
+    raw = f"v3|{slug_part}|{recipe_hash}|{era_part}|{cleaned_scene}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _build_instruction(series_cfg: Optional[dict] = None) -> str:
-    """Construct shot designer prompt, incorporating niche era, world anchor, and recipe context if present."""
+    """
+    The instruction sent to the description model.
+
+    A niche with a recipe gets the recipe, plus the period and the output
+    contract. Appending the recipe to the built-in brief instead would leave
+    "12 to 25 words" and the banned style words in force, which is how a five
+    thousand word recipe still produced seventeen plain words a shot.
+
+    A niche without a recipe keeps the built-in brief exactly as before, with
+    its era and subject appended as context.
+    """
     if not series_cfg:
         return INSTRUCTION
+
+    recipe = (series_cfg.get("prompt_recipe") or "").strip()
+    if recipe:
+        parts = [recipe]
+        era = (series_cfg.get("era_block") or "").strip()
+        if era:
+            parts.append(f"Period and material culture: {era}")
+        parts.append(RECIPE_OUTPUT_CONTRACT)
+        return "\n\n".join(parts)
 
     context_parts = []
     anchor = (series_cfg.get("brief_subject") or series_cfg.get("display_name") or "").strip()
@@ -105,11 +144,24 @@ def _save_disk_cache(cache: Dict[str, str]):
         pass
 
 
-def is_valid_description(sentence: str) -> bool:
-    """Validate sentence according to shot description rules."""
+def is_valid_description(sentence: str, allow_rich: bool = False) -> bool:
+    """
+    Validate a sentence against the rules that produced it.
+
+    The 40-word cap and the banned style words belong to the built-in
+    instruction, which asks for 12 to 25 plain words. When a niche's recipe is
+    the instruction instead, judging its output by those limits throws away
+    exactly what the recipe asked for — a recipe that says "write cinematic
+    descriptions" would have every line it produced rejected.
+
+    `allow_rich` keeps only the checks that still mean something: a description
+    has to exist, and it has to stop somewhere.
+    """
     if not sentence or not sentence.strip():
         return False
     words = sentence.strip().split()
+    if allow_rich:
+        return len(words) <= RICH_WORD_CAP
     if len(words) > 40:
         return False
     if BANNED_PATTERN.search(sentence):
@@ -261,7 +313,7 @@ def describe_shots(shots: list, api_key: str, model: str = "gemini-2.5-flash", s
                     s_id = matched_shot.get("shot_id")
                     s_scene = matched_shot.get("scene", "")
 
-                    if is_valid_description(sentence):
+                    if is_valid_description(sentence, allow_rich=has_recipe):
                         clean_sentence = sentence.rstrip(" .")
                         results[s_id] = clean_sentence
                         _MEMORY_CACHE[_scene_hash(s_scene, series_slug=series_slug, prompt_recipe=prompt_recipe, era_block=era_block)] = clean_sentence

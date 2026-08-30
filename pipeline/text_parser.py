@@ -171,6 +171,37 @@ def split_narration_for_shots(narration: str, n: int) -> list:
     return chunks
 
 
+def _carryable_by_scene(old_shots) -> dict:
+    """
+    What a shot has already earned, keyed by the narration it covers.
+
+    A re-cut rebuilds every shot from scratch. When a new chunk covers exactly
+    the text an old shot covered it *is* that shot, and the description written
+    for it and the query planned for it still describe it. Regenerating them
+    from `extract_keyword` replaces a written sentence with a two-word guess and
+    throws the planner's work away — which is what left one 347-shot film with
+    no descriptions at all and queries like "fought defeated drove".
+
+    Keyed on whitespace-normalised scene text, so a chunk that changed at all is
+    treated as new and is re-planned exactly as before.
+    """
+    carry = {}
+    for shot in old_shots:
+        scene = " ".join((shot.get("scene") or "").split())
+        if not scene:
+            continue
+        keep = {}
+        described = (shot.get("visual_description") or "").strip()
+        if described:
+            keep["visual_description"] = described
+        planned = (shot.get("query") or "").strip()
+        if planned:
+            keep["query"] = planned
+        if keep:
+            carry[scene] = keep
+    return carry
+
+
 def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
     """
     Cut each segment into several shots so the picture changes on a rhythm.
@@ -212,6 +243,7 @@ def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
         ]
         template = old_shots[0] if old_shots else {}
         treatment = template.get("treatment") or {"filter": "none", "grade": None}
+        carry_by_scene = _carryable_by_scene(old_shots)
 
         new_shots = []
         for i, chunk in enumerate(chunks):
@@ -228,6 +260,9 @@ def apply_shot_rhythm(script_data: dict, seconds_per_shot: float = 7.0) -> dict:
                 # in a segment shares one description and gets the same prompt.
                 "scene": chunk,
             }
+            prior = carry_by_scene.get(" ".join(chunk.split()))
+            if prior:
+                shot.update(prior)
             if i < len(carried) and carried[i].get("pin"):
                 shot.update(carried[i])
             new_shots.append(shot)
@@ -332,6 +367,7 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
             ]
             template = old_shots[0] if old_shots else {}
             treatment = template.get("treatment") or {"filter": "none", "grade": None}
+            carry_by_scene = _carryable_by_scene(old_shots)
 
             new_shots = []
             for j, chunk in enumerate(chunks):
@@ -347,6 +383,9 @@ def plan_image_budget(script_data: dict, image_count: int) -> dict:
                     "scene": chunk,
                     "share_with": None,
                 }
+                prior = carry_by_scene.get(" ".join(chunk.split()))
+                if prior:
+                    shot.update(prior)
                 if j < len(carried) and carried[j].get("pin"):
                     shot.update(carried[j])
                 new_shots.append(shot)
