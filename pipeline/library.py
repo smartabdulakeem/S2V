@@ -387,15 +387,12 @@ def get_series_config(series_slug: str = None, project_title: str = None) -> dic
     Resolves per-series prompt configuration and pack defaults strictly from series_slug.
     Validates loaded pack using validate_series_pack() and merges overrides if present.
     """
-    available_packs = {}
-    if os.path.exists(SERIES_CONFIG_DIR):
-        for p in Path(SERIES_CONFIG_DIR).glob("*.json"):
-            available_packs[p.stem] = p.name
+    # The same list the validator checks against, so a pack cannot be loadable
+    # here and unknown there.
+    from pipeline.validator import known_series_slugs
+    available_packs = {slug: os.path.basename(path)
+                       for slug, path in known_series_slugs().items()}
     override_dir = os.path.join(ROOT, "config", "series_overrides")
-    if os.path.exists(override_dir):
-        for p in Path(override_dir).glob("*.json"):
-            if p.stem not in available_packs:
-                available_packs[p.stem] = p.name
 
     if series_slug:
         slug_clean = series_slug.strip().lower().replace("-", "_")

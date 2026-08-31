@@ -23,6 +23,34 @@ ALLOWED_TEXT_POSITIONS = {
     "center"
 }
 ALLOWED_SHOT_SOURCES = {"library", "generate", "pin"}
+
+#: Where a series pack can live. `series` holds the packs that ship with the
+#: app; `series_overrides` holds the niches the user makes in Settings, which
+#: exist nowhere else — that directory is gitignored.
+SERIES_PACK_DIRS = ("series", "series_overrides")
+
+
+def known_series_slugs() -> dict:
+    """
+    {slug: path} for every pack that can actually be rendered.
+
+    One list, so the validator and the loader cannot disagree. They did: the
+    loader resolved a slug from both directories, and this check looked only in
+    `config/series`. A niche created in Settings appeared in the dropdown, could
+    be picked, saved and planned, and was then refused at the start of every
+    render as "not a known series pack" — while being listed among the packs
+    that were known.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    found = {}
+    for sub in SERIES_PACK_DIRS:
+        directory = os.path.join(root, "config", sub)
+        if os.path.isdir(directory):
+            for path in sorted(Path(directory).glob("*.json")):
+                # `series` wins: an override of a shipped pack is a modification
+                # of it, not a second pack with the same name.
+                found.setdefault(path.stem, str(path))
+    return found
 ALLOWED_MOTION_KINDS = {"ken_burns", "static", "generative"}
 ALLOWED_MOTION_EFFECTS = {"zoom_in", "zoom_out", "pan_left", "pan_right"}
 ALLOWED_TREATMENT_FILTERS = {"none", "vignette", "vox_collage", "diptych", "collage", "documentary", "illustration", "silhouette"}
@@ -259,13 +287,10 @@ def validate(script_data: dict) -> list[str]:
             errors.append("project.series_slug: must be a string")
         elif slug_val.strip():
             slug_clean = slug_val.strip().lower().replace("-", "_")
-            series_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "series")
-            slug_file = os.path.join(series_dir, f"{slug_clean}.json")
-            if not os.path.exists(slug_file):
-                available = []
-                if os.path.exists(series_dir):
-                    available = sorted([p.stem for p in Path(series_dir).glob("*.json")])
-                errors.append(f'project.series_slug: "{slug_val}" is not a known series pack. Available packs: {", ".join(available)}.')
+            known = known_series_slugs()
+            if slug_clean not in known:
+                available = ", ".join(sorted(known)) or "none found"
+                errors.append(f'project.series_slug: "{slug_val}" is not a known series pack. Available packs: {available}.')
 
     max_clips = 0
     max_spend = 0.0

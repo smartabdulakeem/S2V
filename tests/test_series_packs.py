@@ -179,3 +179,81 @@ def test_user_niche_creation_override_and_deletion():
         get_series_config(series_slug=slug)
 
 
+
+
+# ---------------------------------------------------------------------------
+# A niche made in Settings must be renderable, not just selectable.
+# ---------------------------------------------------------------------------
+
+def test_a_user_created_niche_passes_validation(tmp_path):
+    """
+    Niches created in Settings live only in config/series_overrides — that
+    directory is gitignored and has no counterpart in config/series. The
+    dropdown listed them and the loader resolved them, but validate() looked
+    only in config/series, so every render of a custom niche failed at the
+    first step with "not a known series pack" — listing, among the packs it
+    knew, packs the user had not chosen.
+    """
+    import json as _json
+    import os as _os
+    from pathlib import Path as _Path
+    from pipeline.validator import validate, known_series_slugs
+
+    root = _Path(__file__).resolve().parent.parent
+    override_dir = root / "config" / "series_overrides"
+    override_dir.mkdir(parents=True, exist_ok=True)
+    slug = "zz_test_only_user_niche"
+    pack_file = override_dir / f"{slug}.json"
+
+    pack_file.write_text(_json.dumps({
+        "series_slug": slug,
+        "display_name": "ZZ Test Only User Niche",
+        "brief_subject": "a test subject",
+        "style_block": "documentary photography",
+    }), encoding="utf-8")
+
+    try:
+        assert slug in known_series_slugs(), "a niche in series_overrides is not known"
+
+        script = {
+            "version": 2,
+            "project": {
+                "title": "Custom Niche Render",
+                "aspect_ratio": "16:9",
+                "series_slug": slug,
+            },
+            "segments": [{
+                "segment_id": 1,
+                "type": "hook",
+                "narration": "A first line of narration for the test film.",
+                "shots": [{"shot_id": "1a", "source": "library", "query": "a test shot"}],
+            }],
+        }
+        errors = validate(script)
+        slug_errors = [e for e in errors if "series_slug" in e]
+        assert not slug_errors, f"a user-created niche was refused: {slug_errors}"
+    finally:
+        if pack_file.exists():
+            _os.remove(pack_file)
+
+    assert slug not in known_series_slugs(), "the test niche was left behind"
+
+
+def test_an_unknown_slug_is_still_refused_and_lists_both_directories():
+    """The check must still catch a real typo, and say what is actually available."""
+    from pipeline.validator import validate, known_series_slugs
+
+    script = {
+        "version": 2,
+        "project": {"title": "T", "aspect_ratio": "16:9",
+                    "series_slug": "definitely_not_a_pack"},
+        "segments": [{
+            "segment_id": 1, "type": "hook", "narration": "One line.",
+            "shots": [{"shot_id": "1a", "source": "library", "query": "q"}],
+        }],
+    }
+    slug_errors = [e for e in validate(script) if "series_slug" in e]
+    assert len(slug_errors) == 1
+    assert "is not a known series pack" in slug_errors[0]
+    for known in known_series_slugs():
+        assert known in slug_errors[0], f"{known} missing from the available list"
