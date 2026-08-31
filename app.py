@@ -1325,6 +1325,24 @@ class Api:
             "releases_url": "https://github.com/jub0t/WolfCut/releases"
         }
 
+    def write_prompt_request(self, script_data: dict) -> dict:
+        """
+        Save the request an outside AI needs in order to write this film's
+        prompts, and reveal it. The whole manual route with no API key.
+        """
+        try:
+            from pipeline.visuals import write_prompt_request
+            from pipeline.library import picture_owning_shots
+            path = write_prompt_request(script_data)
+            count = len(picture_owning_shots(script_data))
+            try:
+                subprocess.Popen(["explorer", f"/select,{os.path.normpath(path)}"])
+            except Exception:
+                pass
+            return {"success": True, "path": path, "pictures": count}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def show_wolfcut_file(self, path: str | None = None) -> dict:
         """Reveals the .wolfcut file in Windows Explorer."""
         target = path

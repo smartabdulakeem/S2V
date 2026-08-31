@@ -1918,3 +1918,5 @@ tbody tr:last-child td {
   border-left-color: var(--gap, #e06c75);
   color: var(--text, #e1e7ec);
 }
+
+.mb-sm { margin-bottom: 10px; }

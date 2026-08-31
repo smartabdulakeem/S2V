@@ -66,9 +66,6 @@
       </label>
 
       <div class="row-bottom">
-        <label class="f f-wide">Prompt opening (shared by every image in this film)
-          <input type="text" id="pt-brief" placeholder="Drafted automatically when you plan — edit to lock the look across every shot.">
-        </label>
         <label class="f f-check">
           <input type="checkbox" id="pt-apply-era" checked>
           <span>Apply the niche's period to every image</span>
@@ -215,7 +212,14 @@
           <button type="button" class="ghost small" onclick="togglePastePromptsPanel()">Close ✕</button>
         </div>
         <p class="hint">
-          Paste prompts generated outside the app (one prompt per block, separated by blank lines). Prompts bind to image slots in order (Prompt 1 &rarr; Slot 1). If working from a folder, images named <code>1_whatever.jpg</code> or <code>1.jpg</code> match slot 1 automatically.
+          <b>No API key needed.</b> Press <b>Write the prompt request</b> — the app saves a file holding your niche recipe, the whole script, and the exact list of moments this film needs a picture for, numbered. Paste that file into any AI chat, and paste its reply back here.
+        </p>
+        <div class="row-center mb-sm">
+          <button type="button" class="ghost" id="btn-write-prompt-request" onclick="writePromptRequest()">Write the prompt request</button>
+          <span class="mono" id="prompt-request-status"></span>
+        </div>
+        <p class="hint">
+          Prompts bind to pictures in order (Prompt 1 &rarr; Picture 1). Images named <code>1_whatever.jpg</code> or <code>1.jpg</code> match picture 1 automatically.
         </p>
         <textarea id="paste-prompts-textarea" rows="6" class="tall w-full" placeholder="Paste external prompts here...&#10;&#10;Prompt 1 (e.g. A vast ancient desert at dawn...)&#10;&#10;Prompt 2 (e.g. One adult male figure alone...)"></textarea>
         <div class="row-between mt-sm">

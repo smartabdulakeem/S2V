@@ -1009,3 +1009,87 @@ def initialize_project_sourcing(script_dict: dict) -> str:
         
     return project_dir
 
+
+
+def write_prompt_request(script_dict: dict) -> str:
+    """
+    The request to hand an outside AI, so it writes the prompts this film needs.
+
+    The owner's fear, in his words: the app segments the script the way it
+    understands, and an outside AI asked to write prompts from the same script
+    has no idea how it was cut up. He is right, and the answer is that the AI
+    does not have to guess — the app already knows, and already builds exactly
+    this request when it calls a model itself. This writes it to a file instead
+    of sending it, so the whole route works with no API key at all:
+
+        plan  ->  prompt_request.txt  ->  any AI chat  ->  paste the reply back
+              ->  make the images, numbered  ->  point the app at the folder
+
+    Numbering is the contract. Moment n here is prompt n in the paste box, is
+    n.jpg in the folder, is the nth picture in the film.
+    """
+    from pipeline import library
+    from pipeline.shot_description import _build_instruction
+
+    proj = script_dict.get("project", {})
+    title = proj.get("title", "My Video")
+    project_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "projects", slugify_title(title))
+    os.makedirs(project_dir, exist_ok=True)
+
+    series_slug = proj.get("series_slug")
+    try:
+        cfg = library.get_series_config(series_slug=series_slug, project_title=title)
+    except Exception:
+        cfg = {}
+
+    owning = library.picture_owning_shots(script_dict)
+    count = len(owning)
+
+    # The look the app would have added itself, stated once so the outside AI
+    # can put it on every prompt and the pictures match the niche.
+    preset = library.resolve_style_preset(cfg, proj.get("visual_type") or "")
+    look = (preset or {}).get("prompt") or (cfg.get("style_block") or "").strip()
+
+    lines = [
+        "HOW TO USE THIS FILE",
+        "",
+        f"1. Copy everything below the line and paste it into any AI chat.",
+        f"2. It will reply with {count} numbered image prompts.",
+        f"3. Paste that reply into Smart Studio -> Storyboard -> Paste External Prompts.",
+        f"4. Make one image per prompt. Name them 1.jpg, 2.jpg ... {count}.jpg.",
+        f"5. Put them in one folder and point the app at it.",
+        "",
+        f"This film needs exactly {count} pictures. Keep the numbering — prompt 7,",
+        f"7.jpg and the 7th picture in the film are the same moment.",
+        "",
+        "=" * 70,
+        "",
+    ]
+
+    # The recipe, and the rules that keep a reply usable, exactly as the app
+    # would send them to a model.
+    lines.append(_build_instruction(cfg))
+    if look:
+        lines += ["", f"End every prompt with this look, word for word: {look}"]
+
+    narrations = [(seg.get("narration") or "").strip()
+                  for seg in (script_dict.get("segments") or [])]
+    position = {}
+    for i, text in enumerate(narrations, 1):
+        position.setdefault(" ".join(text.split()), i)
+
+    lines += ["", "THE FULL SCRIPT", ""]
+    lines += [f"[{i}] {' '.join(t.split())}" for i, t in enumerate(narrations, 1) if t.strip()]
+    lines += ["", f"THE {count} MOMENTS TO DESCRIBE", ""]
+    for idx, (seg, shot) in enumerate(owning, 1):
+        moment = " ".join(((shot.get("scene") or seg.get("narration") or "")).split())
+        at = position.get(moment)
+        where = f" (script line {at})" if at else ""
+        lines.append(f"{idx}.{where} {moment}")
+
+    path = os.path.join(project_dir, "prompt_request.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return path

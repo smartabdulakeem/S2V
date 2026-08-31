@@ -309,11 +309,9 @@ async function loadSeriesPacks() {
   select.addEventListener("change", async () => {
     await loadStylePresets();
     await loadNarrationTones();
-    await refreshBriefPreview();
   });
   await loadStylePresets();
   await loadNarrationTones();
-  wireBriefBox();
 }
 
 // ── Camera motion ────────────────────────────────────────────────────────────
@@ -397,33 +395,6 @@ async function loadNarrationTones() {
 window.loadNarrationTones = loadNarrationTones;
 
 // ── Prompt opening ───────────────────────────────────────────────────────────
-// Blank until the niche or the visual type is changed, then it follows them.
-// Once the user types their own wording it is never overwritten.
-let briefEdited = false;
-
-async function refreshBriefPreview() {
-  const box = document.getElementById("pt-brief");
-  if (!box || briefEdited || isWebMode) return;
-  const slug = (document.getElementById("pt-series-slug") || {}).value || "";
-  const type = (document.getElementById("pt-style") || {}).value || "";
-  if (!slug || !type) { box.value = ""; return; }
-  try {
-    const res = await window.pywebview.api.draft_brief_preview(slug, type);
-    box.value = (res && res.brief) || "";
-  } catch (e) {
-    console.error("Could not draft the prompt opening:", e);
-  }
-}
-
-function wireBriefBox() {
-  const box = document.getElementById("pt-brief");
-  if (!box || box.dataset.wired) return;
-  box.dataset.wired = "1";
-  box.addEventListener("input", () => { briefEdited = box.value.trim().length > 0; });
-  const style = document.getElementById("pt-style");
-  if (style) style.addEventListener("change", refreshBriefPreview);
-}
-window.refreshBriefPreview = refreshBriefPreview;
 
 // ── Visual Types ─────────────────────────────────────────────────────────────
 async function loadStylePresets() {
@@ -1388,6 +1359,39 @@ async function submitPastedPrompts() {
 }
 window.submitPastedPrompts = submitPastedPrompts;
 
+// The manual route, with no API key. The app writes the request an outside AI
+// needs — the niche recipe, the whole script, and the numbered list of moments
+// this film wants a picture for — so the AI never has to guess how the script
+// was cut up. Its reply goes straight back into the box above.
+async function writePromptRequest() {
+  const status = document.getElementById("prompt-request-status");
+  const btn = document.getElementById("btn-write-prompt-request");
+  if (!currentScriptData) {
+    if (status) status.textContent = "Plan the storyboard first.";
+    return;
+  }
+  setButtonBusy(btn, "Writing…");
+  try {
+    if (isWebMode) {
+      if (status) status.textContent = "Only available in the desktop app.";
+      return;
+    }
+    const res = await window.pywebview.api.write_prompt_request(currentScriptData);
+    if (status) {
+      status.textContent = res && res.success
+        ? `Saved — ${res.pictures} moments. Paste this file into any AI chat.`
+        : `Could not write it: ${(res && res.error) || "unknown error"}`;
+    }
+  } catch (e) {
+    if (status) status.textContent = "Could not write it: " + e.message;
+  } finally {
+    clearButtonBusy(btn);
+  }
+}
+window.writePromptRequest = writePromptRequest;
+
+
+
 // ── Script Loading & Planning ────────────────────────────────────────────────
 /**
  * Reopen the project this app last had open.
@@ -1416,11 +1420,6 @@ async function restoreLastProject() {
       const applyEraEl = document.getElementById("pt-apply-era");
       if (applyEraEl) {
         applyEraEl.checked = currentScriptData.project.apply_era !== false;
-      }
-      const briefEl = document.getElementById("pt-brief");
-      if (briefEl && currentScriptData.project.project_brief) {
-        briefEl.value = currentScriptData.project.project_brief;
-        briefEdited = true;
       }
     }
 
@@ -1525,10 +1524,6 @@ window.onParseComplete = async function(result) {
     currentScriptData.project.visual_type = document.getElementById("pt-style").value || "";
     const applyEraEl = document.getElementById("pt-apply-era");
     currentScriptData.project.apply_era = applyEraEl ? applyEraEl.checked : true;
-    const briefEl = document.getElementById("pt-brief");
-    if (briefEl && briefEl.value.trim()) {
-      currentScriptData.project.project_brief = briefEl.value.trim();
-    }
     applyCaptionSetting();
     await saveDraftScript(true);
 
@@ -1577,11 +1572,8 @@ async function refreshStoryboardCoverage() {
         coverageReport = res.report;
         rememberResolvedImages();
 
-        // The box is deliberately NOT filled from here. Doing so made a reopened
-        // project show an opening line nobody asked for, and one that then did
-        // not follow the niche the user picked next. The box tracks the current
-        // choices instead (refreshBriefPreview); an empty box means "draft one
-        // for me when the storyboard is planned".
+        // The brief is drafted by the backend on every plan — recurring figures
+        // only, no medium — and is no longer editable, so it is simply stored.
         const drafted = (res.report && res.report.project_brief) || "";
         if (drafted && currentScriptData) {
           currentScriptData.project = currentScriptData.project || {};

@@ -248,3 +248,63 @@ def test_a_film_with_no_sharing_binds_every_shot(tmp_path, monkeypatch):
     assert res["total_shots"] == 8
     lines = _exported_lines(res["script_data"], tmp_path, monkeypatch)
     assert len(lines) == 8
+
+
+# ---------------------------------------------------------------------------
+# The whole route with no API key: the app states its own segmentation.
+# ---------------------------------------------------------------------------
+
+def test_the_prompt_request_asks_for_exactly_the_pictures_the_film_needs(tmp_path, monkeypatch):
+    """
+    The owner's fear: the app cuts the script up its own way, and an outside AI
+    asked to write prompts from the same script cannot know how. It does not
+    have to guess — the app writes the request, numbered, and the numbering is
+    the contract for the paste box and the image folder alike.
+    """
+    from pipeline.visuals import write_prompt_request
+
+    data = _budgeted(60, 12)
+    monkeypatch.setattr("pipeline.visuals._generate_placeholder_image", lambda *a, **k: None)
+    path = write_prompt_request(data)
+    text = open(path, encoding="utf-8").read()
+
+    assert "This film needs exactly 12 pictures" in text
+    assert "THE 12 MOMENTS TO DESCRIBE" in text
+
+    moments = [ln for ln in text.splitlines()
+               if re.match(r"^\d+\.( \(script line \d+\))? \S", ln)
+               and "MOMENTS" not in ln]
+    numbered = [ln for ln in moments if ln.split(".")[0].isdigit()]
+    assert len(numbered) >= 12, f"only {len(numbered)} moments listed"
+    for i in range(1, 13):
+        assert any(ln.startswith(f"{i}.") for ln in numbered), f"moment {i} missing"
+
+
+def test_the_request_carries_the_whole_script_and_the_niche_recipe(tmp_path, monkeypatch):
+    from pipeline.visuals import write_prompt_request
+
+    data = _budgeted(20, 5)
+    monkeypatch.setattr("pipeline.visuals._generate_placeholder_image", lambda *a, **k: None)
+    text = open(write_prompt_request(data), encoding="utf-8").read()
+
+    assert "THE FULL SCRIPT" in text
+    for seg in data["segments"]:
+        assert seg["narration"][:40] in text, "a script line is missing from the request"
+    assert "1.jpg" in text and "Paste External Prompts" in text
+
+
+def test_a_reply_to_the_request_binds_one_prompt_per_picture(tmp_path, monkeypatch):
+    """The loop closes: n moments out, n prompts back, n pictures bound."""
+    from pipeline.visuals import write_prompt_request
+
+    data = _budgeted(60, 12)
+    monkeypatch.setattr("pipeline.visuals._generate_placeholder_image", lambda *a, **k: None)
+    write_prompt_request(data)
+
+    reply = "\n\n".join(f"A picture for moment {i}" for i in range(1, 13))
+    res = apply_external_prompts(data, reply)
+
+    assert res["prompts_count"] == 12
+    assert res["unprompted_pictures"] == 0 and res["unused_prompts"] == 0
+    for i, (_, shot) in enumerate(picture_owning_shots(data), 1):
+        assert shot["prompt_override"] == f"A picture for moment {i}"

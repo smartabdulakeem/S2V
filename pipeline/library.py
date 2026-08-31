@@ -1722,7 +1722,9 @@ BRIEF_MAX_WORDS = 30
 #: a still, a study or a panel and it renders the artefact and captions it.
 #: "of" rather than "from" matters for the same reason - "from" implies the
 #: picture was cut out of some larger printed thing.
-BRIEF_OPENERS = {
+#: Retired: the brief no longer opens by naming a medium. Kept only as a note
+#: for scripts/author_brief_subjects.py, which still refers to it.
+_RETIRED_BRIEF_OPENERS = {
     "documentary": "A documentary photograph of",
     "illustration": "An illustrated scene of",
     "silhouette": "A silhouetted scene of",
@@ -1734,10 +1736,16 @@ BRIEF_OPENERS = {
 #: nasab, where the particle and the name are separated by a space ("Khalid ibn
 #: al-Walid"). The previous pattern required them contiguous, so it split that
 #: name into "Khalid" and "Walid" - one man read as two characters.
+#: The particles had to be separated. Written as one alternation with `\s*`
+#: after it, "de" matched the opening of the next ordinary word: "Allah decided
+#: to create Adam" was read as a character called "Allah decided", and that
+#: phrase went into every image prompt in the film. A standing particle now has
+#: to be a whole word followed by a space; only the prefixing ones attach.
 _NAME_RE = re.compile(
     r"\b[A-Z][a-z]{2,}(?:-[A-Z][a-z]+)*"
     r"(?:"
-    r"\s+(?:ibn|bin|bint|al-|el-|de|van|von)\s*[A-Z]?[a-z][a-zA-Z-]*"
+    r"\s+(?:ibn|bin|bint|de|van|von)\s+(?:al-|el-)?[A-Z]?[a-z][a-zA-Z-]*"
+    r"|\s+(?:al-|el-)[A-Z]?[a-z][a-zA-Z-]*"
     r"|\s+[A-Z][a-z]+(?:-[A-Z][a-z]+)*"
     r")*"
 )
@@ -1768,10 +1776,18 @@ def draft_project_brief(title: str, series_cfg: dict, script_text: str,
     The opening block shared by every prompt in one script.
 
     The title is never emitted: it is metadata, not a picture. What carries
-    across shots is the kind of picture, the era and region, and the figures
-    who recur often enough to need to look the same in every frame.
+    across shots is the subject and the figures who recur often enough to need
+    to look the same in every frame.
+
+    The brief no longer opens by naming a medium. It used to — "A documentary
+    photograph of ..." — chosen from the treatment, drafted once and then never
+    revisited. The picked visual type states the medium already, so when the two
+    agreed the prompt said it twice, and when they disagreed the prompt asked
+    for both at once. A project set to Paper Collage carried "A documentary
+    photograph of real people and places" alongside "Cut-paper collage on
+    textured board" in all 55 of its prompts. `treatment` is accepted and
+    ignored, so existing callers keep working.
     """
-    opener = BRIEF_OPENERS.get(treatment or "", BRIEF_OPENERS["documentary"])
 
     # world_anchor is not a place in most packs - it carries medium language
     # too ("Matthew Brady tintype archival photograph"), which fights the picked
@@ -1782,8 +1798,8 @@ def draft_project_brief(title: str, series_cfg: dict, script_text: str,
     # authored packs that get medium-free wording.
     subject = ((series_cfg or {}).get("brief_subject")
                or (series_cfg or {}).get("world_anchor")
-               or "a film")
-    parts = [f"{opener} {subject}"]
+               or "")
+    parts = [subject] if subject.strip() else []
 
     # Count by first name, keep the fullest form. A script that says "Khalid ibn
     # al-Walid" once and "Khalid" thereafter is describing one man twice, not two
@@ -1829,14 +1845,15 @@ def cap_project_brief(brief: str) -> str:
 
 def ensure_project_brief(project_info: dict, script_text: str = "") -> str:
     """
-    The project's brief, drafted on first use and never overwritten after.
+    The project's brief: the recurring figures, drafted fresh every time.
 
-    A hand-edited brief has to survive re-planning, or the owner would lose
-    their wording every time they adjusted the shot rhythm.
+    It used to be drafted once and never overwritten, to protect a hand-edited
+    brief across re-plans. There is no longer a box to hand-edit it in — the
+    niche recipe carries the look now — and freezing it was doing harm: a brief
+    drafted before the visual type was picked went on claiming the wrong medium
+    for the life of the project, and no amount of changing the visual type
+    could dislodge it. Redrawing it costs nothing and cannot go stale.
     """
-    existing = (project_info or {}).get("project_brief") or ""
-    if existing.strip():
-        return cap_project_brief(existing)
 
     slug = (project_info or {}).get("series_slug")
     cfg = {}

@@ -11,24 +11,32 @@ SCRIPT = ("Khalid ibn al-Walid rode through the night. Abu Ubaidah held the cent
           "Khalid reached the Jordan valley before dawn and Abu Ubaidah followed.")
 
 
-def test_documentary_treatment_opens_with_documentary_still():
-    brief = draft_project_brief("The Battle of the Mud", CFG, SCRIPT, "documentary")
-    assert brief.startswith("A documentary photograph of")
+#: The brief used to open by naming a medium, chosen from the treatment. The
+#: picked visual type states the medium already, so the prompt either said it
+#: twice or asked for two different things at once — a project set to Paper
+#: Collage carried "A documentary photograph of real people and places"
+#: alongside "Cut-paper collage on textured board" in all 55 of its prompts.
+#: The brief now carries the subject and the recurring figures, nothing else.
+_MEDIUM_WORDS = ("photograph", "photo", "illustrated", "illustration",
+                 "silhouetted", "silhouette", "collage", "cinematic",
+                 "painting", "render", "film", "plate", "still")
 
 
-def test_illustration_treatment_opens_with_illustration_plate():
-    brief = draft_project_brief("The Battle of the Mud", CFG, SCRIPT, "illustration")
-    assert brief.startswith("An illustrated scene of")
+def test_the_brief_never_names_a_medium_whatever_the_treatment():
+    for treatment in ("documentary", "illustration", "silhouette",
+                      "vox_collage", "vignette", None, "not_a_treatment"):
+        brief = draft_project_brief("The Battle of the Mud", CFG, SCRIPT, treatment)
+        lowered = brief.lower()
+        named = [w for w in _MEDIUM_WORDS if w in lowered]
+        assert not named, f"treatment {treatment!r} put {named} into the brief: {brief!r}"
 
 
-def test_silhouette_treatment_opens_with_silhouette_study():
-    brief = draft_project_brief("X", CFG, SCRIPT, "silhouette")
-    assert brief.startswith("A silhouetted scene of")
-
-
-def test_unknown_treatment_falls_back_to_documentary_still():
-    brief = draft_project_brief("X", CFG, SCRIPT, None)
-    assert brief.startswith("A documentary photograph of")
+def test_the_treatment_no_longer_changes_the_brief():
+    """It is accepted so existing callers keep working, and ignored."""
+    a = draft_project_brief("X", CFG, SCRIPT, "documentary")
+    b = draft_project_brief("X", CFG, SCRIPT, "silhouette")
+    c = draft_project_brief("X", CFG, SCRIPT, None)
+    assert a == b == c
 
 
 def test_brief_names_the_subject_not_the_medium():
@@ -114,8 +122,10 @@ def test_plan_shots_returns_the_brief_it_drafted():
     d.setdefault("project", {})["series_slug"] = "islamic_history"
     d["project"]["visual_type"] = "architectural_plate"
     report = plan_shots(d)
-    assert report.get("project_brief", "").startswith("A documentary photograph of"), \
-        report.get("project_brief")
+    brief = report.get("project_brief", "")
+    assert brief, "plan_shots returned no brief"
+    assert "photograph" not in brief.lower(), brief
+    assert "seventh century Arabia" in brief, brief
 
 
 def test_brief_is_stable_for_the_same_inputs():
@@ -131,41 +141,27 @@ def test_a_missing_brief_is_drafted():
     info = {"title": "The Battle of the Mud", "series_slug": "islamic_history",
             "visual_type": "architectural_plate"}
     out = ensure_project_brief(info, SCRIPT)
-    assert out.startswith("A documentary photograph of")
+    assert out.strip(), "no brief was drafted"
+    assert "photograph" not in out.lower(), out
 
 
-def test_an_existing_brief_is_left_alone():
+def test_a_stored_brief_is_redrawn_rather_than_kept():
+    """
+    It used to be drafted once and never overwritten, to protect a hand-edited
+    brief. There is no box to edit it in any more, and freezing it did harm: a
+    brief drafted before the visual type was picked went on claiming the wrong
+    medium for the life of the project, and changing the visual type could not
+    dislodge it.
+    """
     info = {"title": "X", "series_slug": "islamic_history",
             "visual_type": "architectural_plate",
-            "project_brief": "My own wording, untouched"}
-    assert ensure_project_brief(info, SCRIPT) == "My own wording, untouched"
+            "project_brief": "A documentary photograph of something stale"}
+    out = ensure_project_brief(info, SCRIPT)
+    assert out != info["project_brief"], "a stale brief survived"
+    assert "photograph" not in out.lower(), out
 
 
 def test_a_blank_brief_is_treated_as_missing():
     info = {"title": "X", "series_slug": "islamic_history",
             "visual_type": "architectural_plate", "project_brief": "   "}
-    assert ensure_project_brief(info, SCRIPT).startswith("A documentary photograph of")
-
-
-def test_no_opener_names_a_physical_object():
-    """
-    An opener describes the kind of picture, never a thing you could hold.
-
-    "Illustration plate from a documentary on early Islamic history" came back
-    from the generator as a decorative plate with that sentence lettered
-    underneath, and another frame carried "PLATE 40:" across it. The generator
-    draws the nouns it is handed. This guards the whole table, so a future
-    opener cannot quietly reintroduce the artefact.
-    """
-    from pipeline.library import BRIEF_OPENERS
-
-    banned = ("plate", "still", "study", "panel", "print", "poster",
-              "page", "sheet", "card", "frame", "clipping")
-    for treatment, opener in BRIEF_OPENERS.items():
-        words = opener.lower().replace(",", " ").split()
-        hit = [w for w in words if w in banned]
-        assert not hit, f"{treatment!r} opener names an artefact: {opener!r} ({hit})"
-        assert not opener.lower().endswith(" from"), (
-            f"{treatment!r} opener says 'from', which implies the picture was cut "
-            f"out of a larger printed thing: {opener!r}"
-        )
+    assert ensure_project_brief(info, SCRIPT).strip()
