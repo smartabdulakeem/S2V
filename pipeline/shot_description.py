@@ -49,6 +49,10 @@ following the directives above.
 These requirements override anything above that conflicts with them:
 - Describe only what a camera could see. Never restate the narration, and never
   address the viewer.
+- Each description is ONE still frame that stands on its own. No camera
+  movement - no pan, zoom, tracking, dolly, cut or sequence - and never refer
+  to another shot, to "the previous scene", or to what came before. The
+  picture is made in isolation by someone who has seen nothing else.
 - Nothing written may appear in the scene: no text, letters, captions, numbers,
   signage or inscriptions.
 - Output exactly one line per excerpt, formatted as:

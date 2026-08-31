@@ -120,3 +120,35 @@ def test_is_valid_description_keeps_its_original_meaning_by_default():
     assert is_valid_description("   ", allow_rich=True) is False
     # Even a rich description has an upper bound; runaway output is still junk.
     assert is_valid_description("word " * 400, allow_rich=True) is False
+
+
+def test_a_recipe_still_gets_the_one_still_frame_rule():
+    """
+    A recipe replaces the built-in instruction entirely, so the rules that keep
+    a description *usable as an image prompt* have to survive in the output
+    contract. Without this, recipe-driven descriptions came back as video
+    direction — "a slow, deliberate pan across the lake", "a zoom out from the
+    previous scene". An image model cannot draw a pan and has not seen the
+    previous scene.
+    """
+    from pipeline.shot_description import _build_instruction
+
+    instruction = _build_instruction({
+        "series_slug": "n",
+        "prompt_recipe": "Describe each moment richly and at length.",
+    })
+
+    assert "Describe each moment richly" in instruction, "the recipe must still lead"
+    lowered = instruction.lower()
+    assert "one still frame" in lowered
+    for banned in ("pan", "zoom", "tracking", "dolly"):
+        assert banned in lowered, f"the contract does not forbid {banned}"
+    assert "previous scene" in lowered, "cross-shot references are not forbidden"
+
+
+def test_the_still_frame_rule_does_not_leak_into_the_plain_instruction():
+    """A film with no recipe keeps the original wording, which already bans them."""
+    from pipeline.shot_description import _build_instruction, INSTRUCTION
+
+    assert _build_instruction(None) == INSTRUCTION
+    assert _build_instruction({"series_slug": "n"}) == INSTRUCTION
