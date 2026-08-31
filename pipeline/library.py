@@ -1767,7 +1767,30 @@ _BRIEF_STOPWORDS = {
     "From", "Into", "Onto", "Upon", "About", "Against", "Among", "Through",
     "Toward", "Towards", "Behind", "Beyond", "Across", "Along", "Around",
     "Bring", "Come", "Take", "Give", "Look", "See", "Say", "Said", "Let",
+    # Openers that begin a clause and so get capitalised. "According to the
+    # reports" put a character called "According" into the brief the moment a
+    # real name was excluded and a slot opened up.
+    "According", "Consider", "Imagine", "Picture", "Remember", "Notice",
+    "Perhaps", "Maybe", "Indeed", "Rather", "Nothing", "Nobody", "Something",
+    "Someone", "Everything", "Everyone", "Another", "Others", "Whether",
+    "Before", "Yes", "Well", "First", "Second", "Third", "Last", "Next",
+    "Today", "Tomorrow", "Yesterday", "Long", "Far", "More", "Less", "Much",
 }
+
+
+def never_depict_names(series_cfg: dict) -> set:
+    """
+    Lowercased names the niche says no picture may show.
+
+    Declared in the niche file as `never_depict`, so it travels with the niche
+    and needs no screen of its own. It reaches both places a name can turn into
+    a picture: the brief that names recurring figures, and the instruction the
+    description model is given.
+    """
+    raw = (series_cfg or {}).get("never_depict") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    return {str(n).strip().lower() for n in raw if str(n).strip()}
 
 
 def draft_project_brief(title: str, series_cfg: dict, script_text: str,
@@ -1805,19 +1828,38 @@ def draft_project_brief(title: str, series_cfg: dict, script_text: str,
     # al-Walid" once and "Khalid" thereafter is describing one man twice, not two
     # men once each - counting the exact strings separately left both below the
     # threshold and dropped the protagonist from the brief.
+    # Figures the niche says are never drawn. A name can recur all through a
+    # script and still be one no picture may show — a film about Adam and Iblis
+    # says "Allah" constantly, and "consistent depiction of Allah" in every
+    # prompt is not what the niche wants drawn. The niche decides, because it
+    # is a matter for the subject, not for the app.
+    never = never_depict_names(series_cfg)
+
     counts = {}
     fullest = {}
     for m in _NAME_RE.finditer(script_text or ""):
         name = m.group(0).strip()
         head = name.split()[0]
-        if head in _BRIEF_STOPWORDS:
+        if head in _BRIEF_STOPWORDS or head.lower() in never:
             continue
         counts[head] = counts.get(head, 0) + 1
         if len(name) > len(fullest.get(head, "")):
             fullest[head] = name
 
+    # A name is a word that is never an ordinary word. "According", "Different",
+    # "Suddenly" are capitalised because they open a clause, and they also turn
+    # up in lower case elsewhere in the same script; "Adam" and "Iblis" never
+    # do. Listing the openers one at a time did not hold — excluding one name
+    # freed a slot and the next opener took it — so the test is structural.
+    def _is_a_name(head: str) -> bool:
+        # Case-sensitive: does this word ever appear in lower case here? A name
+        # never does. Counting occurrences instead was wrong, because a name
+        # following a capitalised opener is swallowed into it - "Before Adam"
+        # is one match headed "Before" - which deflated the name's own count.
+        return not re.search(rf"\b{re.escape(head.lower())}\b", script_text or "")
+
     recurring = [fullest[h] for h in
-                 sorted([h for h, c in counts.items() if c >= 2],
+                 sorted([h for h, c in counts.items() if c >= 2 and _is_a_name(h)],
                         key=lambda h: (-counts[h], h))[:3]]
     if recurring:
         parts.append("consistent depiction of " + ", ".join(recurring))

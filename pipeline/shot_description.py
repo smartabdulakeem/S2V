@@ -92,6 +92,24 @@ def _scene_hash(scene: str, series_slug: str = "", prompt_recipe: str = "",
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def _never_depict_rule(series_cfg: Optional[dict]) -> str:
+    """
+    The niche's `never_depict` names, phrased as a rule for the model.
+
+    A figure reaches a picture two ways: named in the brief the composer appends
+    to every prompt, or written into a description by the model. Both have to
+    honour the list, or it is only half a rule.
+    """
+    from pipeline.library import never_depict_names
+    names = never_depict_names(series_cfg)
+    if not names:
+        return ""
+    listed = ", ".join(sorted(n.title() for n in names))
+    return ("- Never depict, and never describe the appearance of: " + listed +
+            ". Show the scene around them - what others do, where the light "
+            "falls, what is left behind - never their form, face, hands or figure.")
+
+
 def _build_instruction(series_cfg: Optional[dict] = None) -> str:
     """
     The instruction sent to the description model.
@@ -105,7 +123,13 @@ def _build_instruction(series_cfg: Optional[dict] = None) -> str:
         era = (series_cfg.get("era_block") or "").strip()
         if era:
             parts.append(f"Period and material culture: {era}")
-        parts.append(RECIPE_OUTPUT_CONTRACT)
+        contract = RECIPE_OUTPUT_CONTRACT
+        rule = _never_depict_rule(series_cfg)
+        if rule:
+            contract = contract.replace(
+                "- Nothing written may appear in the scene:",
+                rule + "\n- Nothing written may appear in the scene:")
+        parts.append(contract)
         return "\n\n".join(parts)
 
     context_parts = []

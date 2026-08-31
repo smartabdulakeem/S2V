@@ -165,3 +165,76 @@ def test_a_blank_brief_is_treated_as_missing():
     info = {"title": "X", "series_slug": "islamic_history",
             "visual_type": "architectural_plate", "project_brief": "   "}
     assert ensure_project_brief(info, SCRIPT).strip()
+
+
+# ---------------------------------------------------------------------------
+# Figures a niche says are never drawn
+# ---------------------------------------------------------------------------
+
+SACRED = {"brief_subject": "ancient sacred history",
+          "never_depict": ["Allah", "God"]}
+SACRED_SCRIPT = ("Allah decided to create Adam. Iblis refused. "
+                 "Allah commanded again and Iblis refused again. Adam waited.")
+
+
+def test_a_never_depict_name_is_kept_out_of_the_brief():
+    """
+    A name can recur all through a script and still be one no picture may show.
+    "consistent depiction of Allah" in all 55 prompts of a film about Adam and
+    Iblis is not what the niche wants drawn, and it is the niche's call, not
+    the app's.
+    """
+    brief = draft_project_brief("X", SACRED, SACRED_SCRIPT, None)
+    assert "Allah" not in brief, brief
+    assert "Adam" in brief and "Iblis" in brief, brief
+
+
+def test_never_depict_is_case_insensitive_and_accepts_a_bare_string():
+    from pipeline.library import never_depict_names
+
+    assert never_depict_names({"never_depict": ["ALLAH", " God "]}) == {"allah", "god"}
+    assert never_depict_names({"never_depict": "Allah"}) == {"allah"}
+    assert never_depict_names({}) == set()
+    assert never_depict_names(None) == set()
+
+
+def test_the_rule_also_reaches_the_description_model():
+    """Half a rule is no rule: a name reaches a picture through the model too."""
+    from pipeline.shot_description import _build_instruction
+
+    instruction = _build_instruction({
+        "series_slug": "n",
+        "prompt_recipe": "Describe the moment richly.",
+        "never_depict": ["Allah", "God"],
+    })
+    assert "Never depict" in instruction
+    assert "Allah" in instruction and "God" in instruction
+
+    without = _build_instruction({"series_slug": "n",
+                                  "prompt_recipe": "Describe the moment richly."})
+    assert "Never depict" not in without
+
+
+# ---------------------------------------------------------------------------
+# A name is a word that is never an ordinary word
+# ---------------------------------------------------------------------------
+
+def test_a_capitalised_opener_is_not_a_character_even_when_it_recurs():
+    """
+    Listing openers one at a time did not hold: excluding a real name freed a
+    slot and the next opener took it — "According", then "Different". The test
+    is structural now. A name never appears in lower case in the same script.
+    """
+    script = ("According to reports the army moved. Different accounts survive. "
+              "According to others it was different. Suddenly it was over. "
+              "Suddenly the walls fell, and the reports were different.")
+    brief = draft_project_brief("X", CFG, script, None)
+    for opener in ("According", "Different", "Suddenly"):
+        assert opener not in brief, f"{opener!r} was treated as a character: {brief}"
+
+
+def test_a_name_that_never_appears_lowercase_is_kept():
+    script = ("Adam waited in the garden. Iblis refused to bow. "
+              "Adam waited again while Iblis turned away.")
+    brief = draft_project_brief("X", CFG, script, None)
+    assert "Adam" in brief and "Iblis" in brief, brief
