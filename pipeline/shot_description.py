@@ -290,13 +290,27 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
             # Every provider goes through the seam, Gemini included. Gemini used
             # to take a direct HTTP path here, so the one provider writing all
             # of the prompts was the one the seam never covered.
-            reply_text = prov_instance.complete_text(system=prompt_text, user="", max_tokens=2048)
+            # The reply carries one description per shot in the batch, so the
+            # ceiling has to scale with the batch and with how long a recipe
+            # lets a description run. At a flat 2048 a recipe-driven batch of
+            # twenty was cut off mid-word after the third description, and the
+            # other seventeen shots silently fell back to two-word keyword
+            # search. Measured: 3 of 20 came back at 2048, all 20 at 8192.
+            # The floor matters as much as the scaling: a final batch of seven
+            # still came back with two at 2048. An unused ceiling costs nothing
+            # — only generated tokens are billed — so there is no reason to be
+            # tight here, and every reason not to be.
+            per_shot = 250 if has_recipe else 80
+            reply_budget = min(8192, max(4096, len(batch) * per_shot + 512))
+            reply_text = prov_instance.complete_text(system=prompt_text, user="",
+                                                     max_tokens=reply_budget)
 
             if not reply_text:
                 continue
 
             # Parse lines: Match ^\s*(\d+)[.):]\s*(.+)$ per line
             line_pattern = re.compile(r"^\s*(\d+)[.):]\s*(.+)$")
+            batch_before = len(results)
             for line in reply_text.splitlines():
                 m = line_pattern.match(line.strip())
                 if not m:
@@ -321,6 +335,18 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
                                                   script_context=script_context, model=model_name,
                                                   provider=prov_key)] = clean_sentence
                         cache_updated = True
+
+            # A batch that answers for fewer shots than it was asked about has
+            # been cut off, and every shot it skipped drops to keyword search.
+            # That is invisible unless it is counted, which is how seventeen
+            # shots in twenty went unnoticed.
+            got = len(results) - batch_before
+            if got < len(batch):
+                message = (f"{PROVIDER_DISPLAY_NAMES.get(prov_key, prov_key.title())} "
+                           f"described {got} of {len(batch)} shots in one batch — "
+                           f"the reply was cut short. The rest fall back to keyword search.")
+                set_last_provider_status("error", message, answering_provider=prov_key)
+                sys.stderr.write(f"[shot_description] {message}\n")
         except Exception as err:
             # A dead provider has to reach the screen. Classifying the error and
             # then writing it to stderr — where no user looks — before dropping

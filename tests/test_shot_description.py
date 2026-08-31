@@ -419,3 +419,61 @@ def test_12_user_created_niche_style_presets_is_override():
     finally:
         delete_user_niche(user_slug)
 
+
+
+# ---------------------------------------------------------------------------
+# The reply ceiling has to fit the batch, or most of it is thrown away.
+# ---------------------------------------------------------------------------
+
+def test_the_reply_budget_scales_with_the_batch_and_the_recipe():
+    """
+    max_tokens was a flat 2048 for a batch of twenty. With a niche recipe the
+    descriptions run long, so the model was cut off mid-word after the third
+    and the other seventeen shots fell back to two-word keyword search — which
+    is what "the prompts are still vague" turned out to be. Measured on a real
+    script: 3 of 20 came back at 2048, all 20 at 8192.
+
+    An unused ceiling is not billed, so the floor is generous on purpose.
+    """
+    import pipeline.shot_description as sd
+    from pipeline.llm.interface import BaseLLMProvider
+
+    asked = []
+
+    class Recorder(BaseLLMProvider):
+        model = "gemini-2.5-flash"
+
+        def complete(self, *a, **k):
+            return {}
+
+        def complete_text(self, system, user="", max_tokens=2048):
+            asked.append(max_tokens)
+            n = system.count("\n")  # answer for every shot so nothing retries
+            return "\n".join(f"{i}. A described moment number {i}" for i in range(1, 41))
+
+    def run(n_shots, series_cfg):
+        asked.clear()
+        sd._MEMORY_CACHE.clear()
+        shots = [{"shot_id": f"{i}a", "scene": f"Narration line number {i} of the film."}
+                 for i in range(1, n_shots + 1)]
+        with patch.object(sd, "_load_disk_cache", return_value={}), \
+             patch.object(sd, "_save_disk_cache"):
+            sd.describe_shots(shots, series_cfg=series_cfg, provider=Recorder())
+        return asked[0]
+
+    recipe_cfg = {"series_slug": "n", "prompt_recipe": "Describe richly, at length."}
+    plain_cfg = {"series_slug": "n"}
+
+    twenty_rich = run(20, recipe_cfg)
+    assert twenty_rich >= 5000, (
+        f"a batch of 20 rich descriptions asked for only {twenty_rich} tokens; "
+        f"2048 truncated after the third")
+
+    # The floor matters too: a final short batch of seven still came back cut
+    # off at 2048.
+    seven_rich = run(7, recipe_cfg)
+    assert seven_rich >= 4096, f"a small batch floored at {seven_rich}"
+
+    assert run(20, plain_cfg) >= 2048
+    assert twenty_rich <= 8192, "the ceiling should stay bounded"
+    assert twenty_rich > run(7, recipe_cfg), "the budget does not scale with the batch"
