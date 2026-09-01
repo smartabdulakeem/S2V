@@ -1970,3 +1970,23 @@ tbody tr:last-child td {
   letter-spacing: 0.01em;
 }
 
+/* Whether the picture boundaries sit on measured audio or on a word-count
+   guess. The guess is fair across a film and wrong on any single line. */
+.timing-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.timing-pill.ok {
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: var(--ok);
+}
+.timing-pill.warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: var(--warn);
+}
+

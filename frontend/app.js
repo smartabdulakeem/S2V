@@ -1724,6 +1724,8 @@ function renderStoryboardScreen() {
 
   syncImageCountControl();
 
+  updateTimingPill();
+
   const pictures = picturesFromScript(currentScriptData);
   const pictureByKey = {};
   pictures.forEach(pic => { pictureByKey[pic.key] = pic; });
@@ -2070,6 +2072,64 @@ async function replanPictures() {
     setBoardBusy(false);
   }
 }
+/** Does this script sit on measured audio, or on the word-count guess? */
+function updateTimingPill() {
+  const pill = document.getElementById("timing-pill");
+  if (!pill) return;
+  const segs = (currentScriptData && currentScriptData.segments) || [];
+  const measured = segs.filter(sg => parseFloat(sg.narration_seconds) > 0).length;
+  const all = segs.length > 0 && measured === segs.length;
+  pill.classList.toggle("ok", all);
+  pill.classList.toggle("warn", !all);
+  pill.textContent = all
+    ? "timings measured"
+    : measured
+      ? `${measured} of ${segs.length} measured`
+      : "estimated from word count";
+}
+
+/* The app pushes one of these per segment while the narration is being timed. */
+window.onTimingProgress = function(event) {
+  if (event && event.finished) return;
+  const total = (event && event.total) || 0;
+  const done = (event && event.done) || 0;
+  setBoardBusy(true, total
+    ? `Timing narration… ${done} of ${total}`
+    : "Timing narration…");
+};
+
+/** Render every line and measure it, so boundaries sit on real seconds. */
+async function measureNarration() {
+  if (isWebMode || !currentScriptData) return;
+  const segs = currentScriptData.segments || [];
+  if (!segs.length) return;
+
+  setBoardBusy(true, `Timing narration… 0 of ${segs.length}`);
+  try {
+    const res = await window.pywebview.api.measure_narration_for_script(currentScriptData);
+    if (!res.success) {
+      alert("Could not measure the narration: " + (res.error || "unknown error"));
+      return;
+    }
+    currentScriptData = res.script_data;
+    if (currentScriptPath) {
+      await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+    }
+    updateTimingPill();
+    await refreshStoryboardCoverage();
+    if (res.failed) {
+      alert(`Measured ${res.measured} of ${segs.length} lines. `
+        + `${res.failed} could not be recorded or read, and keep their word-count estimate.`);
+    }
+  } catch (e) {
+    alert("Could not measure the narration: " + e.message);
+  } finally {
+    setBoardBusy(false);
+  }
+}
+window.measureNarration = measureNarration;
+window.updateTimingPill = updateTimingPill;
+
 window.setPlanMode = setPlanMode;
 window.replanPictures = replanPictures;
 

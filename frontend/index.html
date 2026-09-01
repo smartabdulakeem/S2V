@@ -193,6 +193,8 @@
               <input type="number" id="plan-hold-max" min="2" max="900" value="75" class="hold-input">s each
             </span>
             <button type="button" id="btn-replan-pictures" onclick="replanPictures()">Re-plan pictures</button>
+            <span class="mono timing-pill warn" id="timing-pill" title="Boundaries are only as good as the timings they are placed on">estimated from word count</span>
+            <button type="button" id="btn-measure-narration" onclick="measureNarration()">Measure narration</button>
             <label for="image-count" id="image-count-label" class="mono board-count-label hidden">How many images?</label>
             <input type="number" id="image-count" min="1" max="500" value="31" class="board-count-input hidden" oninput="onImageCountInput(this.value)" onblur="onImageCountCommit(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
             <span class="mono hidden" id="image-count-hint">~0 words · 0.0 min · about 25s per image</span>

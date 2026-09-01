@@ -806,6 +806,62 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def measure_narration_for_script(self, script_data: dict) -> dict:
+        """
+        Render every line and record how long it really takes to say.
+
+        Planning guessed a line's length from its word count. 2.6 words a second
+        is fair across a film and wrong on every individual line, so boundaries
+        placed on it drift from the audio the viewer hears.
+
+        The audio is generated for the render anyway and is cached under the same
+        project key the render uses, so this moves the work earlier rather than
+        adding it - a later render finds the files already there.
+        """
+        import base64
+        import hashlib
+
+        def _push(event: dict):
+            payload = base64.b64encode(
+                json.dumps(event, ensure_ascii=False).encode("utf-8")
+            ).decode("ascii")
+            try:
+                self._window.evaluate_js(
+                    f"window.onTimingProgress("
+                    f"JSON.parse(window.decodeBase64UTF8('{payload}')))"
+                )
+            except Exception:
+                pass
+
+        try:
+            from pipeline.narration_timing import measure_narration
+
+            project = script_data.get("project") or {}
+            title = project.get("title") or "Untitled Project"
+            # Same key the renderer uses, so measuring warms the render's cache
+            # instead of building a second copy of every mp3 beside it.
+            proj_hash = hashlib.md5(title.encode("utf-8")).hexdigest()[:8]
+            cache_dir = os.path.join(BASE_DIR, "cache", proj_hash)
+
+            google_key = (self._settings.get("google_tts_api_key", "").strip()
+                          or self._settings.get("google_api_key", "").strip())
+
+            total = len(script_data.get("segments") or [])
+            seen = {"n": 0}
+
+            def on_progress(message):
+                seen["n"] += 1
+                _push({"done": seen["n"], "total": total, "message": message})
+
+            stats = measure_narration(script_data, cache_dir=cache_dir,
+                                      google_api_key=google_key,
+                                      on_progress=on_progress)
+            _push({"done": total, "total": total, "message": "", "finished": True})
+            return {"success": True, "script_data": script_data, **stats}
+        except Exception as e:
+            _push({"done": 0, "total": 0, "message": "", "finished": True})
+            return {"success": False, "error": str(e)}
+
     def plan_pictures_for_script(self, script_data: dict, image_count: int = None,
                                  min_hold: float = 8.0, max_hold: float = 75.0) -> dict:
         """
