@@ -315,3 +315,45 @@ def plan_pictures(script_lines: list, seconds: list, series_cfg: dict = None,
 
     return repair_spans(parse_plan_reply(reply, n), n, seconds,
                         min_hold, max_hold, exact_count)
+
+def apply_spans(script_data: dict, spans: list) -> dict:
+    """
+    Write a picture plan onto the script as `share_with`, and return a report.
+
+    One shot per segment: the plan is about which narration a picture carries,
+    and a segment is the unit of narration. A segment carrying several shots is
+    collapsed to its first, which is what sharing already means for it.
+    """
+    segments = script_data.get("segments") or []
+    owner_of = {}
+    description_of = {}
+
+    for span in spans:
+        first = max(1, int(span["first_line"]))
+        last = min(len(segments), int(span["last_line"]))
+        if first > len(segments):
+            continue
+        owner_seg = segments[first - 1]
+        owner_id = ((owner_seg.get("shots") or [{}])[0].get("shot_id")
+                    or f"{owner_seg.get('segment_id', first)}a")
+        description_of[owner_id] = (span.get("description") or "").strip()
+        for line in range(first, last + 1):
+            owner_of[line] = (owner_id, line == first)
+
+    for i, seg in enumerate(segments, 1):
+        shots = seg.get("shots") or []
+        shot = shots[0] if shots else {"shot_id": f"{seg.get('segment_id', i)}a",
+                                       "query": "documentary shot",
+                                       "scene": seg.get("narration", "")}
+        owner_id, is_owner = owner_of.get(i, (None, True))
+
+        shot["share_with"] = None if (is_owner or owner_id is None) else owner_id
+        if is_owner and owner_id and description_of.get(owner_id):
+            shot["visual_description"] = description_of[owner_id]
+        elif not is_owner:
+            shot.pop("visual_description", None)
+
+        seg["shots"] = [shot]
+
+    return {"pictures": sum(1 for s in segments if not s["shots"][0].get("share_with")),
+            "segments": len(segments)}
