@@ -98,3 +98,30 @@ def test_static_really_is_static(source_image, tmp_path):
     a = _frame(out, 0.2, str(tmp_path / "s_a.png"))
     b = _frame(out, 1.6, str(tmp_path / "s_b.png"))
     assert _difference(a, b) < 0.5
+
+
+def test_a_picture_held_for_minutes_barely_moves():
+    """
+    The owner's concern, in his words: "This may affect the image editing, I
+    mean the moving, zooming in, zooming out ... but I know there's always a
+    way around that where we're not zooming that much."
+
+    Travel is clamped, so an image held ten minutes travels no further than one
+    held five seconds — the same distance over 120x the time, which is 120x
+    slower. Nothing needs adding; this is here so nothing removes it.
+    """
+    from pipeline.motion import travel_for, MOTION_STYLES
+
+    ceiling = MOTION_STYLES["ken_burns"]["max"]
+
+    assert travel_for("ken_burns", 600.0) == ceiling
+    assert travel_for("ken_burns", 75.0) == ceiling
+    # Sample at 3.0s: rate 0.05 * 3.0s = 0.15 < max 0.24 (at 5.0s rate*5.0=0.25 hits max clamp)
+    assert travel_for("ken_burns", 3.0) < ceiling
+
+
+def test_the_static_style_still_holds_perfectly_still_at_any_length():
+    from pipeline.motion import travel_for
+
+    assert travel_for("static", 600.0) == 0.0
+    assert travel_for("static", 8.0) == 0.0
