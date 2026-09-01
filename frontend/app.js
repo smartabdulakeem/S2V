@@ -1625,6 +1625,57 @@ function rememberResolvedImages() {
   });
 }
 
+/* ── Pictures, not shots ─────────────────────────────────────────────────────
+   The board drew one row per shot. A 347-segment film with 60 pictures drew 347
+   rows, most of them repeats of a picture already shown further up, and there
+   was no way to see how long a picture actually held or which stretch of
+   narration it had been given. These helpers group the segments back into the
+   pictures they belong to, so a row is a picture and carries its real timing. */
+
+/** Spoken seconds per segment: measured where a timing pass has run, estimated elsewhere. */
+function segmentSecondsList(script) {
+  return (script.segments || []).map(seg => {
+    const measured = parseFloat(seg.narration_seconds);
+    if (isFinite(measured) && measured > 0) return measured;
+    const words = String(seg.narration || "").trim().split(/\s+/).filter(Boolean).length;
+    return words ? words / 2.6 : 0;   // WORDS_PER_SECOND, same as the backend
+  });
+}
+
+/** Walk the script once, following share_with, and return one entry per picture. */
+function picturesFromScript(script) {
+  const secs = segmentSecondsList(script);
+  const pictures = [];
+  let elapsed = 0;
+
+  (script.segments || []).forEach((seg, i) => {
+    const shot = (seg.shots || [])[0] || {};
+    if (!shot.share_with || !pictures.length) {
+      pictures.push({
+        number: pictures.length + 1,
+        key: `${seg.segment_id}_${shot.shot_id}`,
+        firstLine: i + 1,
+        lastLine: i + 1,
+        startsAt: elapsed,
+        seconds: secs[i] || 0,
+        narration: [seg.narration || ""]
+      });
+    } else {
+      const p = pictures[pictures.length - 1];
+      p.lastLine = i + 1;
+      p.seconds += secs[i] || 0;
+      p.narration.push(seg.narration || "");
+    }
+    elapsed += secs[i] || 0;
+  });
+  return pictures;
+}
+
+function mmss(t) {
+  const whole = Math.max(0, Math.round(t));
+  return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+}
+
 function renderStoryboardScreen() {
   const listContainer = document.getElementById("storyboard-list");
   if (!listContainer) return;
@@ -1673,6 +1724,10 @@ function renderStoryboardScreen() {
 
   syncImageCountControl();
 
+  const pictures = picturesFromScript(currentScriptData);
+  const pictureByKey = {};
+  pictures.forEach(pic => { pictureByKey[pic.key] = pic; });
+
   let html = "";
 
   currentScriptData.segments.forEach(seg => {
@@ -1681,8 +1736,13 @@ function renderStoryboardScreen() {
     const shots = seg.shots || [{ shot_id: `${segId}a`, query: seg.b_roll_keyword || "visual" }];
 
     shots.forEach(shot => {
+      // A shot pointing at another shot's image is not a picture of its own. It
+      // used to draw its own row, repeating a picture already shown above.
+      if (shot.share_with) return;
+
       const shotId = shot.shot_id;
       const key = `${segId}_${shotId}`;
+      const pic = pictureByKey[key];
       const rep = reportMap[key] || {
         state: "matched",
         best_score: 0.32,
@@ -1763,10 +1823,15 @@ function renderStoryboardScreen() {
           ${thumbHtml}
           <div class="body">
             <div class="head">
-              <span class="sid">SEGMENT ${segId} &middot; SHOT ${shotId}</span>
+              <span class="sid">${pic ? `PICTURE ${String(pic.number).padStart(2, "0")}` : `SEGMENT ${segId} &middot; SHOT ${shotId}`}</span>
+              ${pic ? `<span class="mono pic-timing">${mmss(pic.startsAt)} &rarr; ${mmss(pic.startsAt + pic.seconds)}
+                 &middot; holds ${pic.seconds.toFixed(1)}s
+                 &middot; ${pic.firstLine === pic.lastLine
+                     ? `script line ${pic.firstLine}`
+                     : `script lines ${pic.firstLine}-${pic.lastLine}`}</span>` : ""}
               <span class="pill ${pillClass}">${pillText}</span>
             </div>
-            <p class="narr">&ldquo;${narration}&rdquo;</p>
+            <p class="narr">&ldquo;${pic ? pic.narration.join(" ") : narration}&rdquo;</p>
             <p class="q">query: ${rep.query || shot.query}</p>
             ${pinWarnHtml}
             ${altsHtml}
