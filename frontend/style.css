@@ -1920,3 +1920,45 @@ tbody tr:last-child td {
 }
 
 .mb-sm { margin-bottom: 10px; }
+
+/* ── Picture planning controls ──────────────────────────────────────────────
+   Auto lets the story decide how many pictures the film needs; Exact number is
+   the override, and one picture for a whole film is a legitimate answer. */
+.plan-seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.plan-seg-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-3, var(--ink));
+  cursor: pointer;
+}
+.plan-seg-btn + .plan-seg-btn { border-left: 1px solid var(--line); }
+.plan-seg-btn.active {
+  background: var(--brass-soft);
+  color: var(--brass);
+}
+.plan-hold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.hold-input {
+  width: 46px;
+  padding: 2px 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: right;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+}
+

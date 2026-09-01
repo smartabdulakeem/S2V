@@ -1944,6 +1944,70 @@ async function applyShotRhythm(secs) {
     setBoardBusy(false);
   }
 }
+/* ── Picture planning ────────────────────────────────────────────────────────
+   The old budget divided the runtime by a count and cut there, which put
+   boundaries inside narration with nothing to photograph. These controls hand
+   the whole script to a model and let it choose the boundaries instead. */
+let planMode = "auto";
+
+function setPlanMode(mode) {
+  planMode = (mode === "exact") ? "exact" : "auto";
+  const on = (id, yes) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("hidden", !yes);
+  };
+  const seg = (id, yes) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("active", yes);
+  };
+  seg("plan-mode-auto", planMode === "auto");
+  seg("plan-mode-exact", planMode === "exact");
+  on("plan-hold-group", planMode === "auto");
+  on("image-count-label", planMode === "exact");
+  on("image-count", planMode === "exact");
+  on("image-count-hint", planMode === "exact");
+}
+
+/** Ask the model where the pictures belong, then redraw the board. */
+async function replanPictures() {
+  if (isWebMode || !currentScriptData) return;
+
+  const num = (id, fallback) => {
+    const el = document.getElementById(id);
+    const v = parseFloat(el && el.value);
+    return isFinite(v) && v > 0 ? v : fallback;
+  };
+
+  const exact = planMode === "exact"
+    ? Math.max(1, Math.min(500, Math.round(num("image-count", 1))))
+    : null;
+  const minHold = num("plan-hold-min", 8);
+  const maxHold = num("plan-hold-max", 75);
+
+  setBoardBusy(true, exact
+    ? `Planning exactly ${exact} picture${exact === 1 ? "" : "s"}…`
+    : "Letting the story decide how many pictures…");
+  try {
+    const res = await window.pywebview.api.plan_pictures_for_script(
+      currentScriptData, exact, minHold, maxHold);
+    if (!res.success) {
+      alert("Could not plan the pictures: " + (res.error || "unknown error"));
+      return;
+    }
+    currentScriptData = res.script_data;
+    if (currentScriptPath) {
+      await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+    }
+    await refreshStoryboardCoverage();
+  } catch (e) {
+    alert("Could not plan the pictures: " + e.message);
+  } finally {
+    setBoardBusy(false);
+  }
+}
+window.setPlanMode = setPlanMode;
+window.replanPictures = replanPictures;
+
 window.applyShotRhythm = applyShotRhythm;
 window.applyImageBudget = applyImageBudget;
 window.onImageCountInput = onImageCountInput;
