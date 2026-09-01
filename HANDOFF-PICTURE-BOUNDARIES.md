@@ -1,314 +1,188 @@
-# Handoff — the image problem, and the plan that replaces it, 1 Sep 2026
+# Handoff — model-chosen picture boundaries, 1 Sep 2026
 
-Paste this whole file into a new chat to pick the work up cold.
+Paste this whole file into a new chat to pick the work up cold. It replaces the earlier
+handoff of the same name.
 
 ## Which document goes where
 
-There are two documents. They have different readers.
-
-| Document | Who reads it | How |
-|---|---|---|
-| **This file** — `HANDOFF-PICTURE-BOUNDARIES.md` | **The new Claude chat** | The owner pastes it in. It is the only thing he pastes. |
-| **The plan** — `docs/superpowers/plans/2026-09-01-model-chosen-picture-boundaries.md` | **Antigravity** | The owner gives it to Antigravity to write code from. |
-
-**Claude: do not ask him to paste the plan.** It is 77 KB of code and pasting it would waste the
-context this handoff exists to save. Open it from disk yourself when you need it:
-
-```
-C:\Users\HomePC\Documents\GitHub\Smart-Studio\docs\superpowers\plans\2026-09-01-model-chosen-picture-boundaries.md
-```
+| Document | Who reads it |
+|---|---|
+| **This file** | **The new Claude chat.** The owner pastes it in, and it is the only thing he pastes. |
+| **The plan** — `docs/superpowers/plans/2026-09-01-model-chosen-picture-boundaries.md` | **Claude, from disk.** 80 KB. Never ask the owner to paste it. |
+| **`TASK-N-FOR-ANTIGRAVITY.md`** in the repo root | **Antigravity.** Claude writes these one at a time. |
 
 **Repo:** `C:\Users\HomePC\Documents\GitHub\Smart-Studio`
-**Branch:** `feat/image-budget` — **113 commits, none pushed.** This machine holds the only copy.
+**Branch:** `feat/image-budget` — **57 commits ahead of `origin/feat/image-budget`, nothing pushed today.**
 **Python:** `C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe` (not on PATH).
 Prefix anything printing prompt text with `PYTHONIOENCODING=utf-8`.
-**Suite:** **549 tests in 43 files, ~8–14 minutes.** Last full run: **548 passed, 1 xfailed, 0 failures.**
+**Suite: 46 files, 574 tests, ~44 minutes.** Last full run: **569 passed, 1 xfailed, 0 failed**
+— that run predates Tasks 4–5, which added 5 + 14 tests, all passing in their own files.
 
-> If a test report says "30 passed" it ran one file, not the suite. Antigravity reported exactly
-> that as a "clean baseline" — it is not, and a run under 500 has not tested anything.
-
----
-
-## Where this stands in one paragraph
-
-The owner's films came out with generic, drifting image prompts. Three separate defects were found
-and fixed today, in order of discovery, and each was hiding the next. The last one is not a wording
-problem at all: **picture boundaries are cut by a clock, so 18 of his 60 pictures are assigned to
-stretches of narration with nothing in them to photograph.** No instruction text fixes an empty
-span. A 13-task plan replaces clock-cut boundaries with boundaries a model chooses from the whole
-script. **Nothing has been executed yet.** The plan is written, reviewed and ready.
+> The old handoff said the suite takes 8–14 minutes. It does not — it takes **44** on this
+> machine. A report claiming a full clean run in ten minutes has not run the suite.
 
 ---
 
-## The evidence, so nobody re-litigates it
+## Where this stands
 
-Measured on `projects/Before_Adam_The_Story_of_Iblis` — 347 segments, ~18 minutes, 60 pictures:
+The root cause was never wording: **18 of the owner's 60 pictures were assigned to stretches of
+narration with nothing in them to photograph**, because boundaries were cut by a clock. A
+13-task plan replaces clock-cut boundaries with boundaries a model chooses from the whole
+script. **Tasks 1–5 are built, verified and committed. Task 6 is written and waiting.**
 
-| Claim | Truth |
-|---|---|
-| "The app forces one image per sentence" | **False.** 347 segments → 60 pictures, **mean 18.8s, median 20.2s** on screen. Already cinematic pacing. |
-| "The script is being truncated" | **False.** 16,215 chars against a 60,000 cap. The model sees all 347 lines. |
-| "The prompts are vague" | **Symptom.** 18 of 60 spans contain almost nothing photographable — **7 of them in the first 15 pictures**, which is exactly where the owner stopped generating. |
+Do not re-litigate the evidence. Measured on `projects/Before_Adam_The_Story_of_Iblis` (347
+segments, ~18 min, 60 pictures): mean 18.8s per picture, median 20.2s — there is no "one image
+per sentence" problem and never was. The script is not truncated (16,215 chars against a 60,000
+cap). **Success is the empty-span count dropping from 18 of 60. Success is NOT a lower picture
+count** — judging on count would let a worse film pass.
 
-Picture 9 covers script lines 41–44 in full:
+## Commits so far, newest first
 
 ```
-[41] Some describe him as belonging to a group of creatures associated with the angels and called jinn.
-[42] Other reports describe him as having been among the most devoted and knowledgeable worshippers.
-[43] And the reports differ over exactly how his position should be understood.
-[44] But they converge on something important.
+64f4259  Task 5  ask the model where pictures belong, parse spans from the reply
+8756727  Task 4  exact picture count holds from one to one-per-line
+4e466ad  ——————  fix(voiceover): re-record a line when its words change
+1bffbcd  Task 3  deterministic span repair guaranteeing a legal picture plan
+d2a3267  Task 2  narration timing pass writes measured seconds and audio paths
+77d6301  Task 1  measured narration seconds with word-count fallback
+d8a3c4d  ——————  the three prompt-quality fixes from 31 Aug (see that commit body)
 ```
 
-No subject, no action, no place. A model ordered to illustrate that returns "a commanding, imposing
-cloaked figure on a ridge" because that is all the span supports. **That is the root cause.**
+## Two things fixed beyond the plan — do not revert them
 
----
+1. **`parse_plan_reply` tolerates markdown.** The plan's regex dropped every span from a
+   bulleted reply, a bold reply, or one labelled `Picture 1 (1-4):`. A reply whose every line is
+   dropped parses as nothing, which `repair_spans` answers with **one picture for the whole
+   film** — so a correct answer became an eighteen-minute still, silently. Since there are no
+   API credits and the request is pasted into a browser chat, that was the likeliest real
+   outcome, not an edge case. Five tests cover the formats.
 
-## What was fixed today — all uncommitted, all in the working tree
+2. **`generate_voiceover` re-records when the words change.** It keyed its cache on segment
+   number and tone only, so rewording a line returned the previous recording of the previous
+   words. Since Task 2 that stale duration also decides where a picture starts and ends. Fixed
+   with a `.text` fingerprint beside the existing `.tone` marker. Audio cached before the fix is
+   **adopted and stamped, not re-recorded**, so existing films do not all regenerate; the cost
+   is that an already-stale segment stays stale one more time.
 
-### 1. The description request was rebuilt around pictures, not sentences
-`pipeline/shot_description.py`
+## What is left
 
-- The narration excerpt is **no longer pasted** under the instruction as the thing to illustrate.
-  A picture is named by its number and its span (`Picture 7 — script lines 31-36`); the lines
-  themselves are already in the full-script block above.
-- The film's picture count and the **whole plan** travel with every batch, so a batch writing
-  41–60 knows 1–40 exist.
-- Replies are parsed by **picture number**, not batch position. Previously a reply numbered 41–60
-  against a 20-item batch was discarded whole and those shots fell to keyword search.
-- Only picture-owning shots are described. It used to send all 347 for a 60-picture film and throw
-  287 away.
-- `RICH_WORD_CAP` 150 → 220. An over-cap description is **discarded**, not trimmed, so the richer
-  output contract would have silently undone itself.
-
-### 2. Depiction rules — the reason images were unusable
-`pipeline/shot_description.py`, `pipeline/library.py`, and the niche config
-
-The owner's own prompts end with exclusions on **60 of 60** lines. The app's ended with them on
-**0 of 60** — and the niche has held a 234-character `negative_block` all along that was never
-shown to the model.
-
-- `negative_block` now reaches the model as *"Standing exclusions for this film"*.
-- Every description must end with what must not appear. *"A picture with nothing excluded is not finished."*
-- **New `never_show_face` list**, a sibling of `never_depict`. `never_depict` removes a figure
-  (right for the Divine); `never_show_face` keeps it present but never identifiable — for Iblis,
-  Shaytan, Satan, the jinn, angels, Adam. Without it the model wrote *"a figure's tense, furrowed
-  brow, cold eyes staring with bitter envy"*, which renders as a photographed human model.
-- **Bug fixed:** `save_series_override` kept a fixed key list that never included `never_depict`.
-  Editing any other niche field would have silently erased the only rule keeping faces off the
-  Divine. Both lists are on the list now, with a round-trip test.
-
-### 3. Pacing — the tail collapse
-`pipeline/text_parser.py` → `plan_image_budget`
-
-A run closed on the first segment past `total / N` and **reset the counter**, so every run finished
-long, the surplus accumulated, and the segments ran out before the runs did. The film ended in a
-burst of one-segment pictures: 1.2s, 1.6s, 3.6s. It got **worse** the more images were asked for
-(20 → 0 bad, 40 → 3, 60 → 7, 80 → 13), which is why raising the budget made pacing feel worse.
-
-Fixed by cutting at cumulative boundaries. Budget 60: nothing under 10.8s, spread halved.
-
-> **The owner's critique of this fix is correct and worth carrying forward:** it made the runs
-> *more even*, and evenness is not editorial judgement. It removed an indefensible defect
-> (1.2-second pictures) without addressing the real problem. That is what the plan is for.
-
-### 4. Niche config — the owner's content, backed up first
-`config/series_overrides/pre_islamic_prophetic___global_history.json` (**gitignored — exists nowhere else**)
-
-- Added `never_show_face: ["Iblis", "Shaytan", "Satan", "the jinn", "angels", "Adam"]`
-- Added a `NON-HUMAN BEINGS AND THE UNSEEN` section to `prompt_recipe` (5,277 → 6,487 chars):
-  smokeless fire for Iblis and the jinn, light rather than bodies for angels, unformed clay for
-  Adam before the breath, the Divine shown only by its effect. Prohibitions alone produced "a
-  cloaked figure"; the model needed somewhere to put the meaning.
-
-**Backup:** `C:\Users\HomePC\Documents\GitHub\Smart-Studio\config\_backups\niche-pre_islamic-2026-09-01.json`
-
-To revert both niche changes:
-
-```bash
-copy "C:\Users\HomePC\Documents\GitHub\Smart-Studio\config\_backups\niche-pre_islamic-2026-09-01.json" "C:\Users\HomePC\Documents\GitHub\Smart-Studio\config\series_overrides\pre_islamic_prophetic___global_history.json"
-```
-
-Note: `config/_backups/` is **not** gitignored, unlike `config/series_overrides/`. That backup is
-currently untracked. Committing it would put a copy of his niche in git — protective, since his
-niches exist nowhere else, but it is his call, not a default. Nothing was committed.
-
----
-
-## The plan — 13 tasks, nothing executed
-
-`docs/superpowers/plans/2026-09-01-model-chosen-picture-boundaries.md`
-
-Hand the **whole file** to Antigravity. It contains every file path, the actual code, exact
-commands and expected output.
-
-**What it does:** time stops choosing where pictures go and only constrains how long one may hold.
-The model that already reads the whole script returns the boundaries.
-
-| Phase | Tasks | |
+| Phase | Tasks | State |
 |---|---|---|
-| 1 | 1–4 | Measured narration seconds + audio paths; **deterministic span repair** (built before anything asks a model, so a mangled reply can never break a film) |
-| 2 | 5–8 | Ask the model where pictures belong; parse; spans → `share_with`; app endpoint |
-| 3 | 9–11 | Motion clamp verified; timecodes in the export; **WolfCut timeline with no video encode** |
-| 4 | 12–13 | The whole chain in order; acceptance on the real film |
+| 1 | 1–4 | **Done.** Measured seconds, audio paths, deterministic span repair, exact count. |
+| 2 | 5–8 | **5 done.** 6 written and waiting. 7 spans → `share_with`. 8 app endpoint. |
+| 3 | 9–11 | Motion clamp verified; timecodes in the export; WolfCut timeline with no video encode. |
+| 4 | 12–13 | The whole chain in order; acceptance on the real film. |
 
-**Start with Phase 1.** It needs no API key, so it builds and tests entirely offline.
+**Next action: hand `TASK-6-FOR-ANTIGRAVITY.md` to Antigravity.**
 
 ### Decisions already settled — do not re-open
 
-- **Exact count beats the holding range.** Auto mode: 8–75s per picture, count falls out of the
-  story. Manual mode: the owner asks for N and gets exactly N, down to **one picture for a whole
-  20-minute film**. The ceiling must not quietly split it back.
-- **Every failure has one home.** Dead provider, refusal, garbled reply — all end at one picture
+- **Exact count beats the holding range.** Auto: 8–75s per picture, count falls out of the
+  story. Manual: N exactly, down to one picture for a whole 20-minute film. Proven in Task 4.
+- **Every failure has one home** — dead provider, refusal, garbled reply all end at one picture
   over the whole film. The parser never guesses; `repair_spans` decides.
 - **`plan_image_budget` is not deleted.** It stays as the offline fallback.
 - **Automatic image selection is untouched.** `plan_shots` still binds pin → numbered folder →
-  CLIP retrieval → gap. It binds to model-chosen boundaries instead of clock-cut ones. Task 12
-  proves it.
-- **Motion needs no work.** `travel_for` already clamps travel (`ken_burns` max 0.24), so an image
-  held 70s moves nine times slower than one held 8s. Task 9 exists so nobody removes that.
-
-### Success criterion — the one thing that matters
-
-**The empty-span count dropping from 18 of 60.** Task 13 re-measures it.
-
-**Success is NOT a lower picture count.** An external report claimed the app forces one image per
-sentence and that the fix should yield "15–30 instead of 60–100". That is false — see the evidence
-table. Judging on picture count would let a *worse* film pass.
+  CLIP retrieval → gap, now against model-chosen boundaries. Task 12 proves it.
+- **Motion needs no work.** `travel_for` already clamps travel; Task 9 only stops anyone
+  removing that.
 
 ---
 
-## Open items, in the owner's own priority
-
-1. **Nothing from today is committed.** 6 modified source files, 2 new test files, the plan.
-   `library/index.npz` is modified — commit it, never `git checkout --` it.
-2. **`library/new image/`** holds 60 images generated from the owner's *own* prompt list, numbered
-   to *his* cut of the script, not the app's — 60 of 60 filenames match his prompts, 0 of 60 match
-   the app's. They cannot bind to the app's slots. Git also shows 47 deletions there from a previous
-   project; the folder is reused as scratch. **His decision what happens to them — nothing has been
-   deleted or moved.**
-3. **`era_block` is 136 chars** and appended to every prompt: *"Antiquity to pre-Islamic Late
-   Antiquity… up to 6th-century Arabia."* No single era line is true across a film spanning
-   pre-human antiquity to 6th-century Arabia. A previous session emptied it deliberately. **Ask
-   before removing it again.**
-4. **WolfCut has never been opened.** The export writes a real timeline and Task 11 makes it
-   available without a render, but no `.wolfcut` file has ever been loaded in WolfCut itself. That
-   is the one test only the owner can run.
-5. **Background music is not exported.** WolfCut gets T1 pictures, T2 narration, T3 captions. Music
-   and SFX are added by hand — which is the human-touch window the owner wants, but he should know
-   it before opening the file. A T4 music track is a small addition if he asks.
-
----
-
-## How the work actually runs — read this before doing anything
-
-**The loop, and it does not vary:**
+## How the work runs — read this before doing anything
 
 ```
-1. YOU write the instruction        a task from the plan, or a smaller piece of one
-2. Antigravity writes the code      one task, then it STOPS — see ANTIGRAVITY-RULES.md.
-                                    It does not commit.
-3. The owner brings you the report  test output, git diff, changed files
-4. YOU verify and fix               read the code, find the errors, edit them yourself
-5. Next task                        break it into smaller pieces if Antigravity struggled
+1. YOU write the instruction     generate TASK-N-FOR-ANTIGRAVITY.md from the plan
+2. Antigravity writes the code   one task, then it STOPS. It does not commit.
+3. The owner says "antigravity is done"
+4. YOU verify from disk          read the files yourself — he does not paste them
+5. YOU commit, then write Task N+1
 ```
 
-**You are the one who verifies. Not him.** This is the single most important thing in this file.
-He is not a programmer and does not review code, prompts or test output. He relays. When he pastes
-a report, a diff, or a set of generated prompts, he is handing you evidence to judge — he is not
-telling you it is correct, and he is not asking you to confirm his reading of it. Read it yourself
-and say plainly what is right and what is wrong.
+**You verify. Not him.** He is not a programmer and does not review code, prompts or test
+output. He relays. Read the files off disk yourself; **do not ask him to paste file contents
+into the chat** — he is managing tokens and asked for this explicitly.
 
-**That includes the prompts.** He pastes `prompt_request.txt` into a browser chat because there are
-no API credits — Anthropic and OpenAI both return 401 through his gateway, Gemini answers on a
-separate Google key. He performs the paste; **you** read what comes back and judge whether it is
-good. Judge by reading the prompts, never by a green suite. A passing suite has never once meant
-the prompts were usable.
+**The verification that actually works,** in this order:
 
-**Antigravity is less capable than you.** That is the point of the split — it is cheap hands, you
-are the judgement. Expect it to: report a subset of the suite as a full run, misread which claims
-about the app are true, drift from the plan's exact code, and stop early. When a task defeats it,
-**break that task into smaller steps and hand it back** rather than doing it yourself. Rewriting
-its work silently defeats the token-management reason the split exists.
+1. `git status --porcelain` — only the intended files changed?
+2. `grep -c "^def test_"` on any file being appended to — did the existing tests survive?
+3. First three bytes of every new file — `efbbbf` means Antigravity used
+   `[System.Text.Encoding]::UTF8` and left a BOM. No other file in this repo has one.
+4. **Mechanically diff its transcription against the plan's code block.** It has been exact
+   five times running; a difference is the thing to look for, not to assume.
+5. Run the tests yourself.
+6. **Then judge the thing itself.** A green suite has never once meant the prompts were usable.
+   Render the actual request text and read it; probe the parser with the formats a browser chat
+   really produces. Both fixes above were found this way, *after* the suite was green.
 
-**Ask one focused question when something is ambiguous.** Do not guess his intent. Explain in plain
-terms; never hand-wave a path or a command — always the full `C:\...` path and the literal command.
+**Antigravity is less capable than you.** That is the point of the split. Every task file must
+repeat: do not commit, never `git add -A`, no BOM, append don't regenerate, name the exact test
+count to preserve, and report **file paths only, never file contents**.
 
----
+## How to report to him — required shape
 
-## How to report back to him — required shape
+Lead with the verdict. Then three headings, a few lines each:
 
-He is not a programmer. He is deciding what to build next and whether the last thing worked. A
-report he cannot act on is a failed report, however accurate it is.
+- **✅ What's done** — in terms of the film, not the code. Name the task number.
+- **⏳ What's left** — how much of the plan remains; what is blocking, and who unblocks it.
+- **▶️ What we can do now** — **one** next action and who does it. If there is a real choice,
+  ask one focused question with a recommendation.
 
-**Every time you finish verifying a task, answer these three questions in this order, under these
-headings, in plain English:**
+Rules: numbers not adjectives ("18 of 60 spans had nothing to photograph"). No jargon without a
+plain-English gloss. Never let "the tests pass" stand for "it works". Say plainly when something
+is broken — he would rather read "Antigravity got this wrong, I fixed it" in the first line.
+Full `C:\...` paths, literal commands in their own code block. Keep it short.
 
-### ✅ What's done
-What now works that did not work before, said in terms of the film — not the code. Name the task
-number so he can track it against the plan.
-
-### ⏳ What's left
-What has not been built yet, and roughly how much of the plan remains. If something is blocked, say
-what is blocking it and who has to unblock it — him, Antigravity, or you.
-
-### ▶️ What we can do now
-The single next action, and who does it. One thing, not a menu. If there is a real choice to make,
-ask it as one focused question with a recommendation.
-
-**Rules for the whole report:**
-
-- **Lead with the verdict.** "Task 3 is correct and I fixed two things" — not a narrative of what
-  you read.
-- **No jargon without a plain-English gloss.** Not "the cumulative partition prevents tail
-  collapse" — say "the film no longer ends with eight images flashing past in half a minute."
-- **Never let "the tests pass" stand for "it works."** A green suite has never once meant the
-  prompts were usable. If you have not looked at real output, say so.
-- **Say plainly when something is broken.** Do not soften it, do not bury it under what went well.
-  He would rather hear "Antigravity got this wrong, I fixed it" in the first line.
-- **Full paths, literal commands.** Always `C:\Users\HomePC\...`, never "your config file". Put any
-  command he should run in its own code block.
-- **Numbers, not adjectives.** "18 of 60 spans had nothing to photograph" beats "the pacing was
-  poor." He makes decisions from numbers.
-- **Keep it short.** Three headings, a few lines each. Detail lives in the plan and the code; he
-  does not need it recited.
-
-**Worked example of a good report:**
-
-> **Task 3 is done and correct.** Antigravity got the merge logic backwards — it folded short
-> pictures into the *longer* neighbour instead of the shorter one, which would have made your
-> uneven pictures worse, not better. Fixed and re-tested.
->
-> **✅ What's done** — The app can now take any picture plan, however broken, and turn it into a
-> legal one: no missing narration, no two pictures claiming the same line. This is the safety net
-> everything else sits on. Tasks 1–3 of 13.
->
-> **⏳ What's left** — 10 tasks. Next up is the manual override, so you can ask for exactly one
-> picture across a 20-minute film and get it.
->
-> **▶️ What we can do now** — Send Task 4 to Antigravity. It needs no API key, so it can build and
-> test it offline.
+**Give him a fresh handoff at 50% context without being asked.**
 
 ## Ground rules
 
-- **Never `git add -A`** — stages ~816 MB including two 310 MB ONNX models. Stage explicit paths.
+- **Never `git add -A`** — stages ~816 MB including two 310 MB ONNX models. Explicit paths only.
 - **Do not push.** He tests first and will say when.
 - `config/settings.json` is gitignored and holds live API keys. Never print or commit it.
-- `config/series_overrides/` is gitignored — his niches exist nowhere else. **Back up before editing.**
-- Inline `style="` in `frontend/index.html` is capped at **19** and is at 19. Layout goes in `style.css`.
+- `config/series_overrides/` is gitignored — his niches exist nowhere else. Back up before
+  editing. A backup sits at `config/_backups/niche-pre_islamic-2026-09-01.json`, **deliberately
+  left uncommitted** — putting his niche in git is his call, not a default.
+- Inline `style="` in `frontend/index.html` is capped at **19** and is at 19. Layout goes in
+  `style.css`.
 - A stale `cache/` causes phantom failures. Tests touching `describe_shots` must patch
   `_load_disk_cache` / `_save_disk_cache`.
 - **Do not weaken a test.** If one must change, quote it before and after and justify it.
+- Editing repo files from a Python helper: they are **CRLF**. Read bytes, normalise to `\n`,
+  patch, write back as CRLF. Writing LF-only mangles the diff. Beware backslash escapes when
+  generating test source through a shell heredoc — build them from `chr(92)` instead.
+
+## Open items in his priority order
+
+1. **`library/new image/`** holds 60 images from the owner's *own* prompt list, numbered to
+   *his* cut of the script, not the app's — 60 of 60 filenames match his prompts, 0 of 60 match
+   the app's, so they cannot bind to the app's slots. Git also shows 47 deletions there from a
+   previous project; the folder is reused as scratch. **His decision. Nothing has been deleted
+   or moved.**
+2. **`era_block` is 136 chars** appended to every prompt: *"Antiquity to pre-Islamic Late
+   Antiquity… up to 6th-century Arabia."* No single era line is true across a film spanning
+   pre-human antiquity to 6th-century Arabia. A previous session emptied it deliberately.
+   **Ask before removing it again.**
+3. **WolfCut has never been opened.** Task 11 makes a timeline available without a render, but
+   no `.wolfcut` file has ever been loaded in WolfCut itself. Only he can run that test.
+4. **Background music is not exported.** WolfCut gets T1 pictures, T2 narration, T3 captions.
+   Music and SFX are added by hand — the human-touch window he wants, but he should know it
+   before opening the file. A T4 music track is a small addition if he asks.
+5. **The `TASK-N-FOR-ANTIGRAVITY.md` files** accumulate in the repo root, untracked. Harmless;
+   clear them when the plan is done.
 
 ## Where the code is
 
 | What | Where |
 |---|---|
+| Boundary request + reply parser | `pipeline/picture_plan.py` → `build_plan_request`, `parse_plan_reply`, `_unformat` |
+| Span repair, exact count | `pipeline/picture_plan.py` → `repair_spans`, `_force_count`, `_merge_short` |
+| Measured narration seconds | `pipeline/narration_timing.py` → `segment_seconds`, `measure_narration`, `timing_maps` |
+| Voiceover cache keys | `pipeline/voiceover.py` → `generate_voiceover`, `_write_marker` |
 | Instruction sent to the model | `pipeline/shot_description.py` → `_build_instruction`, `RECIPE_OUTPUT_CONTRACT` |
 | Depiction rules | `pipeline/shot_description.py` → `_never_depict_rule`, `_never_show_face_rule` |
-| The batch text: script + picture plan | `pipeline/shot_description.py` → `_build_picture_prompt` |
 | Final prompt assembly, slot order | `pipeline/library.py` → `compose_gap_prompt` |
-| Who owns the camera | `pipeline/library.py` → `compose_gap_prompt`, `model_owns_camera` |
 | Picture runs and spans | `pipeline/library.py` → `picture_runs`, `picture_owning_shots` |
 | The clock-cut budget being replaced | `pipeline/text_parser.py` → `plan_image_budget` |
 | Image binding (unchanged by the plan) | `pipeline/library.py` → `plan_shots` |
