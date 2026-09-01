@@ -806,6 +806,41 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def plan_pictures_for_script(self, script_data: dict, image_count: int = None,
+                                 min_hold: float = 8.0, max_hold: float = 75.0) -> dict:
+        """
+        Let the model decide where the pictures go.
+
+        `image_count` None means the story decides how many and the holding
+        range governs. A number means exactly that many, and the range steps
+        aside — one picture across a twenty-minute film is a legitimate answer.
+        """
+        try:
+            from pipeline.picture_plan import plan_pictures, apply_spans
+            from pipeline.narration_timing import segment_seconds
+            from pipeline.library import get_series_config
+
+            segments = script_data.get("segments") or []
+            lines = [(seg.get("narration") or "").strip() for seg in segments]
+            seconds = segment_seconds(script_data)
+
+            project = script_data.get("project") or {}
+            series_cfg = get_series_config(series_slug=project.get("series_slug"),
+                                           project_title=project.get("title"))
+
+            spans = plan_pictures(lines, seconds, series_cfg=series_cfg,
+                                  min_hold=min_hold, max_hold=max_hold,
+                                  exact_count=int(image_count) if image_count else None)
+            stats = apply_spans(script_data, spans)
+
+            from pipeline.text_parser import assign_effects, style_of
+            assign_effects(script_data, style_of(script_data))
+
+            return {"success": True, "script_data": script_data,
+                    "images_after": stats["pictures"], "segments": stats["segments"]}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def fill_gaps_with_nearest(self, script_data: dict, allow_reuse: bool = True) -> dict:
         """
         Accept the closest library image for every gap, in one action.
@@ -1548,6 +1583,9 @@ class Api:
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+
+SmartStudioAPI = Api
 
 
 # ── Window bootstrap ───────────────────────────────────────────────────────────

@@ -72,3 +72,36 @@ def test_the_report_says_what_was_applied():
     script = _script(5)
     stats = apply_spans(script, SPANS)
     assert stats == {"pictures": 2, "segments": 5}
+
+from unittest.mock import patch
+
+
+def test_auto_mode_lets_the_story_decide_the_count():
+    from app import SmartStudioAPI
+
+    script = _script(20)
+    fake = [{"number": 1, "first_line": 1, "last_line": 12, "description": "a"},
+            {"number": 2, "first_line": 13, "last_line": 20, "description": "b"}]
+
+    with patch("pipeline.picture_plan.plan_pictures", return_value=fake):
+        res = SmartStudioAPI().plan_pictures_for_script(script, image_count=None)
+
+    assert res["success"] is True
+    assert res["images_after"] == 2
+    assert len(picture_owning_shots(script)) == 2
+
+
+def test_manual_mode_passes_the_count_straight_through():
+    from app import SmartStudioAPI
+
+    script = _script(20)
+    seen = {}
+
+    def _capture(script_lines, seconds, **kw):
+        seen.update(kw)
+        return [{"number": 1, "first_line": 1, "last_line": 20, "description": "one"}]
+
+    with patch("pipeline.picture_plan.plan_pictures", side_effect=_capture):
+        SmartStudioAPI().plan_pictures_for_script(script, image_count=1)
+
+    assert seen["exact_count"] == 1
