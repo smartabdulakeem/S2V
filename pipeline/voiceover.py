@@ -12,6 +12,7 @@ import asyncio
 import json
 import re
 import base64
+import hashlib
 import os
 import shutil
 import subprocess
@@ -880,6 +881,16 @@ def _generate_with_gemini_tts(
                 raise RuntimeError(f"Gemini 3.1 Flash TTS failed after 3 attempts: {e}")
 
 
+def _write_marker(path: str, value: str) -> None:
+    """Record a cache key beside its audio. A marker that cannot be written only
+    costs a re-record next time, so failure is not worth raising over."""
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(value)
+    except OSError:
+        pass
+
+
 def generate_voiceover(
     segment_id: int,
     narration: str,
@@ -912,6 +923,15 @@ def generate_voiceover(
     tone_key = resolve_tone(narrative_tone)
     tone_marker = output_path + ".tone"
 
+    # The words are not in the filename either, so rewording a line used to
+    # return the previous recording of the previous words - silently. Since the
+    # narration timing pass that recording's duration also decides where a
+    # picture starts and ends, so a stale mp3 became a stale picture boundary.
+    # The text is fingerprinted beside the tone, and a change to it is treated
+    # exactly the way a tone change already was.
+    text_key = hashlib.sha1((narration or "").encode("utf-8")).hexdigest()
+    text_marker = output_path + ".text"
+
     if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
         cached_tone = ""
         try:
@@ -919,12 +939,27 @@ def generate_voiceover(
                 cached_tone = tf.read().strip()
         except OSError:
             pass
-        if cached_tone == tone_key:
+
+        cached_text = None
+        try:
+            with open(text_marker, "r", encoding="utf-8") as xf:
+                cached_text = xf.read().strip()
+        except OSError:
+            pass
+        if cached_text is None:
+            # Audio cached before this fix has no text marker. Adopting it costs
+            # one stale segment in the worst case; treating it as a miss would
+            # re-record every segment of every film already made.
+            _write_marker(text_marker, text_key)
+            cached_text = text_key
+
+        if cached_tone == tone_key and cached_text == text_key:
             if on_progress:
                 on_progress(f"Segment {segment_id} — voiceover already cached, skipping")
             return output_path
         if on_progress:
-            on_progress(f"Segment {segment_id} — tone changed, re-recording")
+            reason = "tone changed" if cached_tone != tone_key else "narration changed"
+            on_progress(f"Segment {segment_id} — {reason}, re-recording")
         try:
             os.unlink(output_path)
         except OSError:
@@ -1016,11 +1051,8 @@ def generate_voiceover(
             
         _generate_with_edge_tts(tts_text, clean_voice, voice_rate, voice_pitch, output_path)
 
-    try:
-        with open(tone_marker, "w", encoding="utf-8") as tf:
-            tf.write(tone_key)
-    except OSError:
-        pass
+    _write_marker(tone_marker, tone_key)
+    _write_marker(text_marker, text_key)
 
     if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError(
