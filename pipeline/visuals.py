@@ -1065,6 +1065,16 @@ def write_prompt_request(script_dict: dict) -> str:
         "last_line": run["last_line"],
     } for run in library.picture_runs(flat)]
 
+    # On-screen times, so an outside AI can pace a description to the seconds
+    # it actually has. Estimated until the narration has been rendered.
+    from pipeline.narration_timing import segment_seconds
+    seconds = segment_seconds(script_dict)
+    elapsed = 0.0
+    for p in pictures:
+        p["starts_at"] = round(elapsed, 3)
+        elapsed += sum(seconds[p["first_line"] - 1:p["last_line"]])
+        p["ends_at"] = round(elapsed, 3)
+
     # The look the app would have added itself, stated once so the outside AI
     # can put it on every prompt and the pictures match the niche.
     preset = library.resolve_style_preset(cfg, proj.get("visual_type") or "")
@@ -1112,7 +1122,8 @@ def write_prompt_request(script_dict: dict) -> str:
         pictures,
         script_context=narrations,
         picture_plan=[{"number": p["picture_number"], "shot_id": p["shot_id"],
-                       "first_line": p["first_line"], "last_line": p["last_line"]}
+                       "first_line": p["first_line"], "last_line": p["last_line"],
+                       "starts_at": p["starts_at"], "ends_at": p["ends_at"]}
                       for p in pictures],
     ))
 

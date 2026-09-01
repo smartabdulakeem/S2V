@@ -1,4 +1,4 @@
-﻿"""
+"""
 pipeline/shot_description.py
 
 Planning-time pass that writes one visual sentence per shot, stored on the shot
@@ -260,13 +260,22 @@ def _numbered_script(script_context) -> list:
 
 
 def _span_label(entry: dict) -> str:
-    """`script lines 7-13`, or `script line 7` when a picture covers one line."""
+    """`02:14 to 02:33 (script lines 7-13)`, or line numbers alone when untimed."""
     first, last = entry.get("first_line"), entry.get("last_line")
     if not first:
         return "position unknown"
-    if not last or last == first:
-        return f"script line {first}"
-    return f"script lines {first}-{last}"
+    lines = (f"script line {first}" if not last or last == first
+             else f"script lines {first}-{last}")
+
+    start, end = entry.get("starts_at"), entry.get("ends_at")
+    if start is None or end is None:
+        return lines
+
+    def _mmss(value):
+        minutes, secs = divmod(int(round(float(value))), 60)
+        return f"{minutes:02d}:{secs:02d}"
+
+    return f"{_mmss(start)} to {_mmss(end)} ({lines})"
 
 
 def _build_batch_prompt(instruction: str, batch: list, script_context=None,

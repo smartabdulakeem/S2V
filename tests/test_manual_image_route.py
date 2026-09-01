@@ -283,7 +283,7 @@ def test_the_prompt_request_asks_for_exactly_the_pictures_the_film_needs(tmp_pat
         "the picture count is not in the half of the file that gets pasted"
     )
     for i in range(1, 13):
-        assert re.search(rf"^Picture {i} — script lines? \d+", body, re.M), (
+        assert re.search(rf"^Picture {i} .*script lines? \d+", body, re.M), (
             f"picture {i} is missing from the plan"
         )
     assert not re.search(r"^Picture 13 ", body, re.M), (
@@ -319,3 +319,22 @@ def test_a_reply_to_the_request_binds_one_prompt_per_picture(tmp_path, monkeypat
     assert res["unprompted_pictures"] == 0 and res["unused_prompts"] == 0
     for i, (_, shot) in enumerate(picture_owning_shots(data), 1):
         assert shot["prompt_override"] == f"A picture for moment {i}"
+
+
+def test_the_export_says_when_each_picture_is_on_screen(tmp_path, monkeypatch):
+    """
+    "Picture 7 - script lines 31-36" tells an outside AI nothing about pace.
+    "Picture 7 - 02:14 to 02:33" tells it it has nineteen seconds to fill.
+    """
+    from pipeline.visuals import write_prompt_request
+
+    data = _budgeted(60, 12)
+    for i, seg in enumerate(data["segments"], 1):
+        seg["narration_seconds"] = 5.0
+
+    monkeypatch.setattr("pipeline.visuals._generate_placeholder_image", lambda *a, **k: None)
+    text = open(write_prompt_request(data), encoding="utf-8").read()
+    body = text.split("=" * 70, 1)[1]
+
+    assert re.search(r"^Picture 1 .*00:00 to 00:2[05]", body, re.M), body[:600]
+    assert re.search(r"^Picture 12 ", body, re.M)
