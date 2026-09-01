@@ -336,3 +336,128 @@ def test_a_shot_with_no_description_keeps_every_slot(recipe_niche):
 
     out = _compose(RECIPE_CFG, visual_description=None, shot_position=1)
     assert any(f in out for f in DEFAULT_FRAMING_CYCLE), "no framing reached the prompt"
+
+
+# ── asking the model where the pictures go ────────────────────────────────────
+
+from pipeline.picture_plan import build_plan_request, parse_plan_reply
+
+PLAN_SCRIPT = [
+    "Before Adam, there was no human being.",
+    "No cities. No nations.",
+    "Some describe him as belonging to a group called jinn.",
+    "And the reports differ over how his position should be understood.",
+    "Iblis became involved in fighting the rebellious jinn.",
+]
+PLAN_SECONDS = [3.0, 2.5, 5.0, 4.5, 4.0]
+
+
+def test_the_request_shows_every_line_with_its_length():
+    req = build_plan_request("INSTRUCTION", PLAN_SCRIPT, PLAN_SECONDS, 8.0, 75.0)
+    assert "[1] (3.0s) Before Adam, there was no human being." in req
+    assert "[5] (4.0s) Iblis became involved in fighting the rebellious jinn." in req
+
+
+def test_the_request_states_the_runtime_and_the_holding_range():
+    req = build_plan_request("INSTRUCTION", PLAN_SCRIPT, PLAN_SECONDS, 8.0, 75.0)
+    assert "19 seconds" in req
+    assert "at least 8" in req and "at most 75" in req
+
+
+def test_the_request_says_a_stretch_may_carry_no_picture_of_its_own():
+    """
+    The whole point. Without this the model fills every gap in the runtime with
+    an invented figure, which is what 18 of 60 spans got.
+    """
+    req = build_plan_request("INSTRUCTION", PLAN_SCRIPT, PLAN_SECONDS, 8.0, 75.0)
+    assert "carry no picture of its own" in req
+    assert "let the picture before it hold" in req.lower()
+
+
+def test_the_request_demands_full_coverage():
+    req = build_plan_request("INSTRUCTION", PLAN_SCRIPT, PLAN_SECONDS, 8.0, 75.0)
+    assert "line 1 to line 5" in req
+    assert "gap" in req.lower() and "overlap" in req.lower()
+
+
+def test_a_fixed_count_replaces_the_holding_range_in_the_request():
+    req = build_plan_request("INSTRUCTION", PLAN_SCRIPT, PLAN_SECONDS, 8.0, 75.0,
+                             exact_count=2)
+    assert "exactly 2 pictures" in req
+    assert "at least 8" not in req
+
+
+def test_the_reply_is_read_back_into_spans():
+    reply = ("1-2: An untouched primordial landscape, no people, no structures\n"
+             "3-4: A distant ember-lit silhouette on a ridge, no face, no horns\n"
+             "5-5: Dark silhouettes clashing amid embers, no human corpses\n")
+    spans = parse_plan_reply(reply, n_lines=5)
+
+    assert [(s["first_line"], s["last_line"]) for s in spans] == [(1, 2), (3, 4), (5, 5)]
+    assert spans[1]["description"].startswith("A distant ember-lit silhouette")
+
+
+def test_a_single_line_picture_may_be_written_without_a_range():
+    spans = parse_plan_reply("1-4: first\n5: last\n", n_lines=5)
+    assert [(s["first_line"], s["last_line"]) for s in spans] == [(1, 4), (5, 5)]
+
+
+def test_commentary_around_the_answer_is_ignored():
+    """Models preamble. The parser must not turn 'Here is the plan:' into a picture."""
+    reply = ("Here is the plan for your film:\n\n"
+             "1-3: something\n"
+             "4-5: something else\n\n"
+             "Let me know if you would like changes.")
+    spans = parse_plan_reply(reply, n_lines=5)
+    assert [(s["first_line"], s["last_line"]) for s in spans] == [(1, 3), (4, 5)]
+
+
+def test_an_empty_reply_returns_nothing_rather_than_guessing():
+    """repair_spans turns nothing into one whole-film picture. That is its job, not the parser's."""
+    assert parse_plan_reply("", n_lines=5) == []
+    assert parse_plan_reply("I cannot help with that.", n_lines=5) == []
+
+
+# ── the reply as a browser chat actually formats it ───────────────────────────
+
+def test_a_bulleted_reply_is_not_thrown_away():
+    """
+    There are no API credits, so the request is pasted into a browser chat and
+    the answer pasted back. Those chats format lists with markdown by default.
+    A bullet in front of every line used to drop every span, and a reply that
+    parses as nothing is answered by repair_spans with one picture for the whole
+    film - so a perfectly good answer became an eighteen-minute still.
+    """
+    reply = "- 1-4: A ridge under a bruised sky.\n- 5-9: Smokeless fire coiling."
+    got = parse_plan_reply(reply, 10)
+    assert [(s["first_line"], s["last_line"]) for s in got] == [(1, 4), (5, 9)]
+
+
+def test_bold_markdown_around_the_range_is_not_thrown_away():
+    """Both placements of the colon occur, inside the bold and outside it."""
+    for reply in ("**1-4:** A ridge under a bruised sky.\n**5-9:** Smokeless fire.",
+                  "**1-4**: A ridge under a bruised sky.\n**5-9**: Smokeless fire."):
+        got = parse_plan_reply(reply, 10)
+        assert [(s["first_line"], s["last_line"]) for s in got] == [(1, 4), (5, 9)], reply
+
+
+def test_a_picture_number_in_front_of_the_range_is_not_thrown_away():
+    """The request numbers the pictures, so models label their answers that way."""
+    reply = ("Picture 1 (1-4): A ridge under a bruised sky.\n"
+             "Picture 2 (5-9): Smokeless fire coiling.")
+    got = parse_plan_reply(reply, 10)
+    assert [(s["first_line"], s["last_line"]) for s in got] == [(1, 4), (5, 9)]
+
+
+def test_the_description_survives_the_formatting_it_arrived_in():
+    """Stripping the markup must not eat the words the picture is made of."""
+    got = parse_plan_reply("- **1-4:** A ridge under a bruised sky.", 10)
+    assert got[0]["description"] == "A ridge under a bruised sky."
+
+
+def test_prose_around_the_plan_is_still_ignored():
+    """Tolerating markup must not start turning ordinary sentences into spans."""
+    reply = ("Here is the picture plan for your film:\n\n"
+             "- 1-4: A ridge under a bruised sky.\n\n"
+             "Let me know if you would like a different pacing.")
+    assert len(parse_plan_reply(reply, 10)) == 1

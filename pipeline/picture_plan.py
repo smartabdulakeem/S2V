@@ -175,3 +175,102 @@ def repair_spans(spans: list, n_lines: int, seconds: list,
     for i, s in enumerate(out, 1):
         s["number"] = i
     return out
+
+#: Lines like "12-19: a description", or "12: a description" for one line.
+_SPAN_LINE = re.compile(r"^\s*(\d+)\s*(?:[-\u2013]\s*(\d+))?\s*[:.)]\s*(.+?)\s*$")
+
+# The request is pasted into a browser chat, because there are no API credits,
+# and those chats format lists with markdown. A bullet, a bold range or a
+# "Picture 3" label in front of a span dropped that span, and a reply whose
+# every line is dropped parses as nothing - which repair_spans answers with one
+# picture for the whole film. Good answers were being thrown away in silence.
+_MARKUP = re.compile(r"^\s*(?:[-*\u2022>]+\s+)?"
+                     r"(?:(?:picture|image|shot)\s*\d+\s*[\u2014\u2013:\-]?\s*)?"
+                     r"(?:(?:script\s+)?lines?\s+)?", re.IGNORECASE)
+_WRAPPED = re.compile(r"^\((\d+(?:\s*[-\u2013\u2014]\s*\d+)?)\)")
+
+
+def _unformat(raw_line: str) -> str:
+    """The span line as it would read without the chat's markup around it."""
+    line = (raw_line or "").replace("**", "").replace("__", "").strip()
+    line = _MARKUP.sub("", line, count=1)
+    return _WRAPPED.sub(r"\1", line.strip())
+
+
+def _clock(seconds: float) -> str:
+    """`3 minutes 12 seconds`, or `47 seconds` when it is under a minute."""
+    total = int(round(seconds))
+    minutes, secs = divmod(total, 60)
+    if not minutes:
+        return f"{secs} seconds"
+    return f"{minutes} minute{'s' if minutes != 1 else ''} {secs} seconds"
+
+
+def build_plan_request(instruction: str, script_lines: list, seconds: list,
+                       min_hold: float, max_hold: float,
+                       exact_count: int = None) -> str:
+    """
+    The request that asks a model where the pictures belong.
+
+    It is handed the whole script with the length of every line, and it decides
+    the boundaries. The app used to decide them by dividing the runtime, which
+    put boundaries inside narration that has nothing to photograph.
+    """
+    n = len(script_lines)
+    total = sum(seconds[:n])
+
+    lines = [instruction, "", "THE FULL SCRIPT",
+             "Every line, with how long it takes to say.", ""]
+    for i, text in enumerate(script_lines[:n], 1):
+        clean = " ".join((text or "").split())
+        lines.append(f"[{i}] ({seconds[i - 1]:.1f}s) {clean}")
+
+    lines += ["", "WHERE THE PICTURES GO",
+              f"This film runs {_clock(total)} across {n} lines of narration.",
+              "You decide where a picture belongs and where one does not."]
+
+    if exact_count:
+        lines.append(f"Use exactly {int(exact_count)} pictures, no more and no fewer.")
+    else:
+        lines.append(f"A picture must hold for at least {min_hold:g} seconds "
+                     f"and at most {max_hold:g}.")
+
+    lines += [
+        "",
+        "A stretch of narration may carry no picture of its own. When the",
+        "narrator compares sources, hedges between reports, or draws a lesson,",
+        "there is nothing new for a camera to look at.",
+        "In that case, let the picture before it hold through the stretch rather",
+        "than inventing something to fill the time. A picture invented to fill",
+        "time is worse than no cut at all.",
+        "",
+        f"Cover every line from line 1 to line {n}. Leave no gap and no overlap:",
+        "each line belongs to exactly one picture, and the pictures run in order.",
+        "",
+        "Answer one line per picture, and nothing else:",
+        "<first line>-<last line>: <description>",
+    ]
+    return "\n".join(lines)
+
+
+def parse_plan_reply(reply_text: str, n_lines: int) -> list:
+    """
+    Read a model's answer back into spans.
+
+    Anything that is not a span line is dropped rather than guessed at. An
+    unusable reply returns an empty list; `repair_spans` decides what to do
+    about that, so the failure has exactly one home.
+    """
+    spans = []
+    for raw in (reply_text or "").splitlines():
+        m = _SPAN_LINE.match(_unformat(raw))
+        if not m:
+            continue
+        first = int(m.group(1))
+        last = int(m.group(2)) if m.group(2) else first
+        description = m.group(3).strip()
+        if first < 1 or first > n_lines or not description:
+            continue
+        spans.append({"first_line": first, "last_line": last,
+                      "description": description})
+    return spans
