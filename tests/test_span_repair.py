@@ -93,3 +93,54 @@ def test_the_description_travels_with_its_span():
     out = repair_spans(_spans((1, 4), (5, 10)), N, SECONDS, 4.0, 60.0)
     assert out[0]["description"] == "picture at 1"
     assert out[1]["description"] == "picture at 5"
+
+
+# ── manual override ───────────────────────────────────────────────────────────
+
+def test_one_picture_can_carry_the_entire_film():
+    """
+    The owner's words: "I also want flexibility enough that I can decide to
+    choose one or two images for a 20-minute video, maybe if that may speak to
+    the whole video."
+    """
+    out = repair_spans(_spans((1, 3), (4, 6), (7, 10)), N, SECONDS,
+                       10.0, 20.0, exact_count=1)
+    assert _bounds(out) == [(1, 10)]
+
+
+def test_two_pictures_split_the_film_near_the_middle_by_time():
+    out = repair_spans(_spans((1, 10)), N, SECONDS, 10.0, 20.0, exact_count=2)
+    assert len(out) == 2
+    a, b = (span_seconds(s, SECONDS) for s in out)
+    assert abs(a - b) <= 4.0, _bounds(out)
+
+
+def test_the_exact_count_beats_the_holding_range():
+    """
+    One picture over a 40s film breaks a 20s ceiling. The owner asked for one
+    picture, so he gets one picture — the range is advisory in manual mode and
+    the ceiling must not quietly split it back into two.
+    """
+    out = repair_spans(_spans((1, 10)), N, SECONDS, 4.0, 20.0, exact_count=1)
+    assert len(out) == 1
+    assert span_seconds(out[0], SECONDS) == 40.0
+
+
+def test_asking_for_more_pictures_than_lines_stops_at_one_per_line():
+    out = repair_spans(_spans((1, 10)), N, SECONDS, 4.0, 20.0, exact_count=25)
+    assert len(out) == N
+    assert _bounds(out) == [(i, i) for i in range(1, N + 1)]
+
+
+def test_the_count_is_met_exactly_at_every_size_in_between():
+    for wanted in range(1, N + 1):
+        out = repair_spans(_spans((1, 4), (5, 7), (8, 10)), N, SECONDS,
+                           4.0, 20.0, exact_count=wanted)
+        assert len(out) == wanted, f"asked {wanted}, got {len(out)}"
+        covered = [ln for s in out for ln in range(s["first_line"], s["last_line"] + 1)]
+        assert covered == list(range(1, N + 1))
+
+
+def test_pictures_are_numbered_from_one_in_film_order():
+    out = repair_spans(_spans((1, 4), (5, 7), (8, 10)), N, SECONDS, 4.0, 60.0)
+    assert [s["number"] for s in out] == [1, 2, 3]
