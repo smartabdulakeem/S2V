@@ -11,12 +11,13 @@ The narration is generated anyway. Measuring it costs one ffprobe per segment.
 
 import os
 import sys
+from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pipeline.narration_timing import segment_seconds
+from pipeline.narration_timing import segment_seconds, measure_narration
 
 
 def _script(*narrations):
@@ -47,3 +48,65 @@ def test_one_measured_segment_does_not_make_the_others_zero():
 
 def test_an_empty_narration_takes_no_time():
     assert segment_seconds(_script("")) == [0.0]
+
+
+def test_the_timing_pass_writes_real_seconds_onto_every_segment():
+    script = _script("one two three", "four five six")
+
+    with patch("pipeline.narration_timing.generate_voiceover",
+               side_effect=lambda **kw: f"/fake/segment_{kw['segment_id']}_audio.mp3"), \
+         patch("pipeline.narration_timing.probe_seconds",
+               side_effect=lambda path: 4.5 if "segment_1" in path else 9.25):
+        stats = measure_narration(script, cache_dir="/fake")
+
+    assert [s["narration_seconds"] for s in script["segments"]] == [4.5, 9.25]
+    assert stats["measured"] == 2
+    assert stats["failed"] == 0
+
+
+def test_a_segment_whose_audio_cannot_be_probed_keeps_its_estimate():
+    """
+    One unreadable mp3 must not zero a segment. A zero-length line collapses
+    the boundary maths around it and takes the pacing with it.
+    """
+    script = _script(" ".join(["word"] * 26), "four five six")
+
+    with patch("pipeline.narration_timing.generate_voiceover",
+               side_effect=lambda **kw: f"/fake/segment_{kw['segment_id']}_audio.mp3"), \
+         patch("pipeline.narration_timing.probe_seconds",
+               side_effect=lambda path: None if "segment_1" in path else 9.25):
+        stats = measure_narration(script, cache_dir="/fake")
+
+    assert script["segments"][0].get("narration_seconds") is None
+    assert segment_seconds(script) == [10.0, 9.25]
+    assert stats["failed"] == 1
+
+
+def test_a_dead_tts_engine_does_not_take_the_whole_pass_down():
+    script = _script("one two three")
+
+    with patch("pipeline.narration_timing.generate_voiceover",
+               side_effect=RuntimeError("no engine")):
+        stats = measure_narration(script, cache_dir="/fake")
+
+    assert stats["failed"] == 1
+    assert stats["measured"] == 0
+
+
+def test_the_audio_path_is_kept_beside_the_seconds():
+    """
+    `write_wolfcut_project` takes an audio path per segment and a duration per
+    segment, and measures neither itself. Its only caller today is inside the
+    render, so a WolfCut timeline costs a full video encode. The timing pass
+    produces both maps — keeping the path here is what lets WolfCut export
+    without rendering anything.
+    """
+    script = _script("one two three", "four five six")
+
+    with patch("pipeline.narration_timing.generate_voiceover",
+               side_effect=lambda **kw: f"/fake/segment_{kw['segment_id']}_audio.mp3"), \
+         patch("pipeline.narration_timing.probe_seconds", return_value=4.0):
+        measure_narration(script, cache_dir="/fake")
+
+    assert script["segments"][0]["narration_audio"] == "/fake/segment_1_audio.mp3"
+    assert script["segments"][1]["narration_audio"] == "/fake/segment_2_audio.mp3"
