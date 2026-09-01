@@ -99,10 +99,23 @@ def test_the_films_standing_exclusions_reach_the_model():
     )
 
 
-def test_every_description_is_required_to_exclude_something():
+def test_exclusions_are_composed_out_of_the_picture_not_written_into_it():
+    """
+    Replaces test_every_description_is_required_to_exclude_something, which
+    asserted every description must end with "no ..., no ..., no ...".
+
+    That test was right that the exclusions must reach the model and wrong
+    about the form. Diffusion text encoders do not parse negation, so naming a
+    thing raises its odds of appearing: sixty prompts ending in "no wings, no
+    horns, no faces" were arguing for wings, horns and faces. The requirement
+    is unchanged - the picture must still honour the exclusions - but it is met
+    by what the picture shows rather than by a list appended to it.
+    """
     built = _build_instruction(CFG)
-    assert 'End every description with what must NOT appear' in built
-    assert "A picture with nothing excluded is not finished." in built
+    assert "Say what IS in the picture, never what is absent." in built
+    assert 'no ..., no ..., no ...' not in built
+    assert CFG["negative_block"] in built, "the exclusions must still reach the model"
+    assert "Do not write these into the description" in built
 
 
 def test_a_niche_with_no_negative_block_still_builds():

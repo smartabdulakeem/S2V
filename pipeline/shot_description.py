@@ -81,11 +81,15 @@ These requirements override anything above that conflicts with them:
   picture is made in isolation by someone who has seen nothing else.
 - Do not name a medium, an art style or a named artist. The look of the film is
   applied afterwards and is not yours to choose.
-- End every description with what must NOT appear in it, written plainly as
-  "no ..., no ..., no ...". Name the mistakes this particular picture invites -
-  a face where none is allowed, a modern object in an ancient scene, a fantasy
-  creature, a stock human model - and carry the film's standing exclusions
-  every time. A picture with nothing excluded is not finished.
+- Say what IS in the picture, never what is absent. Image models do not read
+  negation - writing "no wings" makes wings more likely, not less - so a
+  description that lists what it excludes produces the very thing it excluded.
+  Where something must not be seen, build the picture so that it cannot be: a
+  face that must not show becomes "seen from behind" or "a back-lit
+  silhouette"; a modern building becomes "an untouched primordial landscape";
+  wings and horns become "a column of amber heat-shimmer above bare rock".
+  Never write "no", "not", "without", "avoid" or "free of". A picture that has
+  to say what it leaves out has not been composed yet.
 - Nothing written may appear in the scene: no text, letters, captions, numbers,
   signage or inscriptions.
 - Output exactly one line per picture, formatted as:
@@ -206,8 +210,9 @@ def _build_instruction(series_cfg: Optional[dict] = None) -> str:
         # prompts carry them on every line; that is most of the visible gap.
         negative = (series_cfg.get("negative_block") or "").strip()
         if negative:
-            parts.append("Standing exclusions for this film, to carry into every "
-                         f"picture: {negative}")
+            parts.append("Standing exclusions for this film. Do not write these "
+                         "into the description - compose each picture so that "
+                         f"none of them could appear in it: {negative}")
 
         contract = RECIPE_OUTPUT_CONTRACT
         rules = [r for r in (_never_depict_rule(series_cfg),
