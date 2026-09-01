@@ -41,10 +41,36 @@ Output exactly one line per excerpt, formatted as:
 Return nothing else - no preamble, no blank lines, no commentary."""
 
 #: Kept when a niche's recipe takes over the instruction. The recipe decides how
-#: a shot is described; these four lines decide only that the reply can be parsed
-#: and that nothing unreadable ends up drawn into the picture.
-RECIPE_OUTPUT_CONTRACT = """Write ONE image description for each numbered narration excerpt below,
+#: a shot is described; these lines decide what a description has to resolve
+#: before it counts as finished, that the reply can be parsed, and that nothing
+#: unreadable ends up drawn into the picture.
+#:
+#: The completeness list is the part that earns its length. A recipe describes
+#: the *world* — the look of the whole film — and a model can satisfy every word
+#: of it while still returning "two figures in an ancient setting, dramatic
+#: light". Nothing was asking each individual description to resolve who is in
+#: the frame, what they are doing, where the camera stands and where the light
+#: comes from, so nothing did.
+RECIPE_OUTPUT_CONTRACT = """Write ONE image description for each numbered picture below,
 following the directives above.
+
+Each description is the entire brief for one picture. Nothing else will be
+added to say what the picture shows, so whatever you leave out will not be
+there. Resolve every one of these that the moment calls for:
+
+- the main subject, and the one action visible in the frame
+- the place, and the period's own buildings, tools, clothing and materials
+- what stands near the camera, and what lies behind
+- the composition and the viewpoint: how near the camera is, where it stands,
+  what fills the frame
+- the light: where it comes from, its direction and its quality
+- what hangs in the air, and the emotional weight of the moment
+
+Do not recite those categories one by one. Use them to check that someone who
+has read nothing else could draw this picture and get it right.
+
+You choose the camera for every picture, and you vary it across the film. Do
+not stand the same distance from every subject.
 
 These requirements override anything above that conflicts with them:
 - Describe only what a camera could see. Never restate the narration, and never
@@ -53,14 +79,29 @@ These requirements override anything above that conflicts with them:
   movement - no pan, zoom, tracking, dolly, cut or sequence - and never refer
   to another shot, to "the previous scene", or to what came before. The
   picture is made in isolation by someone who has seen nothing else.
+- Do not name a medium, an art style or a named artist. The look of the film is
+  applied afterwards and is not yours to choose.
+- End every description with what must NOT appear in it, written plainly as
+  "no ..., no ..., no ...". Name the mistakes this particular picture invites -
+  a face where none is allowed, a modern object in an ancient scene, a fantasy
+  creature, a stock human model - and carry the film's standing exclusions
+  every time. A picture with nothing excluded is not finished.
 - Nothing written may appear in the scene: no text, letters, captions, numbers,
   signage or inscriptions.
-- Output exactly one line per excerpt, formatted as:
+- Output exactly one line per picture, formatted as:
   <number>. <description>
+  where <number> is the picture number it was given below.
 - Return nothing else - no preamble, no blank lines, no commentary."""
 
 #: A recipe may ask for a paragraph. It may not ask for a runaway.
-RICH_WORD_CAP = 150
+#:
+#: Raised from 150 when the output contract began requiring each description to
+#: resolve subject, action, place, material culture, foreground, background,
+#: composition, viewpoint, light and atmosphere. A description that answers all
+#: of that runs past 150 words, and a description over the cap is not trimmed —
+#: it is discarded, and the shot silently drops to two-word keyword search. It
+#: would have been the new contract quietly undoing itself.
+RICH_WORD_CAP = 220
 
 BANNED_PATTERN = re.compile(
     r"\b(cinematic|illustration|photograph|painting|render|35mm|close-up|close\s+up|wide\s+shot|caption|title|text|sign|signs|signage)\b",
@@ -78,17 +119,27 @@ def _script_fingerprint(script_context) -> str:
 
 def _scene_hash(scene: str, series_slug: str = "", prompt_recipe: str = "",
                 era_block: str = "", script_context=None, model: str = "",
-                provider: str = "") -> str:
-    """Stable hash of the scene, the niche configuration, model, provider, and the film it is in."""
+                provider: str = "", span: str = "", total_pictures: int = 0) -> str:
+    """
+    Stable hash of the scene, the niche configuration, model, provider, the film
+    it is in, and the stretch of that film the picture has to carry.
+
+    The span belongs in the key because it is now most of the brief. The same
+    opening sentence covering six script lines and covering one is two different
+    pictures, and it changes whenever the image budget is moved — so a re-plan at
+    a different budget has to re-describe rather than serve the old answer.
+    """
     cleaned_scene = " ".join((scene or "").strip().split())
     recipe_hash = hashlib.sha256((prompt_recipe or "").strip().encode("utf-8")).hexdigest()[:12] if prompt_recipe else ""
     slug_part = (series_slug or "").strip().lower()
     era_part = " ".join((era_block or "").strip().split())
     prov_part = (provider or "gemini").strip().lower()
     model_part = (model or "gemini-2.5-flash").strip().lower()
-    # v6: provider and model are part of the key alongside niche, recipe, era and script.
-    raw = (f"v6|{prov_part}|{model_part}|{slug_part}|{recipe_hash}|{era_part}|{_script_fingerprint(script_context)}"
-           f"|{cleaned_scene}")
+    span_part = f"{(span or '').strip()}/{int(total_pictures or 0)}"
+    # v7: the span of script the picture covers, and the film's picture count,
+    # join provider, model, niche, recipe, era and script in the key.
+    raw = (f"v7|{prov_part}|{model_part}|{slug_part}|{recipe_hash}|{era_part}|{_script_fingerprint(script_context)}"
+           f"|{span_part}|{cleaned_scene}")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -110,6 +161,30 @@ def _never_depict_rule(series_cfg: Optional[dict]) -> str:
             "falls, what is left behind - never their form, face, hands or figure.")
 
 
+def _never_show_face_rule(series_cfg: Optional[dict]) -> str:
+    """
+    The niche's `never_show_face` names, phrased as a rule for the model.
+
+    Distinct from `never_depict`, which removes a figure entirely. These belong
+    in the picture; what they must never be is identifiable. Without the rule
+    the model reached for the nearest stock idea of a person — a cloaked figure,
+    a furrowed brow, cold eyes — and an image generator turns that into a
+    photographic human model.
+    """
+    from pipeline.library import never_show_face_names
+    names = never_show_face_names(series_cfg)
+    if not names:
+        return ""
+    listed = ", ".join(sorted(n.title() for n in names))
+    return ("- These may appear in a picture but must never be identifiable: " + listed +
+            ". Show them far from the camera, from behind, or as a silhouette against "
+            "stronger light. No face, no facial features, no eyes, no read of an "
+            "expression, and never anything that would render as a photographed human "
+            "model. Give them no wings, no horns, no coloured skin and no "
+            "fantasy-creature form. Carry their state through the scene instead - the "
+            "light, the ground, the distance, what everyone else is doing.")
+
+
 def _build_instruction(series_cfg: Optional[dict] = None) -> str:
     """
     The instruction sent to the description model.
@@ -123,12 +198,24 @@ def _build_instruction(series_cfg: Optional[dict] = None) -> str:
         era = (series_cfg.get("era_block") or "").strip()
         if era:
             parts.append(f"Period and material culture: {era}")
+        # The niche's standing exclusions. The app has always held these in
+        # `negative_block` and never showed them to the model — it appended them
+        # to the finished prompt, and only when a setting was on. So a request
+        # asking for a complete, production-ready prompt was asking for one with
+        # no exclusions in it, and all sixty came back with none. The owner's own
+        # prompts carry them on every line; that is most of the visible gap.
+        negative = (series_cfg.get("negative_block") or "").strip()
+        if negative:
+            parts.append("Standing exclusions for this film, to carry into every "
+                         f"picture: {negative}")
+
         contract = RECIPE_OUTPUT_CONTRACT
-        rule = _never_depict_rule(series_cfg)
-        if rule:
+        rules = [r for r in (_never_depict_rule(series_cfg),
+                             _never_show_face_rule(series_cfg)) if r]
+        if rules:
             contract = contract.replace(
                 "- Nothing written may appear in the scene:",
-                rule + "\n- Nothing written may appear in the scene:")
+                "\n".join(rules) + "\n- Nothing written may appear in the scene:")
         parts.append(contract)
         return "\n\n".join(parts)
 
@@ -157,14 +244,8 @@ def _build_instruction(series_cfg: Optional[dict] = None) -> str:
 MAX_SCRIPT_CONTEXT_CHARS = 60000
 
 
-def _build_batch_prompt(instruction: str, batch: list, script_context=None) -> str:
-    """The text sent for one batch of shots."""
-    if not script_context:
-        lines = [instruction, ""]
-        for idx, s in enumerate(batch, 1):
-            lines.append(f"{idx}. {s.get('scene', '').strip()}")
-        return "\n".join(lines)
-
+def _numbered_script(script_context) -> list:
+    """The whole narration, one numbered line each, trimmed if it runs away."""
     numbered, total = [], 0
     for i, line in enumerate(script_context, 1):
         text = " ".join((line or "").split())
@@ -175,6 +256,52 @@ def _build_batch_prompt(instruction: str, batch: list, script_context=None) -> s
             numbered.append("[...script trimmed...]")
             break
         numbered.append(f"[{i}] {text}")
+    return numbered
+
+
+def _span_label(entry: dict) -> str:
+    """`script lines 7-13`, or `script line 7` when a picture covers one line."""
+    first, last = entry.get("first_line"), entry.get("last_line")
+    if not first:
+        return "position unknown"
+    if not last or last == first:
+        return f"script line {first}"
+    return f"script lines {first}-{last}"
+
+
+def _build_batch_prompt(instruction: str, batch: list, script_context=None,
+                        picture_plan=None) -> str:
+    """
+    The text sent for one batch of pictures.
+
+    The model is shown three things and nothing else: the whole script, how many
+    pictures the film is made of, and where each one falls in that script. It is
+    never handed a narration excerpt as the thing to illustrate.
+
+    That was the defect. A picture stands for a *run* of script lines — in the
+    owner's film, 5.8 of them on average — but the request pasted the run's first
+    sentence underneath the instruction as if it were the brief. Asked to
+    illustrate "Before Adam, there was no human being.", a model returns a vague
+    landscape, and it is right to: that is all the sentence supports. The six
+    lines the picture actually has to carry were sitting in the script block
+    above, unattached to it.
+
+    So the excerpt is gone. A picture is identified by its number and its span,
+    both of which point back into the script the model has already read. The
+    plan of all the film's pictures travels with every batch, so a model writing
+    pictures 21-40 still knows that 1-20 and 41-60 exist and what they cover.
+
+    With no plan the old excerpt form is kept, for callers that have only a bare
+    list of scenes to describe.
+    """
+    if picture_plan and script_context:
+        return _build_picture_prompt(instruction, batch, script_context, picture_plan)
+
+    if not script_context:
+        lines = [instruction, ""]
+        for idx, s in enumerate(batch, 1):
+            lines.append(f"{idx}. {s.get('scene', '').strip()}")
+        return "\n".join(lines)
 
     position = {}
     for i, line in enumerate(script_context, 1):
@@ -190,13 +317,53 @@ def _build_batch_prompt(instruction: str, batch: list, script_context=None) -> s
         "sentence on its own.",
         "",
     ]
-    lines.extend(numbered)
+    lines.extend(_numbered_script(script_context))
     lines.extend(["", "THE MOMENTS TO DESCRIBE", ""])
     for idx, s in enumerate(batch, 1):
         scene = " ".join((s.get("scene") or "").split())
         at = position.get(scene)
         where = f" (script line {at})" if at else ""
         lines.append(f"{idx}.{where} {scene}")
+    return "\n".join(lines)
+
+
+def _build_picture_prompt(instruction: str, batch: list, script_context,
+                          picture_plan: list) -> str:
+    """The script, the picture count, and where every picture falls in it."""
+    total = len(picture_plan)
+    wanted = [s.get("picture_number") for s in batch if s.get("picture_number")]
+
+    lines = [
+        instruction,
+        "",
+        "THE FULL SCRIPT",
+        "Read all of it before you write anything. This is the whole film, one",
+        "numbered line per narration beat.",
+        "",
+    ]
+    lines.extend(_numbered_script(script_context))
+
+    lines.extend([
+        "",
+        "THE PICTURE PLAN",
+        f"This film is made of exactly {total} pictures, numbered 1 to {total}.",
+        "Each picture stands for a run of consecutive script lines and has to",
+        "carry that whole run — everything those lines say, the turn they take,",
+        "where the story has got to by then — not the first sentence in it.",
+        "The plan is fixed. Do not add a picture, drop one, or move one.",
+        "",
+    ])
+    for entry in picture_plan:
+        lines.append(f"Picture {entry['number']} — {_span_label(entry)}")
+
+    lines.extend([
+        "",
+        "WRITE THESE PICTURES NOW",
+        "Write one description for each of these picture numbers, and no others.",
+        "Number each line with the picture number exactly as given here:",
+        "",
+        ", ".join(str(n) for n in wanted),
+    ])
     return "\n".join(lines)
 
 
@@ -278,6 +445,27 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
     era_block = (series_cfg or {}).get("era_block", "")
     has_recipe = bool((prompt_recipe or "").strip())
 
+    # The plan is the shot list itself. A caller that knows which pictures the
+    # film makes tags every shot it sends with its picture number and the run of
+    # script lines that picture has to carry; the plan is then exactly those
+    # shots, in order, and cannot drift out of step with what gets described.
+    picture_plan = []
+    if shots and all(s.get("picture_number") for s in shots):
+        picture_plan = [
+            {"number": s["picture_number"], "shot_id": s.get("shot_id"),
+             "first_line": s.get("first_line"), "last_line": s.get("last_line")}
+            for s in shots
+        ]
+    total_pictures = len(picture_plan)
+
+    def _hash_for(shot: dict, scene: str) -> str:
+        entry = {"first_line": shot.get("first_line"), "last_line": shot.get("last_line")}
+        return _scene_hash(scene, series_slug=series_slug, prompt_recipe=prompt_recipe,
+                           era_block=era_block, script_context=script_context,
+                           model=model_name, provider=prov_key,
+                           span=_span_label(entry) if picture_plan else "",
+                           total_pictures=total_pictures)
+
     results = {}
     uncached_shots = []
 
@@ -288,9 +476,7 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
         if not shot_id or not scene:
             continue
 
-        h = _scene_hash(scene, series_slug=series_slug, prompt_recipe=prompt_recipe,
-                        era_block=era_block, script_context=script_context,
-                        model=model_name, provider=prov_key)
+        h = _hash_for(shot, scene)
         existing_desc = shot.get("visual_description")
         if existing_desc:
             if has_recipe or is_valid_description(existing_desc):
@@ -312,7 +498,13 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
 
     for batch_start in range(0, len(uncached_shots), BATCH_SIZE):
         batch = uncached_shots[batch_start:batch_start + BATCH_SIZE]
-        prompt_text = _build_batch_prompt(instruction_prompt, batch, script_context=script_context)
+        prompt_text = _build_batch_prompt(instruction_prompt, batch,
+                                          script_context=script_context,
+                                          picture_plan=picture_plan)
+        # With a plan the model answers by picture number, which is a number in
+        # the whole film, not a position inside this batch. Batch three answers
+        # 41, 42, 43 and there is no shot at index 41 of a twenty-shot batch.
+        by_number = {s.get("picture_number"): s for s in batch} if picture_plan else {}
 
         try:
             # Every provider goes through the seam, Gemini included. Gemini used
@@ -328,7 +520,11 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
             # still came back with two at 2048. An unused ceiling costs nothing
             # — only generated tokens are billed — so there is no reason to be
             # tight here, and every reason not to be.
-            per_shot = 250 if has_recipe else 80
+            # 320 covers a description written to the full completeness list at
+            # the 220-word cap. 20 x 320 + 512 stays under the 8192 ceiling, so
+            # the ceiling still holds and no provider is asked for more than it
+            # allows.
+            per_shot = 320 if has_recipe else 80
             reply_budget = min(8192, max(4096, len(batch) * per_shot + 512))
             reply_text = prov_instance.complete_text(system=prompt_text, user="",
                                                      max_tokens=reply_budget)
@@ -349,19 +545,21 @@ def describe_shots(shots: list, api_key: Optional[str] = None, model: str = "",
                 except (ValueError, IndexError):
                     continue
 
-                # Map back to shot at that position in the batch sent (1-indexed)
-                if 1 <= num <= len(batch):
-                    matched_shot = batch[num - 1]
+                # Map back to the shot the number names: its picture number when
+                # a plan was sent, otherwise its 1-indexed place in the batch.
+                if picture_plan:
+                    matched_shot = by_number.get(num)
+                else:
+                    matched_shot = batch[num - 1] if 1 <= num <= len(batch) else None
+
+                if matched_shot is not None:
                     s_id = matched_shot.get("shot_id")
                     s_scene = matched_shot.get("scene", "")
 
                     if is_valid_description(sentence, allow_rich=has_recipe):
                         clean_sentence = sentence.rstrip(" .")
                         results[s_id] = clean_sentence
-                        _MEMORY_CACHE[_scene_hash(s_scene, series_slug=series_slug,
-                                                  prompt_recipe=prompt_recipe, era_block=era_block,
-                                                  script_context=script_context, model=model_name,
-                                                  provider=prov_key)] = clean_sentence
+                        _MEMORY_CACHE[_hash_for(matched_shot, s_scene)] = clean_sentence
                         cache_updated = True
 
             # A batch that answers for fewer shots than it was asked about has

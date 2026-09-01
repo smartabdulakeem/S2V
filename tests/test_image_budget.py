@@ -212,3 +212,88 @@ def test_a_pin_on_a_follower_segment_survives_the_budget(monkeypatch):
         "the run's shared image overwrote a deliberate pin"
     )
     assert rep["state"] == "pinned"
+
+
+# ---------------------------------------------------------------------------
+# Pacing: a run gets its share of the runtime, and the last one is not a scrap
+# ---------------------------------------------------------------------------
+
+def _timed_script(n_segments: int, words_per_segment: int = 8) -> dict:
+    """A script whose segments are all the same length, so runs should be even."""
+    return {"segments": [
+        {"segment_id": i + 1, "narration": " ".join(["word"] * words_per_segment),
+         "shots": [{"shot_id": f"{i + 1}a", "query": "q", "scene": "s"}]}
+        for i in range(n_segments)
+    ]}
+
+
+def _run_lengths(script: dict) -> list:
+    """Segments per picture, in film order."""
+    lengths, current = [], 0
+    for seg in script["segments"]:
+        for shot in seg["shots"]:
+            if shot.get("share_with"):
+                current += 1
+            else:
+                if current:
+                    lengths.append(current)
+                current = 1
+    if current:
+        lengths.append(current)
+    return lengths
+
+
+def test_the_film_does_not_end_in_a_burst_of_one_segment_pictures():
+    """
+    A run used to close on the first segment that carried it past its target
+    duration, and the bucket reset to zero. Every run finished slightly long,
+    the surplus accumulated, and the segments ran out before the runs did — so
+    the tail was force-cut one segment per picture to reach the count.
+
+    On the owner's film at a budget of 60 that was seven pictures under six
+    seconds, the shortest 1.2s, all in the last eight.
+    """
+    script = _timed_script(347)
+    plan_image_budget(script, 60)
+
+    lengths = _run_lengths(script)
+    assert len(lengths) == 60, f"budget not met: {len(lengths)} pictures"
+
+    longest, shortest = max(lengths), min(lengths)
+    assert shortest * 2 >= longest, (
+        f"pictures are wildly uneven: shortest run {shortest} segments, "
+        f"longest {longest} — {lengths[-8:]} at the tail"
+    )
+
+
+def test_the_tail_is_not_worse_than_the_body():
+    """The failure was always at the end, so compare the two halves directly."""
+    script = _timed_script(347)
+    plan_image_budget(script, 60)
+
+    lengths = _run_lengths(script)
+    head = lengths[:len(lengths) // 2]
+    tail = lengths[len(lengths) // 2:]
+    assert min(tail) * 2 >= sum(head) / len(head), (
+        f"the tail collapsed: head averages {sum(head) / len(head):.1f} segments "
+        f"per picture, the shortest tail run is {min(tail)}"
+    )
+
+
+def test_raising_the_budget_does_not_make_the_pacing_worse():
+    """
+    The surplus accumulated faster the more runs were asked for, so asking for
+    more pictures produced more one-segment scraps, not better pacing. That is
+    backwards, and it is what made every budget feel wrong.
+    """
+    worst = {}
+    for n in (20, 40, 60, 80):
+        script = _timed_script(347)
+        plan_image_budget(script, n)
+        lengths = _run_lengths(script)
+        worst[n] = min(lengths) / (sum(lengths) / len(lengths))
+
+    for n in (40, 60, 80):
+        assert worst[n] > 0.4, (
+            f"at a budget of {n} the shortest picture is {worst[n]:.0%} of the average"
+        )

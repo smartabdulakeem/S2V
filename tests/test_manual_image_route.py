@@ -268,16 +268,27 @@ def test_the_prompt_request_asks_for_exactly_the_pictures_the_film_needs(tmp_pat
     path = write_prompt_request(data)
     text = open(path, encoding="utf-8").read()
 
-    assert "This film needs exactly 12 pictures" in text
-    assert "THE 12 MOMENTS TO DESCRIBE" in text
+    # The request no longer lists moments — a narration excerpt pasted under the
+    # instruction reads as the whole brief for that picture, which is what made
+    # the prompts vague. It lists the plan instead: how many pictures the film
+    # is, and which run of script lines each one has to carry.
+    #
+    # Everything above the divider is addressed to the owner and never gets
+    # pasted, so the count has to be below it. It was not: "This film needs
+    # exactly 12 pictures. Keep the numbering" sat above the line, and the AI he
+    # pasted into was never told how many pictures to write.
+    body = text.split("=" * 70, 1)[1]
 
-    moments = [ln for ln in text.splitlines()
-               if re.match(r"^\d+\.( \(script line \d+\))? \S", ln)
-               and "MOMENTS" not in ln]
-    numbered = [ln for ln in moments if ln.split(".")[0].isdigit()]
-    assert len(numbered) >= 12, f"only {len(numbered)} moments listed"
+    assert "exactly 12 pictures" in body, (
+        "the picture count is not in the half of the file that gets pasted"
+    )
     for i in range(1, 13):
-        assert any(ln.startswith(f"{i}.") for ln in numbered), f"moment {i} missing"
+        assert re.search(rf"^Picture {i} — script lines? \d+", body, re.M), (
+            f"picture {i} is missing from the plan"
+        )
+    assert not re.search(r"^Picture 13 ", body, re.M), (
+        "the plan lists a picture the film does not make"
+    )
 
 
 def test_the_request_carries_the_whole_script_and_the_niche_recipe(tmp_path, monkeypatch):

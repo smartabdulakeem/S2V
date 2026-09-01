@@ -234,10 +234,14 @@ def save_series_override(series_slug: str, overrides: dict) -> dict:
     os.makedirs(override_dir, exist_ok=True)
     override_path = os.path.join(override_dir, f"{slug}.json")
 
+    # `never_depict` and `never_show_face` are load-bearing: they are the only
+    # thing keeping a face out of a picture that must not have one. Saving a
+    # niche without them in this list drops them from an override file, and the
+    # rule disappears silently the next time the owner edits anything else.
     allowed_keys = (
         "display_name", "medium_block", "palette_block", "era_block",
         "negative_block", "style_block", "brief_subject", "prompt_recipe",
-        "world_anchor", "style_presets"
+        "world_anchor", "style_presets", "never_depict", "never_show_face"
     )
 
     if os.path.exists(base_path):
@@ -1246,6 +1250,39 @@ def picture_owning_shots(script_data: dict) -> list:
     return owning
 
 
+def picture_runs(entries: list) -> list:
+    """
+    One entry per picture, saying which stretch of narration it has to carry.
+
+    `entries` is every shot in the film in order, as (script_line, shot). A shot
+    with no `share_with` owns a picture; the shots carrying `share_with` that
+    follow it were merged into that same picture by `plan_image_budget`, so the
+    run reaches from the owner's line to the last line merged into it.
+
+    This is the fact the description request was missing. Picture 1 of the
+    owner's film covers six lines about a world before humanity and was being
+    described from the first of them alone. Numbering counts the same pictures
+    `picture_owning_shots` counts, in the same order.
+    """
+    runs = []
+    for i, (line_no, shot) in enumerate(entries):
+        if shot.get("share_with"):
+            continue
+        last_line = line_no
+        for follower_line, follower in entries[i + 1:]:
+            if not follower.get("share_with"):
+                break
+            last_line = follower_line
+        runs.append({
+            "number": len(runs) + 1,
+            "shot": shot,
+            "shot_id": shot.get("shot_id"),
+            "first_line": line_no,
+            "last_line": last_line,
+        })
+    return runs
+
+
 def match_folder_images_by_slot(image_paths: list, slot_count: int) -> tuple:
     """
     Match images from a working folder directly to 1-based shot slots (1..slot_count).
@@ -1793,6 +1830,28 @@ def never_depict_names(series_cfg: dict) -> set:
     return {str(n).strip().lower() for n in raw if str(n).strip()}
 
 
+def never_show_face_names(series_cfg: dict) -> set:
+    """
+    Names the niche says may appear in a picture but must never be identifiable.
+
+    `never_depict` has one treatment: remove the figure and show the scene
+    around it. That is right for the Divine and wrong for everyone else. Iblis
+    has to be *in* the film — he is its subject — and the angels have to be
+    present when they speak. Left with no rule at all, the description model
+    wrote them as people: "a commanding, imposing cloaked figure", "a figure's
+    tense, furrowed brow in heavy shadow, cold eyes staring with bitter envy".
+    An image generator renders that as a photographic human model, which is
+    unusable, and the owner's own prompts never do it — every one of his ends
+    "no identifiable face, no horns, no red skin".
+
+    So this is the second list: present, but distant, faceless and unidentifiable.
+    """
+    raw = (series_cfg or {}).get("never_show_face") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    return {str(n).strip().lower() for n in raw if str(n).strip()}
+
+
 def draft_project_brief(title: str, series_cfg: dict, script_text: str,
                         treatment: str = None) -> str:
     """
@@ -2100,20 +2159,42 @@ def compose_gap_prompt(
     # Subject slot: use visual_description when present and non-empty, otherwise shot_query
     subject_text = (visual_description or "").strip() if (visual_description and visual_description.strip()) else (shot_query or "").strip()
 
+    # Who owns the camera.
+    #
+    # A niche with a recipe now asks its model for the whole scene *and* how it
+    # is seen: composition, viewpoint, foreground, background, light, air. When
+    # that came back, this function appended its own answers on top — framing
+    # picked by `picture_index % 4`, weather and light guessed by matching
+    # keywords against the narration — and the two contradicted each other in
+    # the same sentence. A real prompt from the owner's film read "an expansive,
+    # untouched primordial landscape stretches to the horizon ... cinematic
+    # medium shot, subject filling much of the frame": a landscape to the
+    # horizon, called a medium shot, because 1 % 4 == 1.
+    #
+    # So the content slots stand down when the model has written them, and only
+    # what is constant across the whole film — the brief, the character bible,
+    # the medium and palette, the era, the negative prompt — is still appended
+    # here. A niche with no recipe keeps every slot: its descriptions are the
+    # short built-in kind, which are forbidden to name a camera at all, so
+    # dropping the slots would leave those prompts with no framing whatsoever.
+    model_owns_camera = bool(subject_text) and bool(visual_description) \
+        and bool(visual_description.strip()) and bool((series_cfg.get("prompt_recipe") or "").strip())
+
     # The subject leads.
     parts.append(subject_text)
 
     # Only supply framing the subject does not already state.
-    if match_slot(PROMPT_FRAMING, subject_text) is None:
+    if not model_owns_camera and match_slot(PROMPT_FRAMING, subject_text) is None:
         parts.append(default_framing_for(shot_position))
 
     if project_brief:
         parts.append(project_brief.rstrip(" ,."))
 
-    for table in (PROMPT_MOTION, PROMPT_GROUND, PROMPT_ATMOSPHERE):
-        phrase = match_slot(table, blob)
-        if phrase:
-            parts.append(phrase)
+    if not model_owns_camera:
+        for table in (PROMPT_MOTION, PROMPT_GROUND, PROMPT_ATMOSPHERE):
+            phrase = match_slot(table, blob)
+            if phrase:
+                parts.append(phrase)
 
     # Setting slot / world anchor.
     explicit = (world_anchor or "").strip()
@@ -2128,7 +2209,7 @@ def compose_gap_prompt(
         if anchor and anchor.lower() not in already_said:
             parts.append(anchor)
 
-    light = match_slot(PROMPT_LIGHT, blob)
+    light = None if model_owns_camera else match_slot(PROMPT_LIGHT, blob)
     if light:
         parts.append(light)
 
@@ -2199,7 +2280,7 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     
     # Extract all shots
     all_shots = []
-    for seg in segments:
+    for script_line, seg in enumerate(segments, 1):
         seg_id = seg.get("segment_id", 1)
         narration = seg.get("narration", "")
 
@@ -2239,6 +2320,10 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
                 "run_index": shot.get("run_index"),
                 "run_position": shot.get("run_position"),
                 "visual_description": shot.get("visual_description"),
+                # Which line of the narration this shot sits on. The description
+                # pass needs it to tell the model where in the script a picture
+                # falls and how much of it that picture has to carry.
+                "script_line": script_line,
                 "_shot": shot,
             })
 
@@ -2247,12 +2332,32 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
             from pipeline.shot_description import describe_shots
             google_key = _setting("google_api_key", "")
             series_cfg = get_series_config(series_slug=series_slug, project_title=title)
+            # Describe the pictures the film actually makes, and nothing else.
+            #
+            # Every shot used to be sent. In the owner's 347-line film that is
+            # 347 descriptions for 60 pictures: the other 287 belong to shots
+            # carrying `share_with`, which never own a picture, and were written
+            # and then discarded. Worse than the waste, it hid what a picture is.
+            # A picture covers a run of shots — 5.8 lines of narration on average
+            # — and the run's owner was described from its own first sentence
+            # alone, so picture 1 of that film, which has to carry six lines
+            # about a world before humanity, was written from "Before Adam, there
+            # was no human being." A model given that returns a vague landscape
+            # because that is all the sentence contains.
+            #
+            # Each owner now carries its picture number and the first and last
+            # script lines of the run it stands for, and the model is told to
+            # carry the whole run.
             shots_for_desc = []
-            for s in all_shots:
+            for run in picture_runs([(s.get("script_line"), s) for s in all_shots]):
+                s = run["shot"]
                 scene_text = s.get("narration") or (s.get("_shot") and s["_shot"].get("scene")) or ""
                 shots_for_desc.append({
                     "shot_id": s["shot_id"],
                     "scene": scene_text,
+                    "picture_number": run["number"],
+                    "first_line": run["first_line"],
+                    "last_line": run["last_line"],
                     "visual_description": s.get("visual_description") or (s.get("_shot") and s["_shot"].get("visual_description")),
                 })
             # The whole narration, in order, so a shot can be placed in its film

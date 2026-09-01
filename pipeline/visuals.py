@@ -1029,7 +1029,7 @@ def write_prompt_request(script_dict: dict) -> str:
     n.jpg in the folder, is the nth picture in the film.
     """
     from pipeline import library
-    from pipeline.shot_description import _build_instruction
+    from pipeline.shot_description import _build_instruction, _build_batch_prompt
 
     proj = script_dict.get("project", {})
     title = proj.get("title", "My Video")
@@ -1047,6 +1047,24 @@ def write_prompt_request(script_dict: dict) -> str:
     owning = library.picture_owning_shots(script_dict)
     count = len(owning)
 
+    # Every shot in script order with the narration line it sits on, so each
+    # picture's run of lines can be measured by the same rule the app uses when
+    # it calls a model itself.
+    flat, narration_at = [], {}
+    for line_no, seg in enumerate((script_dict.get("segments") or []), 1):
+        for shot in (seg.get("shots") or []):
+            flat.append((line_no, shot))
+            narration_at[id(shot)] = seg.get("narration") or ""
+
+    pictures = [{
+        "shot_id": run["shot_id"],
+        "scene": " ".join(((run["shot"].get("scene")
+                            or narration_at.get(id(run["shot"]), ""))).split()),
+        "picture_number": run["number"],
+        "first_line": run["first_line"],
+        "last_line": run["last_line"],
+    } for run in library.picture_runs(flat)]
+
     # The look the app would have added itself, stated once so the outside AI
     # can put it on every prompt and the pictures match the niche.
     preset = library.resolve_style_preset(cfg, proj.get("visual_type") or "")
@@ -1061,33 +1079,42 @@ def write_prompt_request(script_dict: dict) -> str:
         f"4. Make one image per prompt. Name them 1.jpg, 2.jpg ... {count}.jpg.",
         f"5. Put them in one folder and point the app at it.",
         "",
-        f"This film needs exactly {count} pictures. Keep the numbering — prompt 7,",
-        f"7.jpg and the 7th picture in the film are the same moment.",
+        f"Keep the numbering — prompt 7, 7.jpg and the 7th picture in the film are",
+        f"the same picture. The count and the numbering are stated again below the",
+        f"line, because everything above it is for you and never gets pasted.",
         "",
         "=" * 70,
         "",
     ]
 
-    # The recipe, and the rules that keep a reply usable, exactly as the app
-    # would send them to a model.
-    lines.append(_build_instruction(cfg))
-    if look:
-        lines += ["", f"End every prompt with this look, word for word: {look}"]
-
+    # Below this line the file is the request itself, and it has to be the same
+    # request the app sends when it calls a model — same instruction, same
+    # script, same picture plan, built by the same function. If the two drift
+    # apart then testing by pasting into a chat stops predicting what the app
+    # will do, which is the only reason this file exists.
+    #
+    # It used to be assembled here a second time, by hand. That is how "This
+    # film needs exactly 55 pictures. Keep the numbering" came to sit *above*
+    # the divider, in the half the instructions tell the owner not to copy: the
+    # AI he pasted into was never told how many pictures to write.
     narrations = [(seg.get("narration") or "").strip()
                   for seg in (script_dict.get("segments") or [])]
-    position = {}
-    for i, text in enumerate(narrations, 1):
-        position.setdefault(" ".join(text.split()), i)
 
-    lines += ["", "THE FULL SCRIPT", ""]
-    lines += [f"[{i}] {' '.join(t.split())}" for i, t in enumerate(narrations, 1) if t.strip()]
-    lines += ["", f"THE {count} MOMENTS TO DESCRIBE", ""]
-    for idx, (seg, shot) in enumerate(owning, 1):
-        moment = " ".join(((shot.get("scene") or seg.get("narration") or "")).split())
-        at = position.get(moment)
-        where = f" (script line {at})" if at else ""
-        lines.append(f"{idx}.{where} {moment}")
+    instruction = _build_instruction(cfg)
+    if look:
+        # Part of the instruction, not a footnote after it. Appended to the end
+        # of the whole request it landed below "write these pictures now", where
+        # it reads as an afterthought to an order already given.
+        instruction += f"\n\nEnd every prompt with this look, word for word: {look}"
+
+    lines.append(_build_batch_prompt(
+        instruction,
+        pictures,
+        script_context=narrations,
+        picture_plan=[{"number": p["picture_number"], "shot_id": p["shot_id"],
+                       "first_line": p["first_line"], "last_line": p["last_line"]}
+                      for p in pictures],
+    ))
 
     path = os.path.join(project_dir, "prompt_request.txt")
     with open(path, "w", encoding="utf-8") as f:
