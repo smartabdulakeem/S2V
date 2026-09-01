@@ -188,12 +188,18 @@ _MARKUP = re.compile(r"^\s*(?:[-*\u2022>]+\s+)?"
                      r"(?:(?:picture|image|shot)\s*\d+\s*[\u2014\u2013:\-]?\s*)?"
                      r"(?:(?:script\s+)?lines?\s+)?", re.IGNORECASE)
 _WRAPPED = re.compile(r"^\((\d+(?:\s*[-\u2013\u2014]\s*\d+)?)\)")
+# Models number their own answers: "1: 1-6: a wide landscape". The leading
+# number was read as the whole span, so the picture covered one line and the
+# real range ended up inside the description. Stripped only when a range
+# actually follows, so a genuine one-line answer - "7: a close shot" - survives.
+_RENUMBERED = re.compile(r"^\d+\s*[:.)]\s*(?=\d+\s*[-\u2013\u2014]\s*\d+\s*[:.)])")
 
 
 def _unformat(raw_line: str) -> str:
     """The span line as it would read without the chat's markup around it."""
     line = (raw_line or "").replace("**", "").replace("__", "").strip()
     line = _MARKUP.sub("", line, count=1)
+    line = _RENUMBERED.sub("", line.strip(), count=1)
     return _WRAPPED.sub(r"\1", line.strip())
 
 
@@ -303,7 +309,10 @@ def plan_pictures(script_lines: list, seconds: list, series_cfg: dict = None,
         from pipeline.llm.factory import get_llm_provider
         provider = get_llm_provider()
 
-    request = build_plan_request(_build_instruction(series_cfg), script_lines,
+    # Hoisted: the same instruction carries the niche recipe, the standing
+    # exclusions and the depiction rules into the describe pass below.
+    instruction = _build_instruction(series_cfg)
+    request = build_plan_request(instruction, script_lines,
                                  seconds, min_hold, max_hold, exact_count)
 
     reply = ""
@@ -313,8 +322,16 @@ def plan_pictures(script_lines: list, seconds: list, series_cfg: dict = None,
     except Exception as err:
         sys.stderr.write(f"[picture_plan] the picture plan fell back to one image: {err}\n")
 
-    return repair_spans(parse_plan_reply(reply, n), n, seconds,
-                        min_hold, max_hold, exact_count)
+    spans = repair_spans(parse_plan_reply(reply, n), n, seconds,
+                         min_hold, max_hold, exact_count)
+
+    # Repair can create pictures the model never described - splitting to meet an
+    # exact count is the common way. A picture with no description falls back to
+    # raw search keywords when the prompt is assembled, so it is asked for here
+    # and borrowed from a neighbour only if that also fails.
+    describe_missing_spans(spans, script_lines, instruction, provider)
+    fill_undescribed(spans)
+    return spans
 
 def apply_spans(script_data: dict, spans: list) -> dict:
     """
@@ -357,3 +374,91 @@ def apply_spans(script_data: dict, spans: list) -> dict:
 
     return {"pictures": sum(1 for s in segments if not s["shots"][0].get("share_with")),
             "segments": len(segments)}
+
+_NUMBERED_LINE = re.compile(r"^\s*(\d+)\s*[:.)]\s*(.+?)\s*$")
+
+
+def _describe_request(instruction: str, spans: list, script_lines: list,
+                      wanted: list) -> str:
+    """Ask for the pictures that have no description, and only those."""
+    out = [instruction, "",
+           "PICTURES THAT STILL NEED A DESCRIPTION",
+           "Each one below is a picture with no description yet. Write one for",
+           "each, from the narration it carries.", ""]
+    for i in wanted:
+        span = spans[i]
+        first = max(1, int(span.get("first_line") or 1))
+        last = min(len(script_lines), int(span.get("last_line") or first))
+        out.append(f"Picture {i + 1} - script lines {first}-{last}")
+        for line_no in range(first, last + 1):
+            text = " ".join((script_lines[line_no - 1] or "").split())
+            out.append(f"[{line_no}] {text}")
+        out.append("")
+    out += ["Answer one line per picture, and nothing else:",
+            "<picture number>: <description>"]
+    return "\n".join(out)
+
+
+def describe_missing_spans(spans: list, script_lines: list, instruction: str,
+                           provider, max_tokens: int = PLAN_REPLY_CEILING) -> int:
+    """
+    Write a description for every picture that has none. Returns how many landed.
+
+    Splitting a span to meet an exact count leaves its pieces blank, and a blank
+    picture falls back to the shot's raw search keywords at prompt assembly -
+    which is how a real 30-picture export came out as 3 written prompts and 27
+    noun piles. Asking again for just the blanks is what closes that gap.
+    """
+    wanted = [i for i, s in enumerate(spans)
+              if not (s.get("description") or "").strip()]
+    if not wanted or provider is None:
+        return 0
+
+    try:
+        reply = provider.complete_text(
+            system=_describe_request(instruction, spans, script_lines, wanted),
+            user="", max_tokens=max_tokens) or ""
+    except Exception as err:
+        sys.stderr.write(f"[picture_plan] descriptions fell back: {err}\\n")
+        return 0
+
+    filled = 0
+    for raw_line in reply.splitlines():
+        m = _NUMBERED_LINE.match(_unformat(raw_line))
+        if not m:
+            continue
+        index = int(m.group(1)) - 1
+        text = m.group(2).strip()
+        # Answered by picture number, never by position in the reply: a model
+        # that answers out of order would otherwise shift every description.
+        if 0 <= index < len(spans) and text and index in wanted:
+            spans[index]["description"] = text
+            filled += 1
+    return filled
+
+
+def fill_undescribed(spans: list) -> int:
+    """
+    Last resort: a still-blank picture borrows its nearest neighbour's words.
+
+    A neighbour repeated is a weaker picture. A pile of search keywords is not a
+    picture at all, and that is what the alternative is. With nothing written
+    anywhere there is nothing honest to borrow, so the blanks are left alone.
+    """
+    borrowed = 0
+    last = ""
+    for span in spans:
+        if (span.get("description") or "").strip():
+            last = span["description"].strip()
+        elif last:
+            span["description"] = last
+            borrowed += 1
+
+    nxt = ""
+    for span in reversed(spans):
+        if (span.get("description") or "").strip():
+            nxt = span["description"].strip()
+        elif nxt:
+            span["description"] = nxt
+            borrowed += 1
+    return borrowed

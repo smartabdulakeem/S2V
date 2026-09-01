@@ -529,3 +529,25 @@ def test_a_dead_provider_gives_one_picture_rather_than_no_film():
     spans = plan_pictures(PLAN_SCRIPT, PLAN_SECONDS, series_cfg=PLAN_CFG,
                           provider=_Dead(), min_hold=4.0, max_hold=75.0)
     assert [(s["first_line"], s["last_line"]) for s in spans] == [(1, 5)]
+
+
+def test_a_picture_number_in_front_of_the_range_does_not_become_the_span():
+    """
+    Gemini answers "1: 1-6: a wide landscape". The leading number was read as
+    the whole span, so picture one covered line one only and the real range was
+    pushed into the description text. On the owner's 347-line film that turned
+    30 pictures into 29 single-line ones plus a 317-line remainder.
+    """
+    got = parse_plan_reply("1: 1-6: a wide untouched landscape\n"
+                           "2: 7-11: a desolate rocky canyon", 347)
+
+    assert [(s["first_line"], s["last_line"]) for s in got] == [(1, 6), (7, 11)]
+    assert got[0]["description"] == "a wide untouched landscape"
+
+
+def test_a_bare_number_answer_is_still_read_as_a_single_line_picture():
+    """Stripping the prefix must not eat a legitimate one-line span."""
+    got = parse_plan_reply("7: a close shot of weathered hands", 347)
+    assert [(s["first_line"], s["last_line"]) for s in got] == [(7, 7)]
+    assert got[0]["description"] == "a close shot of weathered hands"
+
