@@ -461,3 +461,71 @@ def test_prose_around_the_plan_is_still_ignored():
              "- 1-4: A ridge under a bruised sky.\n\n"
              "Let me know if you would like a different pacing.")
     assert len(parse_plan_reply(reply, 10)) == 1
+
+
+# ── the whole pass ────────────────────────────────────────────────────────────
+
+from pipeline.picture_plan import plan_pictures
+
+PLAN_CFG = {
+    "series_slug": "pre_islamic_prophetic___global_history",
+    "prompt_recipe": "Write grounded historical descriptions.",
+    "era_block": "",
+    "negative_block": "modern elements, text, watermark",
+    "never_depict": ["Allah"],
+    "never_show_face": ["Iblis"],
+}
+
+
+class _Provider:
+    def __init__(self, reply):
+        self.reply, self.prompt = reply, None
+
+    def identity(self):
+        return "gemini", "gemini-2.5-flash"
+
+    def complete_text(self, system, user="", max_tokens=2048):
+        self.prompt = system
+        return self.reply
+
+
+def test_the_pass_returns_a_legal_plan_from_a_good_reply():
+    prov = _Provider("1-2: an untouched landscape\n3-4: an ember-lit ridge\n5-5: embers clashing")
+    spans = plan_pictures(PLAN_SCRIPT, PLAN_SECONDS, series_cfg=PLAN_CFG,
+                          provider=prov, min_hold=4.0, max_hold=75.0)
+
+    assert [(s["first_line"], s["last_line"]) for s in spans] == [(1, 2), (3, 4), (5, 5)]
+    assert [s["number"] for s in spans] == [1, 2, 3]
+
+
+def test_the_niche_rules_travel_with_the_boundary_request():
+    """The model writes descriptions here too, so it needs the depiction rules."""
+    prov = _Provider("1-5: everything")
+    plan_pictures(PLAN_SCRIPT, PLAN_SECONDS, series_cfg=PLAN_CFG,
+                  provider=prov, min_hold=4.0, max_hold=75.0)
+
+    assert "must never be identifiable: Iblis" in prov.prompt
+    assert "modern elements, text, watermark" in prov.prompt
+
+
+def test_a_broken_reply_still_produces_a_usable_film():
+    """Overlapping, out of order, past the end — and the film still plans."""
+    prov = _Provider("4-99: late\n1-2: early\n2-3: overlapping")
+    spans = plan_pictures(PLAN_SCRIPT, PLAN_SECONDS, series_cfg=PLAN_CFG,
+                          provider=prov, min_hold=1.0, max_hold=75.0)
+
+    covered = [ln for s in spans for ln in range(s["first_line"], s["last_line"] + 1)]
+    assert covered == [1, 2, 3, 4, 5]
+
+
+def test_a_dead_provider_gives_one_picture_rather_than_no_film():
+    class _Dead:
+        def identity(self):
+            return "gemini", "gemini-2.5-flash"
+
+        def complete_text(self, system, user="", max_tokens=2048):
+            raise RuntimeError("provider is down")
+
+    spans = plan_pictures(PLAN_SCRIPT, PLAN_SECONDS, series_cfg=PLAN_CFG,
+                          provider=_Dead(), min_hold=4.0, max_hold=75.0)
+    assert [(s["first_line"], s["last_line"]) for s in spans] == [(1, 5)]

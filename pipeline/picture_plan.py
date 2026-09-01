@@ -274,3 +274,44 @@ def parse_plan_reply(reply_text: str, n_lines: int) -> list:
         spans.append({"first_line": first, "last_line": last,
                       "description": description})
     return spans
+
+import sys
+
+#: Boundaries and a description for every picture come back in one reply, so the
+#: ceiling has to cover the whole film. Only generated tokens are billed, so an
+#: unused ceiling costs nothing and a short one silently truncates the plan.
+PLAN_REPLY_CEILING = 8192
+
+
+def plan_pictures(script_lines: list, seconds: list, series_cfg: dict = None,
+                  provider=None, min_hold: float = 8.0, max_hold: float = 75.0,
+                  exact_count: int = None) -> list:
+    """
+    Where the pictures go and what each one shows, in one pass over the film.
+
+    Always returns a legal plan. A refusal, a mangled reply or a dead provider
+    all end at the same place: one picture over the whole film, which is a film
+    the owner can still work with.
+    """
+    from pipeline.shot_description import _build_instruction
+
+    n = len(script_lines)
+    if n == 0:
+        return []
+
+    if provider is None:
+        from pipeline.llm.factory import get_llm_provider
+        provider = get_llm_provider()
+
+    request = build_plan_request(_build_instruction(series_cfg), script_lines,
+                                 seconds, min_hold, max_hold, exact_count)
+
+    reply = ""
+    try:
+        reply = provider.complete_text(system=request, user="",
+                                       max_tokens=PLAN_REPLY_CEILING) or ""
+    except Exception as err:
+        sys.stderr.write(f"[picture_plan] the picture plan fell back to one image: {err}\n")
+
+    return repair_spans(parse_plan_reply(reply, n), n, seconds,
+                        min_hold, max_hold, exact_count)
