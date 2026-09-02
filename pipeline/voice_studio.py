@@ -8,7 +8,6 @@ Voiceover Studio tab: give it text and an engine, get an audio file back.
 Engines:
 
     supertonic  Supertonic. Offline, 32 languages, weights already cached.
-    edge        Edge-TTS. Cloud, free, no key.
     google      Google Cloud TTS. Cloud, premium voices, uses your API key.
     kokoro      Kokoro 82M ONNX. Offline, small and fast.
     piper       Piper. Offline neural voices, ONNX models on disk.
@@ -256,25 +255,6 @@ def probe_engines() -> dict:
     """
     engines = {}
 
-    # -- Edge-TTS ----------------------------------------------------------
-    try:
-        import edge_tts  # noqa: F401
-        engines["edge"] = {
-            "id": "edge",
-            "name": "Edge-TTS (high-quality standard voices)",
-            "ready": True,
-            "offline": False,
-            "supports_cloning": False,
-            "supports_pitch": True,
-        }
-    except Exception as e:
-        engines["edge"] = {
-            "id": "edge", "name": "Edge-TTS", "ready": False, "offline": False,
-            "supports_cloning": False, "supports_pitch": True,
-            "blocker": f"edge-tts is not importable: {e}",
-            "fix": "pip install edge-tts",
-        }
-
     # -- Piper -------------------------------------------------------------
     piper_models = []
     if os.path.isdir(os.path.join(PIPER_DIR, "models")):
@@ -418,41 +398,7 @@ def probe_engines() -> dict:
 # generation
 # ---------------------------------------------------------------------------
 
-def _speed_to_edge_rate(speed: float) -> str:
-    pct = int(round((float(speed) - 1.0) * 100))
-    return f"{pct:+d}%"
 
-
-def _pitch_to_edge(pitch_semitones: float) -> str:
-    hz = int(round(float(pitch_semitones) * 20))
-    return f"{hz:+d}Hz"
-
-
-def _generate_edge(text, output_path, voice, speed, pitch):
-    import asyncio
-    import edge_tts
-
-    async def go():
-        communicate = edge_tts.Communicate(
-            text=text,
-            voice=voice or "en-US-AriaNeural",
-            rate=_speed_to_edge_rate(speed),
-            pitch=_pitch_to_edge(pitch),
-        )
-        await communicate.save(output_path)
-
-    try:
-        asyncio.run(go())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(go())
-        finally:
-            loop.close()
-
-    if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
-        raise RuntimeError("Edge-TTS produced no audio.")
-    return {"engine": "edge", "voice": voice}
 
 
 def _generate_piper(text, output_path, model, speed):
@@ -670,18 +616,16 @@ def synthesize(
     except (TypeError, ValueError):
         pitch = 0.0
 
-    ext = "mp3" if engine in ("edge", "google") else "wav"
+    ext = "mp3" if engine == "google" else "wav"
     output_path = _new_output_path(ext=ext, label=label)
     started = time.time()
 
     try:
-        if engine == "edge":
-            meta = _generate_edge(text, output_path, voice, speed, pitch)
-        elif engine == "supertonic":
+        if engine == "supertonic":
             meta = _generate_supertonic(text, output_path, voice, speed, lang=language)
         elif engine == "google":
             meta = _generate_google(text, output_path, voice, speed, pitch, google_api_key)
-        elif engine == "kokoro":
+        elif engine in ("kokoro", "edge"):
             meta = _generate_kokoro(text, output_path, voice, speed)
         elif engine == "piper":
             meta = _generate_piper(text, output_path, voice, speed)

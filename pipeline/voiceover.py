@@ -2,13 +2,12 @@
 Stage 2 — Voiceover generation.
 
 Engine routing (based on voice ID prefix):
-  "edge:<Name>"    → edge-tts — free, 400+ voices, reliable (default fallback)
-  "hf:suno/bark"   → Suno Bark on Hugging Face Serverless
-  "hf:coqui/XTTS"  → Coqui XTTS-v2 on Hugging Face Serverless
-  "local:piper"    → local offline Piper TTS using lessac-medium model
+  "local:kokoro" / "kokoro:"         → local Kokoro ONNX TTS (Apache-2.0, default fallback)
+  "local:supertonic" / "supertonic:" → local Supertonic TTS (MIT)
+  "google:<Name>"                    → Google Cloud Text-to-Speech (requires Google API Key)
+  "google:gemini-3.1-flash-tts"      → Gemini 3.1 Flash TTS (requires Google API Key)
 """
 
-import asyncio
 import json
 import re
 import base64
@@ -27,6 +26,10 @@ from pipeline.net import install as _install_net_shim
 _install_net_shim()
 import urllib.error
 from pathlib import Path
+
+#: Where a voice id we no longer recognise is sent. Kokoro is local, Apache-2.0,
+#: and always present, so this can never fail for want of a key or a network.
+FALLBACK_VOICE = "local:kokoro-bm_george"
 
 # OPTIMIZATION: Limit ONNX Runtime CPU threads to prevent active RAM and CPU overhead
 os.environ["SUPERTONIC_INTRA_OP_THREADS"] = "2"
@@ -579,34 +582,8 @@ def _generate_with_local_kokoro(
             pass
 
 
-# ── Microsoft Edge TTS ────────────────────────────────────────────────────────
-
-async def _edge_tts_async(text: str, voice: str, rate: str, pitch: str, output_path: str):
-    import edge_tts
-    if voice.startswith("edge:"):
-        voice = voice.split(":", 1)[1]
-    communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate, pitch=pitch)
-    await communicate.save(output_path)
-
-
-def _generate_with_edge_tts(narration: str, voice: str, voice_rate: str, voice_pitch: str, output_path: str):
-    try:
-        asyncio.run(_edge_tts_async(narration, voice, voice_rate, voice_pitch, output_path))
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(
-                _edge_tts_async(narration, voice, voice_rate, voice_pitch, output_path)
-            )
-        finally:
-            loop.close()
 
 # ── Public API ────────────────────────────────────────────────────────────────
-
-# ── Public API ────────────────────────────────────────────────────────────────
-
-
 
 TIMEPOINT_CAPABLE_VOICE_TYPES = ("neural2", "wavenet", "standard", "news", "polyglot")
 
@@ -908,10 +885,10 @@ def generate_voiceover(
     Skips if already cached (resume support).
 
     Voice ID formats:
-      "edge:<voice_name>"    edge-tts (free)
-      "google:<voice_name>"  Google Cloud Text-to-Speech (requires Google API Key)
-      "hf:<model_id>"        Hugging Face cloud model (requires HF API Key)
-      "local:piper"          local Piper offline
+      "local:kokoro" / "kokoro:"         local Kokoro offline (Apache-2.0, default fallback)
+      "local:supertonic" / "supertonic:" local Supertonic offline (MIT)
+      "google:<voice_name>"              Google Cloud Text-to-Speech (requires Google API Key)
+      "google:gemini-3.1-flash-tts"      Gemini 3.1 Flash TTS (requires Google API Key)
     """
     output_path = os.path.join(cache_dir, f"segment_{segment_id}_audio.mp3")
 
@@ -1037,19 +1014,20 @@ def generate_voiceover(
         )
 
     else:
-        # Fallback to Microsoft Edge neural voices
-        clean_voice = voice
-        if voice.startswith("edge:"):
-            clean_voice = voice.split(":", 1)[1]
-        elif voice.startswith("gemini:"):
-            clean_voice = "en-US-GuyNeural"
-            if on_progress:
-                on_progress(f"Segment {segment_id} — legacy Gemini voice found. Routing to edge:en-US-GuyNeural")
-
+        # Where a voice id we no longer recognise is sent. Kokoro is local, Apache-2.0,
+        # and always present, so this can never fail for want of a key or a network.
         if on_progress:
-            on_progress(f"Segment {segment_id} — Generating Edge Neural voiceover ({clean_voice})")
-            
-        _generate_with_edge_tts(tts_text, clean_voice, voice_rate, voice_pitch, output_path)
+            on_progress(f"Segment {segment_id} — Unrecognised or legacy voice '{voice}'. Routing to {FALLBACK_VOICE}")
+
+        _generate_with_local_kokoro(
+            narration=tts_text,
+            voice=FALLBACK_VOICE,
+            voice_rate=voice_rate,
+            output_path=output_path,
+            on_progress=on_progress,
+            segment_id=segment_id,
+            narrative_tone=narrative_tone
+        )
 
     _write_marker(tone_marker, tone_key)
     _write_marker(text_marker, text_key)

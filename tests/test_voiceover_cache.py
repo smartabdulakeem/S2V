@@ -29,20 +29,20 @@ def cache(tmp_path):
 
 def _record(cache_dir, calls, text):
     """Call generate_voiceover with the engine stubbed, returning the mp3 path."""
-    def _fake_edge(tts_text, voice, rate, pitch, out_path):
-        calls.append(tts_text)
-        with open(out_path, "wb") as fh:
+    def _fake_kokoro(narration, voice, voice_rate, output_path, on_progress=None, segment_id=0, narrative_tone=""):
+        calls.append(narration)
+        with open(output_path, "wb") as fh:
             fh.write(b"ID3fake-audio")
 
-    original = vo._generate_with_edge_tts
-    vo._generate_with_edge_tts = _fake_edge
+    original = vo._generate_with_local_kokoro
+    vo._generate_with_local_kokoro = _fake_kokoro
     try:
         return vo.generate_voiceover(
-            segment_id=1, narration=text, voice="en-US-GuyNeural",
+            segment_id=1, narration=text, voice=vo.FALLBACK_VOICE,
             voice_rate="+0%", voice_pitch="+0Hz", cache_dir=cache_dir,
         )
     finally:
-        vo._generate_with_edge_tts = original
+        vo._generate_with_local_kokoro = original
 
 
 def test_the_same_words_are_not_recorded_twice(cache):
