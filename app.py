@@ -1519,6 +1519,40 @@ class Api:
             return {"success": True, "path": target}
         return {"success": False, "error": "File not found."}
 
+    def prepare_timeline_audio(self, script_data: dict, project_dir: str = "") -> dict:
+        """Build (or reuse) the narration track and tell the page where it is."""
+        try:
+            import hashlib
+            import pathlib
+            import urllib.parse
+            from pipeline.timeline_audio import build_timeline_audio
+
+            if not project_dir:
+                project = (script_data or {}).get("project") or {}
+                title = project.get("title") or "Untitled Project"
+                proj_hash = hashlib.md5(title.encode("utf-8")).hexdigest()[:8]
+                project_dir = os.path.join(BASE_DIR, "cache", proj_hash)
+
+            res = build_timeline_audio(script_data, project_dir)
+            if not res.get("ok"):
+                return res
+
+            abs_path = os.path.abspath(res["path"])
+            is_devserver = (
+                os.environ.get("SMART_STUDIO_DEVSERVER") == "1"
+                or (self._window is not None and type(self._window).__name__ == "DevWindow")
+            )
+
+            if is_devserver:
+                src = f"/media?path={urllib.parse.quote(abs_path)}"
+            else:
+                src = pathlib.Path(abs_path).as_uri()
+
+            res["src"] = src
+            return res
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def get_version(self) -> str:
         return "2.0.0"
 

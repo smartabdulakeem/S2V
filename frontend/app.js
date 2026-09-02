@@ -204,6 +204,8 @@ function switchPane(paneId) {
 
   if (paneId === "timeline" && typeof renderTimelineScreen === "function") {
     renderTimelineScreen();
+  } else if (typeof timelinePauseAudio === "function") {
+    timelinePauseAudio();
   }
 
   if (paneId === "voice" && typeof initVoiceStudio === "function") {
@@ -2306,6 +2308,146 @@ function tlStateFor(pic) {
   return rep ? rep.state : "";
 }
 
+let tlAnimFrameId = null;
+let tlCurrentFramePic = null;
+let tlAudioPreparing = false;
+
+function timelineAudioEl() {
+  return document.getElementById("tl-audio");
+}
+
+function initTimelineAudio() {
+  const audio = timelineAudioEl();
+  if (!audio || audio.dataset.initialized) return;
+  audio.dataset.initialized = "true";
+
+  audio.addEventListener("play", () => {
+    const btn = document.getElementById("btn-tl-play");
+    if (btn) {
+      btn.innerHTML = "&#10074;&#10074;";
+      btn.setAttribute("aria-label", "Pause");
+      btn.title = "Pause";
+    }
+    if (tlAnimFrameId) cancelAnimationFrame(tlAnimFrameId);
+    tlAnimFrameId = requestAnimationFrame(tlAnimLoop);
+  });
+
+  audio.addEventListener("pause", () => {
+    const btn = document.getElementById("btn-tl-play");
+    if (btn) {
+      btn.innerHTML = "&#9654;";
+      btn.setAttribute("aria-label", "Play");
+      btn.title = "Play";
+    }
+    if (tlAnimFrameId) {
+      cancelAnimationFrame(tlAnimFrameId);
+      tlAnimFrameId = null;
+    }
+  });
+
+  audio.addEventListener("ended", () => {
+    const btn = document.getElementById("btn-tl-play");
+    if (btn) {
+      btn.innerHTML = "&#9654;";
+      btn.setAttribute("aria-label", "Play");
+      btn.title = "Play";
+    }
+    if (tlAnimFrameId) {
+      cancelAnimationFrame(tlAnimFrameId);
+      tlAnimFrameId = null;
+    }
+    const secs = segmentSecondsList(currentScriptData);
+    const total = secs.reduce((a, b) => a + b, 0);
+    timelineSeek(total, { fromAudio: true });
+  });
+}
+
+function tlAnimLoop() {
+  const audio = timelineAudioEl();
+  if (!audio || audio.paused) {
+    tlAnimFrameId = null;
+    return;
+  }
+  timelineSeek(audio.currentTime, { fromAudio: true });
+  tlAnimFrameId = requestAnimationFrame(tlAnimLoop);
+}
+
+function timelinePauseAudio() {
+  const audio = timelineAudioEl();
+  if (audio && !audio.paused) {
+    audio.pause();
+  }
+  if (tlAnimFrameId) {
+    cancelAnimationFrame(tlAnimFrameId);
+    tlAnimFrameId = null;
+  }
+}
+
+async function timelineTogglePlay() {
+  const audio = timelineAudioEl();
+  if (!audio) return;
+
+  if (!audio.paused) {
+    audio.pause();
+    return;
+  }
+
+  const secs = segmentSecondsList(currentScriptData);
+  const total = secs.reduce((a, b) => a + b, 0);
+  if (tlPlayhead >= total - 0.05) {
+    timelineSeek(0);
+  }
+
+  const projectTitle = (currentScriptData && currentScriptData.project && currentScriptData.project.title) || "Untitled Project";
+  if (!audio.src || audio.dataset.project !== projectTitle) {
+    if (tlAudioPreparing) return;
+    tlAudioPreparing = true;
+    const playBtn = document.getElementById("btn-tl-play");
+    const statusEl = document.getElementById("tl-status");
+    const origStatus = statusEl ? statusEl.textContent : "";
+    if (playBtn) playBtn.disabled = true;
+    if (statusEl) statusEl.textContent = "Building timeline narration audio...";
+
+    try {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.prepare_timeline_audio) {
+        // The narration track belongs beside the film it was made from, not in a
+        // hashed cache folder. currentScriptPath is the project's script.json.
+        const projectDir = currentScriptPath
+          ? currentScriptPath.replace(/[\\/][^\\/]*$/, "")
+          : "";
+        const res = await window.pywebview.api.prepare_timeline_audio(currentScriptData, projectDir);
+        if (!res || !res.ok || !res.src) {
+          alert("Could not prepare timeline audio: " + ((res && res.error) || "unknown error"));
+          if (statusEl) statusEl.textContent = origStatus;
+          return;
+        }
+        audio.src = res.src;
+        audio.dataset.project = projectTitle;
+        audio.load();
+      } else {
+        alert("Audio playback requires backend connection.");
+        if (statusEl) statusEl.textContent = origStatus;
+        return;
+      }
+    } catch (err) {
+      alert("Error preparing timeline audio: " + err);
+      if (statusEl) statusEl.textContent = origStatus;
+      return;
+    } finally {
+      tlAudioPreparing = false;
+      if (playBtn) playBtn.disabled = false;
+      if (statusEl) statusEl.textContent = origStatus;
+    }
+  }
+
+  audio.currentTime = tlPlayhead;
+  try {
+    await audio.play();
+  } catch (err) {
+    console.error("Audio playback error:", err);
+  }
+}
+
 function renderTimelineScreen() {
   const lanes = document.getElementById("tl-lanes");
   if (!lanes) return;
@@ -2317,26 +2459,47 @@ function renderTimelineScreen() {
   const laneN = document.getElementById("tl-lane-narration");
   const laneC = document.getElementById("tl-lane-captions");
 
+  initTimelineAudio();
+  tlCurrentFramePic = null;
+
   if (!pics.length) {
     if (statusEl) statusEl.textContent = "no film loaded";
     ruler.innerHTML = "";
     laneP.innerHTML = `<p class="sub tl-empty">Plan a storyboard first. The Timeline shows the plan you already have.</p>`;
     laneN.innerHTML = "";
     laneC.innerHTML = "";
+    const playBtn = document.getElementById("btn-tl-play");
+    if (playBtn) playBtn.disabled = true;
     return;
   }
 
   const segs = currentScriptData.segments || [];
   const secs = segmentSecondsList(currentScriptData);
   const total = secs.reduce((a, b) => a + b, 0);
-  const measured = segs.filter(s => parseFloat(s.narration_seconds) > 0).length;
+  const measured = segs.filter(s => Boolean(s.narration_audio && parseFloat(s.narration_seconds) > 0)).length;
   const width = Math.max(320, total * tlZoom);
 
-  if (statusEl) {
-    statusEl.textContent =
-      `${pics.length} picture${pics.length === 1 ? "" : "s"} · ${tlClock(total)} · ` +
-      (measured === segs.length ? "timings measured" : `${measured} of ${segs.length} measured`);
-    statusEl.classList.toggle("warn-text", measured !== segs.length);
+  const playBtn = document.getElementById("btn-tl-play");
+  if (measured === 0) {
+    if (playBtn) {
+      playBtn.disabled = true;
+      playBtn.title = "Narration has not been recorded yet. Measure narration on the Storyboard first.";
+    }
+    if (statusEl) {
+      statusEl.textContent = "Narration not recorded yet — Measure narration on the Storyboard first";
+      statusEl.classList.add("warn-text");
+    }
+  } else {
+    if (playBtn) {
+      playBtn.disabled = false;
+      playBtn.title = "Play / pause";
+    }
+    if (statusEl) {
+      statusEl.textContent =
+        `${pics.length} picture${pics.length === 1 ? "" : "s"} · ${tlClock(total)} · ` +
+        (measured === segs.length ? "all timings measured" : `${measured} of ${segs.length} measured (${segs.length - measured} missing)`);
+      statusEl.classList.toggle("warn-text", measured !== segs.length);
+    }
   }
 
   lanes.style.width = `${width}px`;
@@ -2408,6 +2571,13 @@ function timelineSeek(seconds, opts) {
   const total = secs.reduce((a, b) => a + b, 0);
   tlPlayhead = Math.max(0, Math.min(total, seconds));
 
+  const audio = timelineAudioEl();
+  if (audio && (!opts || !opts.fromAudio)) {
+    if (Math.abs(audio.currentTime - tlPlayhead) > 0.05) {
+      audio.currentTime = tlPlayhead;
+    }
+  }
+
   const x = tlPlayhead * tlZoom;
   const head = document.getElementById("tl-playhead");
   if (head) head.style.left = `${x.toFixed(1)}px`;
@@ -2427,8 +2597,20 @@ function timelineSeek(seconds, opts) {
 
   const at = pics.find(p => tlPlayhead >= p.startsAt && tlPlayhead < p.startsAt + p.seconds)
              || pics[pics.length - 1];
-  if (at && !(opts && opts.keepSelection && tlSelected !== at.number)) {
-    selectTimelinePicture(at.number, { silent: true });
+  if (at) {
+    if (at.number !== tlCurrentFramePic) {
+      tlCurrentFramePic = at.number;
+      const frame = document.getElementById("tl-frame");
+      if (frame) {
+        const img = tlImageFor(at);
+        frame.innerHTML = img
+          ? `<img src="${img}" alt="Picture ${at.number}"/>`
+          : `<p class="sub">Picture ${at.number} has no image yet. The Storyboard has its prompt.</p>`;
+      }
+      if (!(opts && opts.keepSelection && tlSelected !== at.number)) {
+        selectTimelinePicture(at.number, { silent: true });
+      }
+    }
   }
   if (opts && opts.keepSelection) drawTimelineInspector(tlSelected);
 }
@@ -2532,6 +2714,25 @@ window.timelineNudge = timelineNudge;
 window.timelineSeekPicture = timelineSeekPicture;
 window.selectTimelinePicture = selectTimelinePicture;
 window.timelineScrubFrom = timelineScrubFrom;
+window.timelineSeek = timelineSeek;
+window.timelineTogglePlay = timelineTogglePlay;
+window.timelinePauseAudio = timelinePauseAudio;
+
+// Spacebar toggles playback when Timeline pane is active and not focused in an input
+document.addEventListener("keydown", (e) => {
+  if (e.key === " " || e.code === "Space") {
+    const el = document.activeElement;
+    const tag = el && el.tagName ? el.tagName.toUpperCase() : "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el && el.isContentEditable)) {
+      return;
+    }
+    const timelinePane = document.querySelector('.pane[data-pane="timeline"]');
+    if (timelinePane && timelinePane.getAttribute("data-on") === "1") {
+      e.preventDefault();
+      timelineTogglePlay();
+    }
+  }
+});
 
 // ── Replace: the one place a shot's image changes ─────────────────────────────
 

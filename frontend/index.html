@@ -283,10 +283,12 @@
 
       <div class="tl-top">
         <div class="tl-preview">
+          <audio id="tl-audio" preload="metadata"></audio>
           <div class="tl-frame" id="tl-frame">
             <p class="sub">Plan a storyboard first, then this shows the picture on screen at the playhead.</p>
           </div>
           <div class="tl-transport">
+            <button type="button" id="btn-tl-play" onclick="timelineTogglePlay()" title="Play / pause" aria-label="Play">&#9654;</button>
             <button type="button" onclick="timelineSeekPicture(-1)" title="Previous picture">&#124;&#9664;</button>
             <button type="button" onclick="timelineNudge(-5)" title="Back 5 seconds">&#9664;&#9664;</button>
             <button type="button" onclick="timelineNudge(5)" title="Forward 5 seconds">&#9654;&#9654;</button>
