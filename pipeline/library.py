@@ -1218,6 +1218,34 @@ def match_shots_by_number(paths: list, shot_count: int, shot_prompts: dict = Non
     return out
 
 
+def number_pictures_from_folder(all_shots: list, paths: list) -> dict:
+    """
+    Pair numbered images with picture slots, keyed by index into `all_shots`.
+
+    `n` counts pictures, not shots. `picture_owning_shots` states the contract:
+    slot n is the nth picture the film actually makes, and every caller has to
+    agree or the mismatch simply moves. This is where it moved to. `plan_shots`
+    counted `all_shots` — one entry per script line — so on the owner's 347-line
+    film cut to 15 pictures his 1.jpg…15.jpg were paired with script lines 1…15.
+    Only line 1 owned a picture. The other fourteen landed on shots carrying
+    `share_with`, which are drawn from another shot's image and can never hold
+    one of their own: fifteen images generated, one of them usable.
+
+    Returns {all_shots index: path}, so callers keep working in shot indices.
+    """
+    owner_idx = [i for i, s in enumerate(all_shots) if not s.get("share_with")]
+    if not owner_idx:
+        return {}
+    by_slot = match_shots_by_number(
+        paths,
+        len(owner_idx),
+        shot_prompts={slot: all_shots[i].get("prompt")
+                      for slot, i in enumerate(owner_idx) if all_shots[i].get("prompt")},
+    )
+    return {owner_idx[slot]: path
+            for slot, path in by_slot.items() if 0 <= slot < len(owner_idx)}
+
+
 def parse_external_prompts(pasted_text: str) -> list:
     """
     Split pasted text on blank lines.
@@ -2404,16 +2432,17 @@ def plan_shots(script_data: dict, min_score: float = None, weak_band: float = No
     # the user stating which picture goes where, and that has to outrank the
     # board's own memory of an earlier plan — otherwise a shot that already holds
     # a library image never looks at the numbered file at all.
+    # Numbered against the pictures the film makes, not against script lines —
+    # see `number_pictures_from_folder`.
     numbered_matches = {}
     if folder and _setting("match_by_prompt_name", True):
         try:
             _external = os.path.isabs(str(folder)) and os.path.isdir(str(folder))
             _, _num_paths = (load_folder_index(str(folder)) if _external else load_index())
-            numbered_matches = match_shots_by_number(
+            numbered_matches = number_pictures_from_folder(
+                all_shots,
                 [p.replace("\\", "/") for p in _num_paths
                  if _path_in_scope(p.replace("\\", "/"), "" if _external else folder)],
-                len(all_shots),
-                shot_prompts={i: s["prompt"] for i, s in enumerate(all_shots) if s["prompt"]},
             )
         except Exception:
             numbered_matches = {}
