@@ -1458,7 +1458,7 @@ class Api:
             return {
                 "success": False,
                 "installed": bool(self._find_wolfcut_binary()),
-                "error": "No .wolfcut project file found. Render a video first to export the timeline.",
+                "error": "No .wolfcut project file found. Export the timeline first.",
                 "path": None,
                 "releases_url": "https://github.com/jub0t/WolfCut/releases"
             }
@@ -1519,19 +1519,24 @@ class Api:
             return {"success": True, "path": target}
         return {"success": False, "error": "File not found."}
 
+    def _resolve_project_dir(self, script_data: dict, project_dir: str = "") -> str:
+        """Resolve project directory or fall back to cache/<hash-of-title>."""
+        if project_dir:
+            return project_dir
+        import hashlib
+        project = (script_data or {}).get("project") or {}
+        title = project.get("title") or "Untitled Project"
+        proj_hash = hashlib.md5(title.encode("utf-8")).hexdigest()[:8]
+        return os.path.join(BASE_DIR, "cache", proj_hash)
+
     def prepare_timeline_audio(self, script_data: dict, project_dir: str = "") -> dict:
         """Build (or reuse) the narration track and tell the page where it is."""
         try:
-            import hashlib
-            import pathlib
             import urllib.parse
             from pipeline.timeline_audio import build_timeline_audio
+            from media_server import start_media_server
 
-            if not project_dir:
-                project = (script_data or {}).get("project") or {}
-                title = project.get("title") or "Untitled Project"
-                proj_hash = hashlib.md5(title.encode("utf-8")).hexdigest()[:8]
-                project_dir = os.path.join(BASE_DIR, "cache", proj_hash)
+            project_dir = self._resolve_project_dir(script_data, project_dir)
 
             res = build_timeline_audio(script_data, project_dir)
             if not res.get("ok"):
@@ -1546,12 +1551,68 @@ class Api:
             if is_devserver:
                 src = f"/media?path={urllib.parse.quote(abs_path)}"
             else:
-                src = pathlib.Path(abs_path).as_uri()
+                host, port, token = start_media_server(BASE_DIR)
+                src = f"http://{host}:{port}/media?token={token}&path={urllib.parse.quote(abs_path)}"
 
             res["src"] = src
             return res
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def export_wolfcut_timeline(self, script_data: dict, project_dir: str = "") -> dict:
+        """
+        Write a WolfCut timeline from the narration timing, with no video render.
+
+        The exporter has always been able to do this - it takes an audio path and a
+        duration per segment and measures neither. It was only ever called from
+        inside the renderer, so a timeline cost a full encode.
+        """
+        try:
+            from pipeline.narration_timing import timing_maps
+            from pipeline.wolfcut_export import write_wolfcut_project
+
+            project_dir = self._resolve_project_dir(script_data, project_dir)
+
+            audio_paths, durations = timing_maps(script_data)
+            if not audio_paths:
+                return {
+                    "success": False,
+                    "error": "Narration has not been recorded yet. Measure narration on the Storyboard first.",
+                    "path": None,
+                    "pictures": 0,
+                    "segments": 0,
+                    "captions": 0,
+                }
+
+            wolfcut_path = write_wolfcut_project(script_data, audio_paths, durations, project_dir)
+
+            pictures_count = 0
+            segments_count = 0
+            captions_count = 0
+            if os.path.exists(wolfcut_path):
+                with open(wolfcut_path, "r", encoding="utf-8") as f:
+                    doc = json.load(f)
+                clips = doc.get("clips") or []
+                pictures_count = len([c for c in clips if c.get("trackId") == "T1"])
+                segments_count = len([c for c in clips if c.get("trackId") == "T2"])
+                captions_count = len([c for c in clips if c.get("trackId") == "T3"])
+
+            return {
+                "success": True,
+                "path": os.path.abspath(wolfcut_path),
+                "pictures": pictures_count,
+                "segments": segments_count,
+                "captions": captions_count,
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "path": None,
+                "pictures": 0,
+                "segments": 0,
+                "captions": 0,
+            }
 
     def get_version(self) -> str:
         return "2.0.0"
@@ -1764,6 +1825,9 @@ def main():
             sys.exit(1)
 
     api = Api()
+
+    from media_server import start_media_server
+    start_media_server(BASE_DIR)
 
     window = webview.create_window(
         title="Smart Studio",

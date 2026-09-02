@@ -138,76 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(WINDOW.drain()))
 
         if path == "/media":
-            query = urllib.parse.urlparse(self.path).query
-            params = urllib.parse.parse_qs(query)
-            file_path = (params.get("path") or [""])[0]
-            if not file_path or not os.path.isfile(file_path):
-                return self._send(404, json.dumps({"error": "file not found"}))
-
-            # Only ever serve generated media. Without this the route reads any
-            # absolute path on the machine, and config/settings.json holds live
-            # API keys — a dev tool is not a reason to leave that open.
-            allowed_roots = [
-                os.path.realpath(os.path.join(BASE_DIR, sub))
-                for sub in ("projects", "cache", "output")
-            ]
-            real = os.path.realpath(file_path)
-            if not any(
-                real == root or real.startswith(root + os.sep)
-                for root in allowed_roots
-            ):
-                return self._send(403, json.dumps({"error": "path not allowed"}))
-
-            file_size = os.path.getsize(file_path)
-            ctype = mimetypes.guess_type(file_path)[0] or "audio/mpeg"
-
-            range_header = self.headers.get("Range")
-            if range_header and range_header.startswith("bytes="):
-                try:
-                    ranges = range_header[6:].split("-", 1)
-                    start = int(ranges[0]) if ranges[0] else 0
-                    end = int(ranges[1]) if ranges[1] else file_size - 1
-                    if start >= file_size:
-                        self.send_response(416)
-                        self.send_header("Content-Range", f"bytes */{file_size}")
-                        self.end_headers()
-                        return
-
-                    end = min(end, file_size - 1)
-                    length = end - start + 1
-
-                    self.send_response(206)
-                    self.send_header("Content-Type", ctype)
-                    self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
-                    self.send_header("Content-Length", str(length))
-                    self.send_header("Accept-Ranges", "bytes")
-                    self.send_header("Cache-Control", "no-cache")
-                    self.end_headers()
-
-                    with open(file_path, "rb") as f:
-                        f.seek(start)
-                        chunk_size = 64 * 1024
-                        bytes_left = length
-                        while bytes_left > 0:
-                            read_len = min(chunk_size, bytes_left)
-                            buf = f.read(read_len)
-                            if not buf:
-                                break
-                            self.wfile.write(buf)
-                            bytes_left -= len(buf)
-                    return
-                except Exception as err:
-                    sys.stderr.write(f"Range request error: {err}\n")
-
-            self.send_response(200)
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(file_size))
-            self.send_header("Accept-Ranges", "bytes")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            with open(file_path, "rb") as f:
-                shutil.copyfileobj(f, self.wfile)
-            return
+            from media_server import serve_media
+            return serve_media(self, BASE_DIR, expected_token=None)
 
         rel = "index.html" if path in ("/", "") else path.lstrip("/")
         target = os.path.normpath(os.path.join(FRONTEND, rel))

@@ -320,3 +320,121 @@ def test_a_film_without_captions_is_still_valid(tmp_path):
 ])
 def test_slugs(raw, expected):
     assert _clean_slug(raw) == expected
+
+
+# ---------------------------------------------------------------------------
+# Timeline export without a render
+# ---------------------------------------------------------------------------
+
+def test_a_timeline_can_be_built_from_timing_alone(tmp_path):
+    """
+    The editor bridge without a render. The narration is generated and probed,
+    the picture boundaries come from the plan, and the timeline is written -
+    no video encode anywhere in that sentence.
+    """
+    from pipeline.picture_plan import apply_spans
+
+    # Six segments at 5.0s each
+    data, audio, durs = _script(tmp_path, 6, 30.0, with_images=False)
+    for k in durs:
+        durs[k] = 5.0
+
+    # apply_spans giving picture 1 lines 1-4 and picture 2 lines 5-6
+    apply_spans(data, [
+        {"number": 1, "first_line": 1, "last_line": 4, "description": "the first"},
+        {"number": 2, "first_line": 5, "last_line": 6, "description": "the second"},
+    ])
+
+    img_dir = tmp_path / "resolved"
+    img_dir.mkdir(exist_ok=True)
+    # Give picture 1 and picture 2 real image files
+    data["segments"][0]["shots"][0]["resolved"] = _jpeg(img_dir / "pic1.jpg")
+    data["segments"][4]["shots"][0]["resolved"] = _jpeg(img_dir / "pic2.jpg")
+
+    doc, _, _ = _export(tmp_path, data, audio, durs)
+
+    pic_clips = _track(doc, "T1")
+    assert len(pic_clips) == 2, f"Expected 2 picture clips, got {len(pic_clips)}"
+    assert pic_clips[0]["duration"] == 20.0, f"Expected first duration 20.0, got {pic_clips[0]['duration']}"
+    assert pic_clips[1]["start"] == 20.0, f"Expected second starting at 20.0, got {pic_clips[1]['start']}"
+
+
+def test_export_timeline_calls_zero_encoders(tmp_path, monkeypatch):
+    """
+    No encoder runs. Patch the ffmpeg runner and assert it was called zero times.
+    """
+    import subprocess
+    from app import Api
+
+    api = Api()
+    calls = []
+
+    def fake_run(*args, **kwargs):
+        calls.append(args)
+        raise AssertionError(f"ffmpeg/encoder was called unexpectedly with {args}!")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", fake_run)
+
+    data, audio, durs = _script(tmp_path, 6, 30.0, with_images=True)
+    for i, seg in enumerate(data["segments"], 1):
+        seg["narration_seconds"] = durs[i]
+        seg["narration_audio"] = audio[i]
+
+    res = api.export_wolfcut_timeline(data, str(tmp_path))
+    assert res["success"] is True
+    assert len(calls) == 0, f"Expected zero encoder calls, got {len(calls)}"
+    assert os.path.exists(res["path"])
+
+
+def test_export_timeline_no_audio_returns_clear_failure_without_raising(tmp_path):
+    """
+    A film with no narration audio returns clear failure, and does not raise.
+    """
+    from app import Api
+
+    api = Api()
+    data, _, _ = _script(tmp_path, 6, 30.0, with_images=True)
+    for seg in data["segments"]:
+        seg.pop("narration_audio", None)
+        seg.pop("narration_seconds", None)
+
+    res = api.export_wolfcut_timeline(data, str(tmp_path))
+    assert res["success"] is False
+    assert "Narration has not been recorded yet" in res["error"]
+    assert "Measure narration" in res["error"]
+    assert res["path"] is None
+
+
+def test_export_timeline_captions_empty_without_srt_and_doc_valid(tmp_path):
+    """
+    Captions are empty without an SRT, and the document is still valid — every
+    mediaId on a clip exists in media[], every trackId exists in tracks[].
+    """
+    from app import Api
+
+    api = Api()
+    data, audio, durs = _script(tmp_path, 6, 30.0, with_images=True)
+    for i, seg in enumerate(data["segments"], 1):
+        seg["narration_seconds"] = durs[i]
+        seg["narration_audio"] = audio[i]
+
+    res = api.export_wolfcut_timeline(data, str(tmp_path))
+    assert res["success"] is True
+    assert res["captions"] == 0
+
+    with open(res["path"], "r", encoding="utf-8") as f:
+        doc = json.load(f)
+
+    # Captions track has 0 clips
+    assert _track(doc, "T3") == []
+
+    media_ids = {m["id"] for m in doc["media"]}
+    track_ids = {t["id"] for t in doc["tracks"]}
+
+    assert len(doc["clips"]) > 0
+    for clip in doc["clips"]:
+        assert clip["trackId"] in track_ids, f"Clip trackId {clip['trackId']} not in tracks"
+        if clip.get("mediaId"):
+            assert clip["mediaId"] in media_ids, f"Clip mediaId {clip['mediaId']} not in media"
+

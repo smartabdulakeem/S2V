@@ -3378,14 +3378,14 @@ function openOutputFolder() {
   }
 }
 
-async function openInWolfCut() {
+async function openInWolfCut(projectPath) {
   if (isWebMode || !window.pywebview || !window.pywebview.api || !window.pywebview.api.open_in_wolfcut) {
-    alert("WolfCut export is available in desktop app mode after rendering.");
+    alert("WolfCut export is available in desktop app mode.");
     return;
   }
 
   try {
-    const res = await window.pywebview.api.open_in_wolfcut();
+    const res = await window.pywebview.api.open_in_wolfcut(projectPath);
     if (res.success) {
       return;
     }
@@ -3406,6 +3406,54 @@ async function openInWolfCut() {
   }
 }
 window.openInWolfCut = openInWolfCut;
+
+async function exportTimelineToWolfCut() {
+  if (!currentScriptData) {
+    alert("No film loaded to export.");
+    return;
+  }
+  const statusEl = document.getElementById("tl-status");
+  const origStatus = statusEl ? statusEl.textContent : "";
+  if (statusEl) {
+    statusEl.textContent = "Exporting timeline to WolfCut...";
+    statusEl.className = "mono";
+  }
+
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.export_wolfcut_timeline) {
+      const projectDir = currentScriptPath
+        ? currentScriptPath.replace(/[\\/][^\\/]*$/, "")
+        : "";
+      const res = await window.pywebview.api.export_wolfcut_timeline(currentScriptData, projectDir);
+      if (!res || !res.success) {
+        const err = (res && res.error) || "Export failed.";
+        alert(err);
+        if (statusEl) {
+          statusEl.textContent = err;
+          statusEl.className = "mono warn-text";
+        }
+        return;
+      }
+
+      if (statusEl) {
+        statusEl.textContent = `Exported ${res.pictures} pictures to WolfCut · captions come with render`;
+        statusEl.className = "mono ink-1";
+      }
+
+      if (res.path) {
+        await openInWolfCut(res.path);
+      }
+    } else {
+      alert("WolfCut export requires desktop app connection.");
+      if (statusEl) statusEl.textContent = origStatus;
+    }
+  } catch (err) {
+    console.error("exportTimelineToWolfCut error:", err);
+    alert("Export to WolfCut failed: " + err);
+    if (statusEl) statusEl.textContent = origStatus;
+  }
+}
+window.exportTimelineToWolfCut = exportTimelineToWolfCut;
 
 // ── Library Screen Management ────────────────────────────────────────────────
 function switchLibTab(tab) {
