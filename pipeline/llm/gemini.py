@@ -25,6 +25,24 @@ THINKING_HEADROOM = 4096
 MAX_OUTPUT_TOKENS = 65536
 
 
+def _read_timeout(budget: int) -> int:
+    """
+    How long to wait for a reply of this size.
+
+    A flat 60 seconds was fine when the biggest ask was a few hundred tokens.
+    `PLAN_REPLY_CEILING` is 32768 - boundaries and a description for every
+    picture of an eighteen-minute film in one reply - and that cannot arrive in
+    a minute. It did not: asking for a 60-picture plan of the owner's real film
+    timed out three times in one run, and each time the plan "fell back to one
+    image" and the descriptions fell back to keyword search. Nothing was wrong
+    with the request; the app simply stopped listening before the answer came.
+
+    Roughly a minute per thousand tokens of budget, floored at the old 60 and
+    capped so a hung connection still ends.
+    """
+    return max(60, min(600, 30 + int(budget) // 60))
+
+
 def _with_thinking_headroom(max_tokens: int) -> int:
     """The budget to ask for so `max_tokens` survives for the answer itself."""
     try:
@@ -92,7 +110,8 @@ class GeminiProvider(BaseLLMProvider):
             method="POST"
         )
 
-        res_data = json.loads(urlopen_with_backoff(req, timeout=60).decode("utf-8"))
+        res_data = json.loads(urlopen_with_backoff(
+            req, timeout=_read_timeout(config["maxOutputTokens"])).decode("utf-8"))
         _warn_if_truncated((res_data.get("candidates") or [{}])[0],
                            res_data.get("usageMetadata") or {},
                            config["maxOutputTokens"], "complete")
@@ -124,7 +143,8 @@ class GeminiProvider(BaseLLMProvider):
             headers=headers,
             method="POST"
         )
-        raw = urlopen_with_backoff(req, timeout=60)
+        raw = urlopen_with_backoff(
+            req, timeout=_read_timeout(payload["generationConfig"]["maxOutputTokens"]))
         res_data = json.loads(raw.decode("utf-8")) if raw else {}
         candidates = res_data.get("candidates") or []
         if not candidates:

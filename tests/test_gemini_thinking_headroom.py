@@ -67,6 +67,36 @@ def test_both_entry_points_pad_the_budget(monkeypatch):
             "the answer's budget was spent on thinking again")
 
 
+def test_a_big_reply_is_given_time_to_arrive():
+    """
+    A flat 60s was fine for a few hundred tokens. A whole film's picture plan
+    is 32768, and waiting a minute for it timed out three times in one run of
+    the acceptance check - each time falling back to one image, silently.
+    """
+    assert gemini._read_timeout(4096) > 60, "a description batch needs more than a minute"
+    assert gemini._read_timeout(32768 + gemini.THINKING_HEADROOM) >= 600, \
+        "a full picture plan must be given real time"
+    assert gemini._read_timeout(0) == 60, "the old floor stays for small asks"
+    assert gemini._read_timeout(10 ** 9) <= 600, "a hung connection still has to end"
+
+
+def test_the_timeout_follows_the_budget_that_was_sent(monkeypatch):
+    """The padded budget is what takes the time, so that is what is waited on."""
+    seen = {}
+
+    def fake_urlopen(req, timeout=60):
+        seen["timeout"] = timeout
+        seen["budget"] = json.loads(req.data.decode("utf-8"))["generationConfig"]["maxOutputTokens"]
+        return json.dumps({"candidates": [{"content": {"parts": [{"text": "x"}]},
+                                           "finishReason": "STOP"}]}).encode("utf-8")
+
+    monkeypatch.setattr(gemini, "urlopen_with_backoff", fake_urlopen)
+    gemini.GeminiProvider(api_key="test-key").complete_text(system="go", max_tokens=32768)
+
+    assert seen["timeout"] == gemini._read_timeout(seen["budget"])
+    assert seen["timeout"] > 60
+
+
 def test_a_cut_off_reply_says_so(monkeypatch, capsys):
     """
     Truncation reached no one. `complete_text` returned the short string, or ""
