@@ -877,6 +877,47 @@ async function saveAndTestProvider(provider) {
 }
 window.saveAndTestProvider = saveAndTestProvider;
 
+/**
+ * Delete a stored key, said out loud.
+ *
+ * Emptying the field and pressing Test did nothing, because saving is guarded
+ * by `if (keyVal)`. That guard has to stay: the backend never sends real keys
+ * to the browser, so every field is blank on load and an always-save would wipe
+ * a working key the first time any other provider was tested.
+ */
+async function removeProviderKey(provider) {
+  const uiName = provider === "gemini" ? "google" : provider;
+  const label = { gemini: "Google", google_tts: "Google TTS" }[provider]
+    || provider.charAt(0).toUpperCase() + provider.slice(1);
+  if (!confirm(`Remove the ${label} key from this machine?\n\n` +
+               `The app stops using ${label} until you enter a new one.`)) return;
+
+  const statusPill = document.getElementById(`${uiName}-key-status`);
+  const resultSpan = document.getElementById(`${provider}-test-result`);
+  try {
+    const res = isWebMode
+      ? { success: true, removed: true }
+      : await window.pywebview.api.remove_api_key(provider);
+    if (!res || !res.success) {
+      alert("Could not remove that key: " + ((res && res.error) || "unknown error"));
+      return;
+    }
+    const input = document.getElementById(`${uiName}-key-input`);
+    if (input) input.value = "";
+    if (statusPill) {
+      statusPill.className = "pill p-mute";
+      statusPill.textContent = "not set";
+    }
+    if (resultSpan) {
+      resultSpan.textContent = res.removed ? "removed" : "there was no key";
+      resultSpan.className = "test-result";
+    }
+  } catch (e) {
+    alert("Could not remove that key: " + e.message);
+  }
+}
+window.removeProviderKey = removeProviderKey;
+
 async function saveGoogleKey() {
   const key = document.getElementById("google-key-input").value;
   if (!isWebMode) {
@@ -1780,6 +1821,7 @@ function renderStoryboardScreen() {
   const rtEl = document.getElementById("board-cnt-runtime");
   if (rtEl) rtEl.textContent = `${rMins}:${String(rSecs).padStart(2, "0")}`;
 
+  syncPlanModeFromScript();
   syncImageCountControl();
 
   updateTimingPill();
@@ -1998,6 +2040,28 @@ function updateImageCountHint(val) {
   const count = Math.max(1, Math.min(500, parseInt(val, 10) || 1));
   const secsPerImg = estSecs > 0 ? Math.round(estSecs / count) : 25;
   hintEl.textContent = `~${words.toLocaleString()} words · ${mins} min · about ${secsPerImg}s per image`;
+}
+
+/**
+ * Show the mode the saved plan was actually made in.
+ *
+ * `planMode` is a page variable that starts at "auto" on every load, while the
+ * plan on disk does not. A film pinned to exactly 30 pictures came back reading
+ * "Auto", and pressing Re-plan then quietly changed what had been asked for.
+ */
+function syncPlanModeFromScript() {
+  const project = (currentScriptData && currentScriptData.project) || {};
+  if (project.plan_mode !== "auto" && project.plan_mode !== "exact") return;
+
+  setPlanMode(project.plan_mode);
+
+  // The count box is left to `syncImageCountControl`, which fills it from the
+  // pictures the film has right now. Restoring the number that was asked for
+  // would show 15 on a film that has 16 after a split by hand.
+  const lo = document.getElementById("plan-hold-min");
+  const hi = document.getElementById("plan-hold-max");
+  if (lo && project.plan_min_hold) lo.value = project.plan_min_hold;
+  if (hi && project.plan_max_hold) hi.value = project.plan_max_hold;
 }
 
 function syncImageCountControl() {

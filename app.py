@@ -137,6 +137,36 @@ class Api:
         _save_settings(self._settings)
         return {"success": True}
 
+    #: Which settings key each provider name in the UI writes to.
+    PROVIDER_KEY_NAMES = {
+        "gemini": "google_api_key",
+        "google": "google_api_key",
+        "google_tts": "google_tts_api_key",
+        "anthropic": "anthropic_api_key",
+        "openai": "openai_api_key",
+        "deepseek": "deepseek_api_key",
+        "elevenlabs": "elevenlabs_api_key",
+    }
+
+    def remove_api_key(self, provider: str) -> dict:
+        """
+        Delete a stored key, deliberately and by name.
+
+        Clearing the field and pressing Test did nothing: the save is guarded by
+        `if (keyVal)`, so an emptied box was read as "no change". That guard is
+        correct and must stay — `get_settings` never sends real keys to the
+        browser, so every field is blank on load and an always-save would wipe a
+        working key on the first Test of any other provider. Removing a key is a
+        different intention from saving one and needs to be said out loud.
+        """
+        name = self.PROVIDER_KEY_NAMES.get((provider or "").strip().lower())
+        if not name:
+            return {"success": False, "error": f"There is no key called {provider!r}."}
+        had = bool((self._settings.get(name) or "").strip())
+        self._settings[name] = ""
+        _save_settings(self._settings)
+        return {"success": True, "removed": had, "provider": provider}
+
     def test_llm_provider(self, provider: str, model: str = "", key: str = "") -> dict:
         from pipeline.llm.factory import test_provider
         prov = (provider or "").strip().lower()
@@ -891,6 +921,14 @@ class Api:
 
             from pipeline.text_parser import assign_effects, style_of
             assign_effects(script_data, style_of(script_data))
+
+            # Remember how this plan was asked for. The toggle used to reset to
+            # Auto on every load while the saved plan did not, so the board could
+            # read "Auto" above a film the user had pinned to an exact count.
+            project["plan_mode"] = "exact" if image_count else "auto"
+            project["plan_count"] = int(image_count) if image_count else None
+            project["plan_min_hold"] = float(min_hold)
+            project["plan_max_hold"] = float(max_hold)
 
             return {"success": True, "script_data": script_data,
                     "images_after": stats["pictures"], "segments": stats["segments"]}
