@@ -198,6 +198,10 @@ come back described where the clock cut supplies no words at all.
 - **Never `git add -A`** — stages ~816 MB including two 310 MB ONNX models. Explicit paths only.
 - **Do not push.** He tests first and will say when.
 - `config/settings.json` is gitignored and holds live API keys. Never print or commit it.
+- **`config/settings.backup-20260902-010212.json` is NOT gitignored and contains real keys.**
+  It sits untracked in the working tree. One `git add -A` commits his keys to history — which
+  is the sharpest reason the rule above exists. Adding `config/settings.backup-*.json` to
+  `.gitignore` is his call and has not been done.
 - `config/series_overrides/` is gitignored — his niches exist nowhere else. Back up before
   editing.
 - **Do not weaken a test.** If one must change, quote it before and after and justify it.
