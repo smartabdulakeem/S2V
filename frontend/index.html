@@ -31,9 +31,10 @@
       </div>
       <button class="nav" role="tab" aria-selected="true" data-p="script" onclick="switchPane('script')">Script<span class="k">1</span></button>
       <button class="nav" role="tab" aria-selected="false" data-p="board" onclick="switchPane('board')">Storyboard<span class="k">2</span></button>
-      <button class="nav" role="tab" aria-selected="false" data-p="render" onclick="switchPane('render')">Render<span class="k">3</span></button>
-      <button class="nav" role="tab" aria-selected="false" data-p="library" onclick="switchPane('library')">Library<span class="k">4</span></button>
-      <button class="nav" role="tab" aria-selected="false" data-p="voice" onclick="switchPane('voice')">Voiceover<span class="k">5</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="timeline" onclick="switchPane('timeline')">Timeline<span class="k">3</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="render" onclick="switchPane('render')">Render<span class="k">4</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="library" onclick="switchPane('library')">Library<span class="k">5</span></button>
+      <button class="nav" role="tab" aria-selected="false" data-p="voice" onclick="switchPane('voice')">Voiceover<span class="k">6</span></button>
       <div class="spacer"></div>
       <button class="nav" role="tab" aria-selected="false" data-p="settings" onclick="switchPane('settings')">Settings<span class="k">,</span></button>
     </nav>
@@ -268,7 +269,60 @@
       </div>
     </div>
 
-    <!-- ══ 3. RENDER SCREEN ══ -->
+    <!-- ══ 3. TIMELINE SCREEN ══ -->
+    <div class="pane" data-pane="timeline">
+      <div class="row-between">
+        <h2>Timeline</h2>
+        <span class="mono" id="tl-status">no film loaded</span>
+        <div class="row-center ml-auto">
+          <span class="mono ink-3">zoom</span>
+          <input type="range" id="tl-zoom" min="1" max="60" value="8"
+                 class="tl-zoom" oninput="setTimelineZoom(this.value)"
+                 aria-label="Timeline zoom">
+          <button type="button" class="ghost" onclick="renderTimelineScreen()">Refresh</button>
+        </div>
+      </div>
+
+      <div class="tl-top">
+        <div class="tl-preview">
+          <div class="tl-frame" id="tl-frame">
+            <p class="sub">Plan a storyboard first, then this shows the picture on screen at the playhead.</p>
+          </div>
+          <div class="tl-transport">
+            <button type="button" onclick="timelineSeekPicture(-1)" title="Previous picture">&#124;&#9664;</button>
+            <button type="button" onclick="timelineNudge(-5)" title="Back 5 seconds">&#9664;&#9664;</button>
+            <button type="button" onclick="timelineNudge(5)" title="Forward 5 seconds">&#9654;&#9654;</button>
+            <button type="button" onclick="timelineSeekPicture(1)" title="Next picture">&#9654;&#124;</button>
+            <span class="mono tl-clock" id="tl-clock">00:00.0 / 00:00.0</span>
+          </div>
+        </div>
+
+        <aside class="tl-inspector" id="tl-inspector">
+          <span class="lbl">Inspector</span>
+          <p class="sub">Click a picture on the timeline.</p>
+        </aside>
+      </div>
+
+      <div class="tl-tracks" id="tl-tracks">
+        <div class="tl-gutter">
+          <span class="tl-ruler-corner mono">tracks</span>
+          <span class="tl-track-name">Pictures</span>
+          <span class="tl-track-name">Narration</span>
+          <span class="tl-track-name">Captions</span>
+        </div>
+        <div class="tl-scroll" id="tl-scroll">
+          <div class="tl-lanes" id="tl-lanes" onclick="timelineScrubFrom(event)">
+            <div class="tl-ruler" id="tl-ruler"></div>
+            <div class="tl-lane" id="tl-lane-pictures"></div>
+            <div class="tl-lane" id="tl-lane-narration"></div>
+            <div class="tl-lane" id="tl-lane-captions"></div>
+            <div class="tl-playhead" id="tl-playhead"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ 4. RENDER SCREEN ══ -->
     <div class="pane" data-pane="render">
       <h2>Render</h2>
 
@@ -331,7 +385,7 @@
       <div id="log-panel" class="log-panel hidden">Log initialized...</div>
     </div>
 
-    <!-- ══ 4. LIBRARY SCREEN ══ -->
+    <!-- ══ 5. LIBRARY SCREEN ══ -->
     <div class="pane" data-pane="library">
       <div class="row-between">
         <h2>Library</h2>
@@ -396,7 +450,7 @@
       </div>
     </div>
 
-    <!-- ══ 5. VOICEOVER SCREEN ══ -->
+    <!-- ══ 6. VOICEOVER SCREEN ══ -->
     <div class="pane" data-pane="voice">
       <h2>Voiceover Studio</h2>
 
@@ -497,7 +551,7 @@
       </div>
     </div>
 
-    <!-- ══ 6. SETTINGS SCREEN ══ -->
+    <!-- ══ 7. SETTINGS SCREEN ══ -->
     <div class="pane" data-pane="settings">
       <h2>Settings</h2>
 

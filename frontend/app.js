@@ -202,6 +202,10 @@ function switchPane(paneId) {
     loadLibraryData();
   }
 
+  if (paneId === "timeline" && typeof renderTimelineScreen === "function") {
+    renderTimelineScreen();
+  }
+
   if (paneId === "voice" && typeof initVoiceStudio === "function") {
     initVoiceStudio();
   }
@@ -2193,6 +2197,277 @@ window.toggleSplitPanel = toggleSplitPanel;
 
 window.applyShotRhythm = applyShotRhythm;
 window.onImageCountInput = onImageCountInput;
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+//
+// The film laid out against the clock, which is the one view the Storyboard
+// cannot give: a list of rows says a picture holds 75.8s, but only a timeline
+// shows that it is a fifth of the film and the four beside it are twenty
+// seconds each. Built from the plan already in memory - no render, no second
+// pass over the library - so it costs nothing to look at.
+
+let tlZoom = 8;          // pixels per second
+let tlPlayhead = 0;      // seconds
+let tlSelected = 1;      // picture number
+
+/** Tick spacing that keeps roughly 90px between labels at the current zoom. */
+function tlTickInterval() {
+  const wanted = 90 / tlZoom;
+  return [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900]
+    .find(step => step >= wanted) || 1800;
+}
+
+function tlClock(t) {
+  const whole = Math.max(0, t);
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  return `${String(m).padStart(2, "0")}:${s.toFixed(1).padStart(4, "0")}`;
+}
+
+function tlPictures() {
+  if (!currentScriptData || !currentScriptData.segments) return [];
+  return picturesFromScript(currentScriptData);
+}
+
+/** The image the board settled on for a picture, if it has one yet. */
+function tlImageFor(pic) {
+  const reports = (coverageReport && coverageReport.shot_reports) || [];
+  const rep = reports.find(r => `${r.segment_id}_${r.shot_id}` === pic.key);
+  return rep ? (rep.best_url || "") : "";
+}
+
+function tlStateFor(pic) {
+  const reports = (coverageReport && coverageReport.shot_reports) || [];
+  const rep = reports.find(r => `${r.segment_id}_${r.shot_id}` === pic.key);
+  return rep ? rep.state : "";
+}
+
+function renderTimelineScreen() {
+  const lanes = document.getElementById("tl-lanes");
+  if (!lanes) return;
+
+  const pics = tlPictures();
+  const statusEl = document.getElementById("tl-status");
+  const ruler = document.getElementById("tl-ruler");
+  const laneP = document.getElementById("tl-lane-pictures");
+  const laneN = document.getElementById("tl-lane-narration");
+  const laneC = document.getElementById("tl-lane-captions");
+
+  if (!pics.length) {
+    if (statusEl) statusEl.textContent = "no film loaded";
+    ruler.innerHTML = "";
+    laneP.innerHTML = `<p class="sub tl-empty">Plan a storyboard first. The Timeline shows the plan you already have.</p>`;
+    laneN.innerHTML = "";
+    laneC.innerHTML = "";
+    return;
+  }
+
+  const segs = currentScriptData.segments || [];
+  const secs = segmentSecondsList(currentScriptData);
+  const total = secs.reduce((a, b) => a + b, 0);
+  const measured = segs.filter(s => parseFloat(s.narration_seconds) > 0).length;
+  const width = Math.max(320, total * tlZoom);
+
+  if (statusEl) {
+    statusEl.textContent =
+      `${pics.length} picture${pics.length === 1 ? "" : "s"} · ${tlClock(total)} · ` +
+      (measured === segs.length ? "timings measured" : `${measured} of ${segs.length} measured`);
+    statusEl.classList.toggle("warn-text", measured !== segs.length);
+  }
+
+  lanes.style.width = `${width}px`;
+
+  // Ruler
+  const step = tlTickInterval();
+  let ticks = "";
+  for (let t = 0; t <= total; t += step) {
+    ticks += `<span class="tl-tick" style="left:${(t * tlZoom).toFixed(1)}px">
+                <i></i><b class="mono">${mmss(t)}</b></span>`;
+  }
+  ruler.innerHTML = ticks;
+
+  // Pictures — one clip per picture, width is the time it holds
+  laneP.innerHTML = pics.map(pic => {
+    const w = Math.max(2, pic.seconds * tlZoom);
+    const img = tlImageFor(pic);
+    const state = tlStateFor(pic);
+    const narrow = w < 78;
+    return `
+      <div class="tl-clip ${state === "gap" ? "gap" : state === "weak" ? "weak" : ""} ${tlSelected === pic.number ? "sel" : ""}"
+           style="left:${(pic.startsAt * tlZoom).toFixed(1)}px; width:${w.toFixed(1)}px"
+           onclick="selectTimelinePicture(${pic.number})"
+           title="Picture ${pic.number} — ${pic.seconds.toFixed(1)}s — script lines ${pic.firstLine}-${pic.lastLine}">
+        <span class="tl-clip-head mono">
+          <b>${narrow ? pic.number : `Pic ${String(pic.number).padStart(2, "0")}`}</b>
+          ${narrow ? "" : `<i>${pic.seconds.toFixed(1)}s</i>`}
+        </span>
+        ${img ? `<img src="${img}" alt=""/>` : `<span class="tl-clip-empty">no image</span>`}
+      </div>`;
+  }).join("");
+
+  // Narration and captions — one block per script line, so a picture's stretch
+  // is visible against the lines it actually has to carry.
+  let at = 0;
+  let nHtml = "";
+  let cHtml = "";
+  segs.forEach((seg, i) => {
+    const w = Math.max(1, (secs[i] || 0) * tlZoom);
+    const isMeasured = parseFloat(seg.narration_seconds) > 0;
+    const text = (seg.narration || "").trim();
+    nHtml += `<div class="tl-narr ${isMeasured ? "measured" : ""}"
+                   style="left:${(at * tlZoom).toFixed(1)}px; width:${(w - 1).toFixed(1)}px"
+                   title="line ${i + 1} · ${(secs[i] || 0).toFixed(1)}s${isMeasured ? " (measured)" : " (estimated)"}"></div>`;
+    if (w > 46) {
+      cHtml += `<div class="tl-cap" style="left:${(at * tlZoom).toFixed(1)}px; width:${(w - 3).toFixed(1)}px"
+                     title="${escapeHtml(text)}">${escapeHtml(text)}</div>`;
+    }
+    at += secs[i] || 0;
+  });
+  laneN.innerHTML = nHtml;
+  // An empty lane reads as broken rather than as "too small to letter".
+  laneC.innerHTML = cHtml ||
+    `<span class="tl-cap-hint mono">zoom in to read the narration line by line</span>`;
+
+  timelineSeek(Math.min(tlPlayhead, total), { keepSelection: true });
+}
+
+function setTimelineZoom(value) {
+  tlZoom = Math.max(1, Math.min(60, parseFloat(value) || 8));
+  renderTimelineScreen();
+}
+
+/** Move the playhead, and show whichever picture is on screen at that moment. */
+function timelineSeek(seconds, opts) {
+  const pics = tlPictures();
+  if (!pics.length) return;
+  const secs = segmentSecondsList(currentScriptData);
+  const total = secs.reduce((a, b) => a + b, 0);
+  tlPlayhead = Math.max(0, Math.min(total, seconds));
+
+  const x = tlPlayhead * tlZoom;
+  const head = document.getElementById("tl-playhead");
+  if (head) head.style.left = `${x.toFixed(1)}px`;
+
+  // Follow the playhead. Stepping to picture 12 of an eighteen-minute film put
+  // it 9,000px along a lane 790px wide, so the timeline appeared not to respond.
+  const scroll = document.getElementById("tl-scroll");
+  if (scroll) {
+    const view = scroll.clientWidth;
+    if (x < scroll.scrollLeft + 40 || x > scroll.scrollLeft + view - 40) {
+      scroll.scrollLeft = Math.max(0, x - view * 0.35);
+    }
+  }
+
+  const clock = document.getElementById("tl-clock");
+  if (clock) clock.textContent = `${tlClock(tlPlayhead)} / ${tlClock(total)}`;
+
+  const at = pics.find(p => tlPlayhead >= p.startsAt && tlPlayhead < p.startsAt + p.seconds)
+             || pics[pics.length - 1];
+  if (at && !(opts && opts.keepSelection && tlSelected !== at.number)) {
+    selectTimelinePicture(at.number, { silent: true });
+  }
+  if (opts && opts.keepSelection) drawTimelineInspector(tlSelected);
+}
+
+function timelineNudge(delta) {
+  timelineSeek(tlPlayhead + delta);
+}
+
+function timelineSeekPicture(direction) {
+  const pics = tlPictures();
+  if (!pics.length) return;
+  const here = pics.findIndex(p => p.number === tlSelected);
+  const next = pics[Math.max(0, Math.min(pics.length - 1, here + direction))];
+  if (next) timelineSeek(next.startsAt + 0.01);
+}
+
+function selectTimelinePicture(number, opts) {
+  tlSelected = number;
+  document.querySelectorAll("#tl-lane-pictures .tl-clip").forEach((el, i) => {
+    el.classList.toggle("sel", i + 1 === number);
+  });
+  drawTimelineInspector(number);
+  if (!(opts && opts.silent)) {
+    const pic = tlPictures().find(p => p.number === number);
+    if (pic) timelineSeek(pic.startsAt + 0.01, { keepSelection: true });
+  }
+}
+
+/** Which script line is on screen at a moment, 1-based. */
+function tlLineAt(seconds) {
+  const secs = segmentSecondsList(currentScriptData);
+  let at = 0;
+  for (let i = 0; i < secs.length; i++) {
+    at += secs[i] || 0;
+    if (seconds < at) return i + 1;
+  }
+  return secs.length;
+}
+
+function drawTimelineInspector(number) {
+  const box = document.getElementById("tl-inspector");
+  const frame = document.getElementById("tl-frame");
+  if (!box) return;
+
+  const pic = tlPictures().find(p => p.number === number);
+  if (!pic) {
+    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Click a picture on the timeline.</p>`;
+    return;
+  }
+
+  const img = tlImageFor(pic);
+  const state = tlStateFor(pic);
+  // Cutting at the playhead is the timeline's own gesture for what Split does
+  // on the board. It can only start a picture on a line this one already covers,
+  // and never on the line it already starts at.
+  const headLine = tlLineAt(tlPlayhead);
+  const canCutHere = headLine > pic.firstLine && headLine <= pic.lastLine;
+  if (frame) {
+    frame.innerHTML = img
+      ? `<img src="${img}" alt="Picture ${pic.number}"/>`
+      : `<p class="sub">Picture ${pic.number} has no image yet. The Storyboard has its prompt.</p>`;
+  }
+
+  box.innerHTML = `
+    <span class="lbl">Inspector</span>
+    <h3>Picture ${String(pic.number).padStart(2, "0")}</h3>
+    ${img ? `<img class="tl-insp-thumb" src="${img}" alt=""/>`
+          : `<div class="tl-insp-thumb empty">no image yet</div>`}
+    <div class="tl-insp-grid mono">
+      <span class="k">in</span><span class="v">${tlClock(pic.startsAt)}</span>
+      <span class="k">out</span><span class="v">${tlClock(pic.startsAt + pic.seconds)}</span>
+      <span class="k">holds</span><span class="v brass">${pic.seconds.toFixed(1)}s</span>
+      <span class="k">lines</span><span class="v">${pic.firstLine}&ndash;${pic.lastLine}</span>
+      <span class="k">state</span><span class="v">${state || "not planned"}</span>
+    </div>
+    <p class="tl-insp-narr">&ldquo;${escapeHtml(pic.narration.join(" ")).slice(0, 420)}&rdquo;</p>
+    <div class="tl-insp-acts">
+      ${canCutHere
+        ? `<button type="button" onclick="splitPictureAt(${headLine})"
+             title="A new picture starts at the playhead">&#9986; Cut here &mdash; line ${headLine}</button>`
+        : `<button type="button" disabled
+             title="Move the playhead inside this picture, past its first line">Cut at the playhead</button>`}
+      ${pic.number > 1
+        ? `<button type="button" onclick="mergePictureAt(${pic.firstLine})">&uarr; Join to picture ${String(pic.number - 1).padStart(2, "0")}</button>`
+        : ""}
+      <button type="button" onclick="switchPane('board')">Open on the Storyboard</button>
+    </div>`;
+}
+
+/** Clicking anywhere in the lanes moves the playhead there. */
+function timelineScrubFrom(event) {
+  const lanes = document.getElementById("tl-lanes");
+  if (!lanes) return;
+  const rect = lanes.getBoundingClientRect();
+  timelineSeek((event.clientX - rect.left) / tlZoom);
+}
+
+window.renderTimelineScreen = renderTimelineScreen;
+window.setTimelineZoom = setTimelineZoom;
+window.timelineNudge = timelineNudge;
+window.timelineSeekPicture = timelineSeekPicture;
+window.selectTimelinePicture = selectTimelinePicture;
+window.timelineScrubFrom = timelineScrubFrom;
 
 // ── Replace: the one place a shot's image changes ─────────────────────────────
 
