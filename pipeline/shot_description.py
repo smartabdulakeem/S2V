@@ -88,8 +88,11 @@ These requirements override anything above that conflicts with them:
   face that must not show becomes "seen from behind" or "a back-lit
   silhouette"; a modern building becomes "an untouched primordial landscape";
   wings and horns become "a column of amber heat-shimmer above bare rock".
-  Never write "no", "not", "without", "avoid" or "free of". A picture that has
-  to say what it leaves out has not been composed yet.
+  Never write "no", "not", "without", "avoid", "free of", "devoid of", "empty
+  of", "absent", "lacking" or "there are none" - in any phrasing. "Devoid of
+  human figures" and "with no discernible figures" are the same mistake as "no
+  people": name a thing and the model draws it. Describe only what the camera
+  sees. A picture that has to say what it leaves out has not been composed yet.
 - Nothing written may appear in the scene: no text, letters, captions, numbers,
   signage or inscriptions.
 - Output exactly one line per picture, formatted as:

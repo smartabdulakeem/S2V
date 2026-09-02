@@ -259,6 +259,43 @@ def build_plan_request(instruction: str, script_lines: list, seconds: list,
     return "\n".join(lines)
 
 
+# Asking the model not to write negations gets it right most of the time, and
+# "most of the time" still puts "devoid of any human presence" on the opening
+# picture of a film. An image model reads that as a request for human presence,
+# so the clause is removed rather than argued about.
+_NEGATION_CLAUSE = re.compile(
+    r"(?:^|(?<=[,;]))\s*(?:and\s+|but\s+|with\s+|the\s+air\s+is\s+)?"
+    r"(?:no|not|without|avoid(?:ing)?|free\s+of|devoid\s+of|empty\s+of|"
+    r"absent|lacking|bare\s+of|untouched\s+by)\b[^,;.]*",
+    re.IGNORECASE)
+
+
+def strip_negations(text: str) -> str:
+    """
+    Remove clauses that describe what is not there.
+
+    Text encoders do not parse negation: "no wings" raises the odds of wings.
+    The instruction forbids it and the model mostly complies, so this is the
+    guarantee behind the request rather than a replacement for it. If removing
+    the negations would leave nothing, the original is kept - a flawed
+    description still beats an empty one.
+    """
+    if not text:
+        return text
+    cleaned = _NEGATION_CLAUSE.sub("", text)
+    if cleaned == text:
+        return text          # nothing removed: leave the wording exactly alone
+    cleaned = re.sub(r"\s*,\s*(?=[,.])", "", cleaned)
+    cleaned = re.sub(r"(?:\s*,)+\s*", ", ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,;")
+    # Only guards against a description that was nothing but its negation.
+    if len(cleaned) < 12:
+        return text.strip()
+    if not cleaned.endswith((".", "!", "?")):
+        cleaned += "."
+    return cleaned
+
+
 def parse_plan_reply(reply_text: str, n_lines: int) -> list:
     """
     Read a model's answer back into spans.
@@ -278,7 +315,7 @@ def parse_plan_reply(reply_text: str, n_lines: int) -> list:
         if first < 1 or first > n_lines or not description:
             continue
         spans.append({"first_line": first, "last_line": last,
-                      "description": description})
+                      "description": strip_negations(description)})
     return spans
 
 import sys
@@ -286,7 +323,10 @@ import sys
 #: Boundaries and a description for every picture come back in one reply, so the
 #: ceiling has to cover the whole film. Only generated tokens are billed, so an
 #: unused ceiling costs nothing and a short one silently truncates the plan.
-PLAN_REPLY_CEILING = 8192
+# One export came back with a description ending "and a single, distant," -
+# the reply ran out of room mid-sentence. Nineteen rich descriptions is well
+# past 8192 tokens once the model reasons before answering.
+PLAN_REPLY_CEILING = 32768
 
 
 def plan_pictures(script_lines: list, seconds: list, series_cfg: dict = None,
@@ -432,7 +472,7 @@ def describe_missing_spans(spans: list, script_lines: list, instruction: str,
         # Answered by picture number, never by position in the reply: a model
         # that answers out of order would otherwise shift every description.
         if 0 <= index < len(spans) and text and index in wanted:
-            spans[index]["description"] = text
+            spans[index]["description"] = strip_negations(text)
             filled += 1
     return filled
 

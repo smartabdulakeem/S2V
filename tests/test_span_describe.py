@@ -20,7 +20,8 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pipeline.picture_plan import (
-    describe_missing_spans, fill_undescribed, plan_pictures, repair_spans,
+    describe_missing_spans, fill_undescribed, parse_plan_reply, plan_pictures,
+    repair_spans, strip_negations,
 )
 
 LINES = [f"line {i} of the narration, saying something" for i in range(1, 31)]
@@ -158,3 +159,51 @@ def test_a_model_that_returns_three_spans_for_thirty_pictures_still_describes_al
     assert len(out) == 30
     blank = [s for s in out if not (s.get("description") or "").strip()]
     assert blank == [], f"{len(blank)} pictures would fall back to raw keywords"
+
+
+# -- what is not in the picture never reaches the picture ---------------------
+
+def test_a_trailing_clause_about_what_is_absent_is_removed():
+    """
+    The opening picture of the owner's film read "...under a vast sky, devoid of
+    any human presence or structures." A text encoder cannot subtract: it reads
+    "human presence" and draws people into an empty landscape.
+    """
+    out = strip_negations("A wide untouched primordial landscape under a vast "
+                          "sky, devoid of any human presence or structures.")
+    assert out == "A wide untouched primordial landscape under a vast sky."
+
+
+def test_a_negation_in_the_middle_closes_up_cleanly():
+    out = strip_negations("A celestial sphere with volumetric shafts of light, "
+                          "with no discernible figures, immense in scale.")
+    assert out == "A celestial sphere with volumetric shafts of light, immense in scale."
+    assert ",," not in out and " ," not in out
+
+
+def test_a_description_with_nothing_to_remove_is_left_exactly_as_it_was():
+    text = ("A canyon at dusk, jagged rock formations casting long shadows, "
+            "heat-shimmer rising from bare stone.")
+    assert strip_negations(text) == text
+
+
+def test_a_description_that_is_only_a_negation_is_kept_rather_than_emptied():
+    """A flawed description still beats an empty one."""
+    assert strip_negations("no people") == "no people"
+
+
+def test_the_scrub_runs_on_whatever_the_model_sends_back():
+    got = parse_plan_reply("1-6: A wide landscape, devoid of any human figures.", 30)
+    assert got[0]["description"] == "A wide landscape."
+
+
+def test_the_scrub_runs_on_the_second_describe_pass_too():
+    spans = [{"first_line": 1, "last_line": 10, "description": ""}]
+
+    class _P:
+        def complete_text(self, system="", user="", max_tokens=0):
+            return "1: A still valley, without any sign of habitation."
+
+    describe_missing_spans(spans, LINES, "INSTRUCTION", _P())
+    assert spans[0]["description"] == "A still valley."
+

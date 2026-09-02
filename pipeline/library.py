@@ -2187,7 +2187,13 @@ def compose_gap_prompt(
     if not model_owns_camera and match_slot(PROMPT_FRAMING, subject_text) is None:
         parts.append(default_framing_for(shot_position))
 
-    if project_brief:
+    # The brief is scaffolding for a prompt the app had to assemble from search
+    # keywords. When the model has written the picture itself the brief adds
+    # nothing and dilutes it: "consistent depiction of Adam, Iblis, Paradise"
+    # rode on all nineteen prompts of one export, and an image model generates
+    # every picture with no memory of the others, so it cannot act on it at all.
+    model_wrote_it = bool(visual_description and visual_description.strip())
+    if project_brief and not model_wrote_it:
         parts.append(project_brief.rstrip(" ,."))
 
     if not model_owns_camera:
@@ -2200,7 +2206,7 @@ def compose_gap_prompt(
     explicit = (world_anchor or "").strip()
     if explicit and " " not in explicit and "_" in explicit:
         explicit = ""
-    already_said = f"{medium} {era} {project_brief or ''}".lower()
+    already_said = f"{medium} {era} {'' if model_wrote_it else (project_brief or '')}".lower()
     if explicit:
         if explicit.lower() not in already_said:
             parts.append(explicit)
