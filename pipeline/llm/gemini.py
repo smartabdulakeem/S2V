@@ -1,9 +1,57 @@
 import json
+import sys
 import urllib.request
 import urllib.error
 from typing import Optional, Dict, Any
 from pipeline.llm.interface import BaseLLMProvider
 from pipeline.llm.http import urlopen_with_backoff
+
+#: Room for the model's own reasoning, on top of the answer the caller asked for.
+#
+# On Gemini 2.5, thinking is on by default and its tokens are billed against
+# maxOutputTokens — so a caller asking for 4096 tokens of answer was not getting
+# 4096 tokens of answer. Measured on the owner's real description batches:
+# thinking took 1683, 1911 and 2895 tokens of the 4096, leaving as little as
+# 1201 for the reply. That is why the board reported "described 3 of 8 shots in
+# one batch — the reply was cut short" on one run and described all eight on the
+# next, with nothing changed in between: whether the answer fitted was decided
+# by how long the model happened to think.
+#
+# Unused output tokens are not billed, so headroom is free. 4096 clears the
+# worst measured run with room to spare.
+THINKING_HEADROOM = 4096
+
+#: gemini-2.5-flash accepts 65536 output tokens; stay inside that after padding.
+MAX_OUTPUT_TOKENS = 65536
+
+
+def _with_thinking_headroom(max_tokens: int) -> int:
+    """The budget to ask for so `max_tokens` survives for the answer itself."""
+    try:
+        wanted = int(max_tokens)
+    except (TypeError, ValueError):
+        wanted = 2048
+    return max(1, min(MAX_OUTPUT_TOKENS, wanted + THINKING_HEADROOM))
+
+
+def _warn_if_truncated(candidate: dict, usage: dict, asked: int, where: str):
+    """
+    Say when a reply was cut off.
+
+    Silence here is expensive. `complete_text` returned the truncated string —
+    or "" when thinking consumed everything and no part came back at all — and
+    the caller could not tell that from a genuinely short answer, so shots
+    dropped to two-word keyword search without anything reaching the screen.
+    """
+    if (candidate or {}).get("finishReason") != "MAX_TOKENS":
+        return
+    thoughts = (usage or {}).get("thoughtsTokenCount")
+    sys.stderr.write(
+        f"[gemini] {where}: reply hit the {asked}-token ceiling and was cut off"
+        + (f" (thinking used {thoughts} of it)" if thoughts else "")
+        + ". Raise the caller's max_tokens.\n"
+    )
+
 
 class GeminiProvider(BaseLLMProvider):
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
@@ -23,7 +71,7 @@ class GeminiProvider(BaseLLMProvider):
         config = {
             "responseMimeType": "application/json",
             "temperature": 0.3,
-            "maxOutputTokens": max_tokens
+            "maxOutputTokens": _with_thinking_headroom(max_tokens)
         }
         if json_schema:
             config["responseSchema"] = json_schema
@@ -45,6 +93,9 @@ class GeminiProvider(BaseLLMProvider):
         )
 
         res_data = json.loads(urlopen_with_backoff(req, timeout=60).decode("utf-8"))
+        _warn_if_truncated((res_data.get("candidates") or [{}])[0],
+                           res_data.get("usageMetadata") or {},
+                           config["maxOutputTokens"], "complete")
         raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
         return json.loads(raw_text)
 
@@ -64,7 +115,7 @@ class GeminiProvider(BaseLLMProvider):
             ],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": max_tokens
+                "maxOutputTokens": _with_thinking_headroom(max_tokens)
             }
         }
         req = urllib.request.Request(
@@ -78,6 +129,8 @@ class GeminiProvider(BaseLLMProvider):
         candidates = res_data.get("candidates") or []
         if not candidates:
             return ""
+        _warn_if_truncated(candidates[0], res_data.get("usageMetadata") or {},
+                           payload["generationConfig"]["maxOutputTokens"], "complete_text")
         parts = (candidates[0].get("content") or {}).get("parts") or []
         if not parts:
             return ""
