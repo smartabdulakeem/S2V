@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pipeline.picture_plan import (
     describe_missing_spans, fill_undescribed, parse_plan_reply, plan_pictures,
-    repair_spans, strip_negations,
+    refers_to_another_picture, repair_spans, strip_negations,
 )
 
 LINES = [f"line {i} of the narration, saying something" for i in range(1, 31)]
@@ -206,4 +206,58 @@ def test_the_scrub_runs_on_the_second_describe_pass_too():
 
     describe_missing_spans(spans, LINES, "INSTRUCTION", _P())
     assert spans[0]["description"] == "A still valley."
+
+
+# -- a picture that leans on its neighbour describes nothing -------------------
+
+def test_a_description_that_refers_to_another_picture_is_recognised():
+    """
+    Picture two of a real export read "The same primordial landscape, but now
+    with drifting amber embers." Nothing generates picture one first and hands
+    it over - every image is made alone - so this describes nothing at all.
+    """
+    assert refers_to_another_picture("The same primordial landscape, but now with embers.")
+    assert refers_to_another_picture("As before, the celestial hall of light.")
+    assert refers_to_another_picture("A wide shot of the same valley shown earlier.")
+
+
+def test_a_self_contained_description_is_not_mistaken_for_one():
+    assert not refers_to_another_picture(
+        "A desolate rocky canyon at dusk, heat-shimmer rising from bare stone.")
+
+
+def test_a_referring_description_is_asked_for_again_rather_than_kept():
+    """
+    There is no way to repair the reference without knowing what it pointed at,
+    so the picture is rewritten from its own narration instead.
+    """
+    class _Leans:
+        def __init__(self):
+            self.calls = 0
+
+        def complete_text(self, system="", user="", max_tokens=0):
+            self.calls += 1
+            if self.calls == 1:
+                return ("1-10: A wide untouched valley at dawn.\n"
+                        "11-20: The same valley, but now with drifting embers.\n"
+                        "21-30: A rocky canyon under a bruised sky.")
+            return "2: A wide valley at dusk with drifting amber embers over bare rock."
+
+    out = plan_pictures(LINES, SECONDS, provider=_Leans())
+
+    assert not any(refers_to_another_picture(s["description"]) for s in out)
+    assert out[1]["description"].startswith("A wide valley at dusk")
+
+
+def test_a_rewrite_that_leans_again_falls_back_rather_than_shipping_the_reference():
+    class _AlwaysLeans:
+        def complete_text(self, system="", user="", max_tokens=0):
+            return ("1-10: A wide untouched valley at dawn.\n"
+                    "11-20: The same valley again.\n"
+                    "21-30: A rocky canyon under a bruised sky.")
+
+    out = plan_pictures(LINES, SECONDS, provider=_AlwaysLeans())
+
+    assert not any(refers_to_another_picture(s["description"]) for s in out)
+    assert all((s.get("description") or "").strip() for s in out)
 

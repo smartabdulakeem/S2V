@@ -369,7 +369,12 @@ def plan_pictures(script_lines: list, seconds: list, series_cfg: dict = None,
     # exact count is the common way. A picture with no description falls back to
     # raw search keywords when the prompt is assembled, so it is asked for here
     # and borrowed from a neighbour only if that also fails.
+    clear_cross_references(spans)
     describe_missing_spans(spans, script_lines, instruction, provider)
+    # A rewrite can come back leaning on a neighbour again. Twice is enough:
+    # borrowing a neighbour's words is better than describing a picture nobody
+    # generating this one can see.
+    clear_cross_references(spans)
     fill_undescribed(spans)
     return spans
 
@@ -437,6 +442,34 @@ def _describe_request(instruction: str, spans: list, script_lines: list,
     out += ["Answer one line per picture, and nothing else:",
             "<picture number>: <description>"]
     return "\n".join(out)
+
+
+# "The same primordial landscape, but now with drifting embers" was picture two
+# of a real export. Nothing generates picture one first and hands it over: every
+# image is made alone, so a description that leans on its neighbour describes
+# nothing at all. These are asked for again rather than patched, because there
+# is no way to repair the reference without knowing what it pointed at.
+_REFERS_ELSEWHERE = re.compile(
+    r"\b(?:the\s+same|as\s+(?:before|above|in\s+the\s+(?:previous|last|first))|"
+    r"same\s+as|previously|the\s+previous\s+(?:scene|shot|image|picture)|"
+    r"this\s+scene\s+continues|continuing\s+from|now\s+with|"
+    r"identical\s+to|matching\s+the\s+(?:previous|earlier))\b",
+    re.IGNORECASE)
+
+
+def refers_to_another_picture(text: str) -> bool:
+    """Does this description only make sense next to another one?"""
+    return bool(_REFERS_ELSEWHERE.search(text or ""))
+
+
+def clear_cross_references(spans: list) -> int:
+    """Blank any description that leans on another picture, so it is rewritten."""
+    cleared = 0
+    for span in spans:
+        if refers_to_another_picture(span.get("description") or ""):
+            span["description"] = ""
+            cleared += 1
+    return cleared
 
 
 def describe_missing_spans(spans: list, script_lines: list, instruction: str,

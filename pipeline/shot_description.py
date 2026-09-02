@@ -78,7 +78,9 @@ These requirements override anything above that conflicts with them:
 - Each description is ONE still frame that stands on its own. No camera
   movement - no pan, zoom, tracking, dolly, cut or sequence - and never refer
   to another shot, to "the previous scene", or to what came before. The
-  picture is made in isolation by someone who has seen nothing else.
+  picture is made in isolation by someone who has seen nothing else. "The same
+  landscape, but now with embers" describes nothing: whoever draws it has never
+  seen the first one. Name the landscape again, in full, every time.
 - Do not name a medium, an art style or a named artist. The look of the film is
   applied afterwards and is not yours to choose.
 - Say what IS in the picture, never what is absent. Image models do not read
