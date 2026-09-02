@@ -261,3 +261,77 @@ def test_a_rewrite_that_leans_again_falls_back_rather_than_shipping_the_referenc
     assert not any(refers_to_another_picture(s["description"]) for s in out)
     assert all((s.get("description") or "").strip() for s in out)
 
+
+# -- the gaps that let a negation reach a real export -------------------------
+
+def test_a_negation_with_no_comma_in_front_of_it_is_still_removed():
+    """
+    The scrubber first matched only clauses following a comma, so "an empty
+    plain without structures" went out unchanged. The comma is punctuation, not
+    the mistake.
+    """
+    assert strip_negations("An empty plain without structures.") == "An empty plain."
+
+
+def test_a_short_description_is_cleaned_rather_than_left_as_it_was():
+    """
+    The guard against emptying a description was set at twelve characters, so
+    "A ridge, devoid of any human presence." kept its negation because what
+    survived was shorter than that. Two words is the real line.
+    """
+    assert strip_negations("A ridge, devoid of any human presence.") == "A ridge."
+
+
+def test_the_phrase_that_survived_a_real_export_is_removed():
+    """From the owner's export, picture one, generated with the scrubber live."""
+    out = strip_negations(
+        "A wide, untouched primordial landscape under a clear sky, "
+        "with no signs of human habitation or structures.")
+    assert out == "A wide, untouched primordial landscape under a clear sky."
+
+
+def test_a_clean_description_is_still_returned_byte_for_byte():
+    text = ("A canyon at dusk, jagged rock formations casting long shadows, "
+            "heat-shimmer rising from bare stone.")
+    assert strip_negations(text) == text
+
+
+# -- a reply that numbers its pictures instead of giving line ranges ----------
+
+def test_a_numbered_reply_is_spread_across_the_script_not_read_as_line_one():
+    """
+    The request asks for "<first line>-<last line>: <description>" and Gemini
+    mostly obliges. On some runs it answers "1: a wide landscape" instead, and
+    read literally that is picture one covering line one - so fifteen pictures
+    over a 347-line script became fourteen single lines and one enormous
+    remainder. The same request produced both shapes on consecutive runs, which
+    is why it looked intermittent rather than broken.
+    """
+    reply = "\n".join(f"{i}: picture {i} description here" for i in range(1, 6))
+    got = parse_plan_reply(reply, 347)
+
+    assert [(s["first_line"], s["last_line"]) for s in got] == [
+        (1, 69), (70, 139), (140, 208), (209, 278), (279, 347)]
+    assert got[0]["description"] == "picture 1 description here"
+
+
+def test_a_reply_that_does_give_ranges_is_left_exactly_as_it_is():
+    reply = "\n".join(["1-10: first picture",
+                        "11-34: second picture",
+                        "35-347: third picture"])
+    got = parse_plan_reply(reply, 347)
+    assert [(s["first_line"], s["last_line"]) for s in got] == [(1, 10), (11, 34), (35, 347)]
+
+
+def test_one_genuine_single_line_answer_is_not_spread():
+    """Spreading needs the whole reply to be numbered, not one short span."""
+    got = parse_plan_reply("7: a close shot of weathered hands", 347)
+    assert [(s["first_line"], s["last_line"]) for s in got] == [(7, 7)]
+
+
+def test_a_numbered_reply_still_covers_every_line_once():
+    reply = "\n".join(f"{i}: picture {i}" for i in range(1, 16))
+    got = parse_plan_reply(reply, 347)
+    covered = [ln for s in got for ln in range(s["first_line"], s["last_line"] + 1)]
+    assert covered == list(range(1, 348))
+

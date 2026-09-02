@@ -264,9 +264,14 @@ def build_plan_request(instruction: str, script_lines: list, seconds: list,
 # picture of a film. An image model reads that as a request for human presence,
 # so the clause is removed rather than argued about.
 _NEGATION_CLAUSE = re.compile(
-    r"(?:^|(?<=[,;]))\s*(?:and\s+|but\s+|with\s+|the\s+air\s+is\s+)?"
-    r"(?:no|not|without|avoid(?:ing)?|free\s+of|devoid\s+of|empty\s+of|"
-    r"absent|lacking|bare\s+of|untouched\s+by)\b[^,;.]*",
+    # An optional comma and joining word, then the negation and the rest of its
+    # clause. Anchored on the negation itself rather than on a preceding comma:
+    # "an empty plain without structures" has no comma and is the same mistake.
+    r"\s*,?\s*(?:and\s+|but\s+|with\s+|featuring\s+|showing\s+|"
+    r"the\s+air\s+is\s+)?"
+    r"\b(?:no|not|without|avoid(?:ing)?|free\s+of|devoid\s+of|empty\s+of|"
+    r"absent\s+of|absent|lacking|bare\s+of|untouched\s+by|"
+    r"with\s+none|there\s+are\s+none)\b[^,;.]*",
     re.IGNORECASE)
 
 
@@ -276,9 +281,10 @@ def strip_negations(text: str) -> str:
 
     Text encoders do not parse negation: "no wings" raises the odds of wings.
     The instruction forbids it and the model mostly complies, so this is the
-    guarantee behind the request rather than a replacement for it. If removing
-    the negations would leave nothing, the original is kept - a flawed
-    description still beats an empty one.
+    guarantee behind the request rather than a replacement for it.
+
+    A description that was nothing but its negation is kept as it was - a
+    flawed description still beats an empty one.
     """
     if not text:
         return text
@@ -288,8 +294,8 @@ def strip_negations(text: str) -> str:
     cleaned = re.sub(r"\s*,\s*(?=[,.])", "", cleaned)
     cleaned = re.sub(r"(?:\s*,)+\s*", ", ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,;")
-    # Only guards against a description that was nothing but its negation.
-    if len(cleaned) < 12:
+    # Two words is the line between a picture and a fragment.
+    if len(cleaned.split()) < 2:
         return text.strip()
     if not cleaned.endswith((".", "!", "?")):
         cleaned += "."
@@ -316,7 +322,40 @@ def parse_plan_reply(reply_text: str, n_lines: int) -> list:
             continue
         spans.append({"first_line": first, "last_line": last,
                       "description": strip_negations(description)})
-    return spans
+    return _spread_if_only_numbered(spans, n_lines)
+
+
+def _spread_if_only_numbered(spans: list, n_lines: int) -> list:
+    """
+    Rescue a reply that numbered its pictures instead of giving line ranges.
+
+    The request asks for "<first line>-<last line>: <description>" and the model
+    mostly obliges. Sometimes it answers "1: a wide landscape" instead, and read
+    literally that is picture one covering line one - so a fifteen-picture plan
+    for a 347-line script became fourteen single lines and one enormous
+    remainder. The same request produced both shapes on consecutive runs, which
+    is why it looked intermittent.
+
+    The tell is structural: every span one line long, numbered 1, 2, 3... in
+    order, over a script far longer than the number of pictures. That is a list
+    of pictures, not a set of boundaries. The descriptions and their order are
+    still good, so the lines are spread evenly and the boundaries are then the
+    holding range's business.
+    """
+    if len(spans) < 2 or n_lines <= len(spans):
+        return spans
+    numbered = all(s["first_line"] == s["last_line"] for s in spans) and         [s["first_line"] for s in spans] == list(range(1, len(spans) + 1))
+    if not numbered:
+        return spans
+
+    per = n_lines / float(len(spans))
+    out = []
+    for i, span in enumerate(spans):
+        first = int(round(i * per)) + 1
+        last = n_lines if i == len(spans) - 1 else int(round((i + 1) * per))
+        out.append({"first_line": first, "last_line": max(first, last),
+                    "description": span["description"]})
+    return out
 
 import sys
 
