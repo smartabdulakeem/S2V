@@ -574,3 +574,116 @@ def fill_undescribed(spans: list) -> int:
             span["description"] = nxt
             borrowed += 1
     return borrowed
+
+
+# ── moving one boundary by hand ───────────────────────────────────────────────
+#
+# The model places the boundaries and it is usually right, but "usually" is not
+# a thing you can ship. Re-planning a whole film to move one boundary costs two
+# model calls, rewrites every other picture, and throws away descriptions that
+# were already good — which is precisely how the owner lost 26 of 30 of them.
+#
+# A boundary is only ever `share_with` on the segment where a picture starts, so
+# splitting and merging is flipping that one field. Nothing else in the plan is
+# touched, and every other picture keeps the description it already had.
+
+
+def picture_boundaries(script_data: dict) -> list:
+    """Script line numbers (1-based) where each picture starts, in film order."""
+    return [i for i, seg in enumerate(script_data.get("segments") or [], 1)
+            if not ((seg.get("shots") or [{}])[0]).get("share_with")]
+
+
+def _first_shot(seg: dict, line: int) -> dict:
+    shots = seg.get("shots") or []
+    if not shots:
+        shots = [{"shot_id": f"{seg.get('segment_id', line)}a",
+                  "query": "documentary shot",
+                  "scene": seg.get("narration", "")}]
+        seg["shots"] = shots
+    return shots[0]
+
+
+def split_picture(script_data: dict, at_line: int) -> dict:
+    """
+    Start a new picture at `at_line`, ending the one that was covering it.
+
+    The picture before keeps its description, because it still illustrates the
+    narration it starts on. The new one is left without one so the description
+    pass writes it from the narration it actually has to carry — borrowing the
+    old picture's words would describe the wrong half of the scene.
+    """
+    segments = script_data.get("segments") or []
+    line = int(at_line)
+    if not 1 <= line <= len(segments):
+        return {"success": False, "error": f"There is no script line {line}."}
+    if line == 1:
+        return {"success": False,
+                "error": "Picture 1 already starts at the first line of the script."}
+
+    shot = _first_shot(segments[line - 1], line)
+    if not shot.get("share_with"):
+        return {"success": False, "error": f"A picture already starts at line {line}."}
+
+    shot["share_with"] = None
+    shot.pop("visual_description", None)
+    shot.pop("prompt", None)
+    # Anything it was holding belonged to the picture it used to be part of.
+    for key in ("resolved", "resolved_score", "run_index", "run_position"):
+        shot.pop(key, None)
+
+    # Every line after it that was still pointing at the old picture now belongs
+    # to this one, up to wherever the next picture starts.
+    owner_id = shot.get("shot_id")
+    for i in range(line + 1, len(segments) + 1):
+        follower = _first_shot(segments[i - 1], i)
+        if not follower.get("share_with"):
+            break
+        follower["share_with"] = owner_id
+
+    return {"success": True, "script_data": script_data,
+            "pictures": len(picture_boundaries(script_data)), "split_at": line}
+
+
+def merge_picture(script_data: dict, at_line: int) -> dict:
+    """
+    Fold the picture starting at `at_line` into the one before it.
+
+    Its description goes with it. A description is written for the stretch of
+    narration a picture carries, and that stretch no longer exists — keeping the
+    words would leave them on a shot that can never reach a prompt, which is how
+    26 descriptions went missing without anything on screen saying so.
+    """
+    segments = script_data.get("segments") or []
+    line = int(at_line)
+    if not 1 <= line <= len(segments):
+        return {"success": False, "error": f"There is no script line {line}."}
+
+    shot = _first_shot(segments[line - 1], line)
+    if shot.get("share_with"):
+        return {"success": False, "error": f"No picture starts at line {line}."}
+
+    starts = picture_boundaries(script_data)
+    if line == starts[0]:
+        return {"success": False,
+                "error": "This is the first picture; there is nothing before it to join."}
+    if len(starts) == 1:
+        return {"success": False,
+                "error": "One picture is left. A film needs at least one."}
+
+    previous_owner = _first_shot(segments[starts[starts.index(line) - 1] - 1], line)
+    owner_id = previous_owner.get("shot_id")
+
+    # This shot, and everything that was following it, now belong to that picture.
+    for i in range(line, len(segments) + 1):
+        follower = _first_shot(segments[i - 1], i)
+        if i > line and not follower.get("share_with"):
+            break
+        follower["share_with"] = owner_id
+        follower.pop("visual_description", None)
+        follower.pop("prompt", None)
+        for key in ("resolved", "resolved_score"):
+            follower.pop(key, None)
+
+    return {"success": True, "script_data": script_data,
+            "pictures": len(picture_boundaries(script_data)), "merged_at": line}

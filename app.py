@@ -897,6 +897,37 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def split_picture_at(self, script_data: dict, at_line: int) -> dict:
+        """
+        Start a new picture at a script line, without re-planning the film.
+
+        Re-planning to move one boundary costs two model calls, rewrites every
+        other picture, and throws away descriptions that were already good.
+        """
+        try:
+            from pipeline.picture_plan import split_picture
+            from pipeline.text_parser import assign_effects, style_of
+
+            out = split_picture(script_data, at_line)
+            if out.get("success"):
+                assign_effects(script_data, style_of(script_data))
+            return out
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def merge_picture_at(self, script_data: dict, at_line: int) -> dict:
+        """Fold the picture starting at a script line into the one before it."""
+        try:
+            from pipeline.picture_plan import merge_picture
+            from pipeline.text_parser import assign_effects, style_of
+
+            out = merge_picture(script_data, at_line)
+            if out.get("success"):
+                assign_effects(script_data, style_of(script_data))
+            return out
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def fill_gaps_with_nearest(self, script_data: dict, allow_reuse: bool = True) -> dict:
         """
         Accept the closest library image for every gap, in one action.

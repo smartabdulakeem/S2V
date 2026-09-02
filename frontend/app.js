@@ -1676,6 +1676,60 @@ function mmss(t) {
   return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
 }
 
+/** Narration is the user's own text and goes into markup; it does not get a vote. */
+function escapeHtml(text) {
+  return String(text == null ? "" : text)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function toggleSplitPanel(panelId) {
+  const el = document.getElementById(panelId);
+  if (!el) return;
+  const opening = el.classList.contains("hidden");
+  // One open at a time, or a long board becomes a wall of choices.
+  document.querySelectorAll(".splitpanel").forEach(p => p.classList.add("hidden"));
+  if (opening) el.classList.remove("hidden");
+}
+
+/**
+ * Move one boundary, keeping every other picture exactly as it is.
+ *
+ * The board is re-planned against the library afterwards because the picture
+ * that changed needs an image and a description; the ones that did not change
+ * keep the description they already had.
+ */
+async function applyBoundaryChange(call, line, busyLabel) {
+  if (isWebMode || !currentScriptData) return;
+  setBoardBusy(true, busyLabel);
+  try {
+    const res = await window.pywebview.api[call](currentScriptData, line);
+    if (!res || !res.success) {
+      alert((res && res.error) || "Could not change that boundary.");
+      return;
+    }
+    currentScriptData = res.script_data;
+    if (currentScriptPath) {
+      await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+    }
+    await refreshStoryboardCoverage();
+  } catch (e) {
+    alert("Could not change that boundary: " + e.message);
+  } finally {
+    setBoardBusy(false);
+  }
+}
+
+function splitPictureAt(line) {
+  return applyBoundaryChange("split_picture_at", line,
+    `Starting a new picture at line ${line}…`);
+}
+
+function mergePictureAt(line) {
+  return applyBoundaryChange("merge_picture_at", line,
+    "Joining this picture to the one before it…");
+}
+
 function renderStoryboardScreen() {
   const listContainer = document.getElementById("storyboard-list");
   if (!listContainer) return;
@@ -1800,6 +1854,41 @@ function renderStoryboardScreen() {
         `;
       }
 
+      // Moving one boundary by hand. Re-planning to fix a single picture costs
+      // two model calls, rewrites every other picture, and throws away
+      // descriptions that were already good.
+      let boundaryActsHtml = "";
+      let splitPanelHtml = "";
+      if (pic) {
+        const panelId = `split-${segId}-${shotId}`;
+        // Line one already starts this picture; a new one can begin anywhere after it.
+        const splitLines = pic.narration
+          .map((text, i) => ({ line: pic.firstLine + i, text: text }))
+          .slice(1);
+
+        boundaryActsHtml = `
+          ${pic.number > 1
+            ? `<button type="button" onclick="mergePictureAt(${pic.firstLine})"
+                 title="Fold this picture into picture ${pic.number - 1}">&uarr; Join to picture ${String(pic.number - 1).padStart(2, "0")}</button>`
+            : ""}
+          ${splitLines.length
+            ? `<button type="button" onclick="toggleSplitPanel('${panelId}')">Split into two&hellip;</button>`
+            : ""}
+        `;
+
+        if (splitLines.length) {
+          splitPanelHtml = `
+            <div class="splitpanel hidden" id="${panelId}">
+              <span class="lbl">Start a new picture at&hellip;</span>
+              ${splitLines.map(l => `
+                <button type="button" class="splitline" onclick="splitPictureAt(${l.line})">
+                  <b>line ${l.line}</b> ${escapeHtml(l.text).slice(0, 110)}
+                </button>`).join("")}
+            </div>
+          `;
+        }
+      }
+
       // A pin that no longer resolves must say so, not quietly revert to a search result.
       const pinWarnHtml = rep.pin_missing
         ? `<p class="q" style="color:var(--warn)">the image you chose is missing from the library — showing a search result instead</p>`
@@ -1840,7 +1929,9 @@ function renderStoryboardScreen() {
             ${gapBoxHtml}
             <div class="acts">
               <button type="button" onclick="openReplaceModal('${segId}', '${shotId}')">Replace</button>
+              ${boundaryActsHtml}
             </div>
+            ${splitPanelHtml}
           </div>
         </div>
       `;
@@ -2096,6 +2187,9 @@ window.updateTimingPill = updateTimingPill;
 
 window.setPlanMode = setPlanMode;
 window.replanPictures = replanPictures;
+window.splitPictureAt = splitPictureAt;
+window.mergePictureAt = mergePictureAt;
+window.toggleSplitPanel = toggleSplitPanel;
 
 window.applyShotRhythm = applyShotRhythm;
 window.onImageCountInput = onImageCountInput;
