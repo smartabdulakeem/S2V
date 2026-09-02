@@ -32,9 +32,10 @@
       <button class="nav" role="tab" aria-selected="true" data-p="script" onclick="switchPane('script')">Script<span class="k">1</span></button>
       <button class="nav" role="tab" aria-selected="false" data-p="board" onclick="switchPane('board')">Storyboard<span class="k">2</span></button>
       <button class="nav" role="tab" aria-selected="false" data-p="timeline" onclick="switchPane('timeline')">Timeline<span class="k">3</span></button>
-      <button class="nav" role="tab" aria-selected="false" data-p="render" onclick="switchPane('render')">Render<span class="k">4</span></button>
-      <button class="nav" role="tab" aria-selected="false" data-p="library" onclick="switchPane('library')">Library<span class="k">5</span></button>
-      <button class="nav" role="tab" aria-selected="false" data-p="voice" onclick="switchPane('voice')">Voiceover<span class="k">6</span></button>
+      <div class="rail-divider"></div>
+      <button class="nav" role="tab" aria-selected="false" data-p="render" onclick="switchPane('render')">Render</button>
+      <button class="nav" role="tab" aria-selected="false" data-p="library" onclick="switchPane('library')">Library</button>
+      <button class="nav" role="tab" aria-selected="false" data-p="voice" onclick="switchPane('voice')">Voiceover</button>
       <div class="spacer"></div>
       <button class="nav" role="tab" aria-selected="false" data-p="settings" onclick="switchPane('settings')">Settings<span class="k">,</span></button>
     </nav>
@@ -44,11 +45,6 @@
       <div class="row-between">
         <h2>New video</h2>
         <span class="mono" id="script-status-label">draft &middot; not yet planned</span>
-        <div class="row-center ml-auto">
-          <span class="mono" id="working-folder-label" title="">whole library</span>
-          <button type="button" id="btn-working-folder" onclick="chooseWorkingFolder()">Work from this folder…</button>
-          <button type="button" class="ghost" onclick="useWholeLibrary()" title="Search the whole library again">Whole library</button>
-        </div>
       </div>
 
       <div class="row">
@@ -138,7 +134,6 @@
         <div class="row">
           <button type="button" class="ghost" id="btn-preview-voice" onclick="previewVoice()">Preview voice</button>
           <span id="voice-preview-status" class="mono"></span>
-          <button type="button" class="ghost" onclick="switchPane('settings')">Pronunciation dictionary</button>
         </div>
       </div>
 
@@ -199,14 +194,16 @@
             <label for="image-count" id="image-count-label" class="mono board-count-label hidden">How many images?</label>
             <input type="number" id="image-count" min="1" max="500" value="31" class="board-count-input hidden" oninput="onImageCountInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
             <span class="mono hidden" id="image-count-hint">~0 words · 0.0 min · about 25s per image</span>
-            <button type="button" id="btn-working-folder-board" onclick="chooseWorkingFolder()">Work from this folder…</button>
+            <button type="button" id="btn-working-folder-board" onclick="chooseWorkingFolder()">Drop image folder…</button>
+            <button type="button" class="ghost" onclick="useWholeLibrary()" title="Search the whole library again">Whole library</button>
             <span class="mono" id="working-folder-label-board" title="">whole library</span>
-            <button type="button" id="btn-copy-prompts" onclick="copyAllPrompts()">Copy all prompts</button>
-            <button type="button" id="btn-paste-prompts-board" onclick="togglePastePromptsPanel()">Paste external prompts…</button>
-            <button type="button" id="btn-open-wolfcut-board" onclick="openInWolfCut()">Open in WolfCut</button>
-            <button type="button" id="btn-refresh-library" onclick="refreshLibraryAndReplan()">Refresh library</button>
+            <button type="button" id="btn-copy-prompts" onclick="copyAllPrompts()">Export prompts for Flux</button>
+            <button type="button" id="btn-refresh-library" onclick="refreshLibrary()">Refresh library</button>
             <button type="button" id="btn-fill-gaps" onclick="fillAllGaps()">Use nearest image for all gaps</button>
-            <button type="button" class="primary" id="btn-start-render-board" onclick="startRenderFromBoard()">Render video →</button>
+            <button type="button" class="primary" id="btn-open-timeline" onclick="openTimelineFromBoard()">Open in Timeline &rarr;</button>
+          </div>
+          <div class="board-secondary-row">
+            <button type="button" class="ghost" id="btn-paste-prompts-board" onclick="togglePastePromptsPanel()">Paste external prompts…</button>
           </div>
           <p class="mono board-hint">
             Fewer images means each one is held longer with a slow pan. One image can carry a whole script.
@@ -280,6 +277,7 @@
                  class="tl-zoom" oninput="setTimelineZoom(this.value)"
                  aria-label="Timeline zoom">
           <button type="button" class="ghost" onclick="renderTimelineScreen()">Refresh</button>
+          <button type="button" class="primary" id="btn-render-film" onclick="startRenderFromBoard()">Render film</button>
         </div>
       </div>
 
@@ -804,114 +802,6 @@
           </div>
         </div>
 
-        <!-- LANGUAGE PACKS -->
-        <div class="card collapsed">
-          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-lang-packs">
-            <span class="chevron" aria-hidden="true">▶</span>
-            <h3>Language packs</h3>
-            <span class="mono ml-auto">English installed &middot; language packs not implemented yet</span>
-          </button>
-          <div class="card-body" id="card-body-lang-packs" hidden>
-            <div class="tbl">
-              <table>
-                <thead><tr><th>Language</th><th>Engines</th><th>Size</th><th>Status</th></tr></thead>
-                <tbody>
-                  <tr><td><b>English</b> <span class="mono">primary</span></td><td class="mono">Kokoro, Supertonic, Google, Gemini, Edge</td><td class="mono">318 MB</td><td><span class="pill p-ok">installed</span></td></tr>
-                  <tr><td><b>Arabic</b> <span class="mono">secondary</span></td><td class="mono">Supertonic, Google</td><td class="mono">142 MB</td><td><span class="pill p-warn">partial</span></td></tr>
-                  <tr><td><b>French</b> <span class="mono">secondary</span></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td></tr>
-                  <tr><td><b>Spanish</b></td><td class="mono">Kokoro, Google, Edge</td><td class="mono">96 MB</td><td><span class="pill p-mute">not installed</span></td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- PRONUNCIATION DICTIONARY -->
-        <div class="card collapsed">
-          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-pronunciation">
-            <span class="chevron" aria-hidden="true">▶</span>
-            <h3>Pronunciation dictionary</h3>
-            <span class="mono ml-auto">per series &middot; 34 entries</span>
-          </button>
-          <div class="card-body" id="card-body-pronunciation" hidden>
-            <p class="hint"><b>Arabic names spoken correctly.</b> Wrap names in SSML phonemes so your narrator pronounces proper nouns cleanly.</p>
-            <div class="tbl">
-              <table>
-                <thead><tr><th>Written</th><th>Spoken (IPA)</th><th>Heard in</th><th></th></tr></thead>
-                <tbody>
-                  <tr><td>Al-Mansur</td><td class="mono">alˈmansˤuːr</td><td class="mono">S2E1, S2E4</td><td><button type="button" class="ghost">Test</button></td></tr>
-                  <tr><td>Abu Ubaydah</td><td class="mono">ʔabuː ʕubajda</td><td class="mono">S2E3, S2E6</td><td><button type="button" class="ghost">Test</button></td></tr>
-                  <tr><td>Madinah</td><td class="mono">maˈdiːna</td><td class="mono">all episodes</td><td><button type="button" class="ghost">Test</button></td></tr>
-                  <tr><td>Bayt al-Hikmah</td><td class="mono">bajt alˈħikma</td><td class="mono">S2E1</td><td><button type="button" class="ghost">Test</button></td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="row mt-sm">
-              <button type="button">Add entry</button>
-              <button type="button" class="ghost">Import from script</button>
-              <button type="button" class="ghost">Export</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- DEFAULTS -->
-        <div class="card collapsed">
-          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-defaults">
-            <span class="chevron" aria-hidden="true">▶</span>
-            <h3>Defaults</h3>
-          </button>
-          <div class="card-body" id="card-body-defaults" hidden>
-            <div class="form-grid-2">
-              <label class="f">Resolution
-                <select><option>1080p</option><option>720p — faster</option><option>1440p</option></select>
-              </label>
-              <label class="f">Frame rate
-                <select><option>30 fps</option><option>24 fps — filmic</option></select>
-              </label>
-              <label class="f">Caption style
-                <select><option>documentary lower-third</option><option>kinetic word-by-word</option><option>bold centre</option></select>
-              </label>
-              <label class="f">Grade
-                <select><option>documentary</option><option>illustration</option><option>silhouette</option><option>none</option></select>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- SPENDING -->
-        <div class="card collapsed">
-          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-spending">
-            <span class="chevron" aria-hidden="true">▶</span>
-            <h3>Spending</h3>
-          </button>
-          <div class="card-body" id="card-body-spending" hidden>
-            <div class="form-grid-2">
-              <label class="f">Cap per video<input type="text" value="$5.00"></label>
-              <label class="f">Warn above<input type="text" value="$2.00"></label>
-            </div>
-            <div class="kv"><span>This month</span><b>$3.12</b></div>
-            <div class="kv"><span>Last video</span><b>$0.28</b></div>
-            <p class="mono">Pre-render cost estimates. Nothing paid is generated without approval.</p>
-          </div>
-        </div>
-
-        <!-- PERFORMANCE -->
-        <div class="card collapsed">
-          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-performance">
-            <span class="chevron" aria-hidden="true">▶</span>
-            <h3>Performance</h3>
-          </button>
-          <div class="card-body" id="card-body-performance" hidden>
-            <div class="row">
-              <label class="f">Encoder
-                <select><option>libx264 veryfast (auto-detected)</option><option>h264_qsv</option></select>
-              </label>
-              <label class="f">Parallel shots
-                <select><option>3 (recommended for 4 cores)</option><option>1</option><option>6</option></select>
-              </label>
-            </div>
-            <p class="mono">Hardware probed at startup. NVENC is not attempted when missing.</p>
-          </div>
         </div>
       </div>
     </div>

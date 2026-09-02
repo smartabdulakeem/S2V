@@ -270,6 +270,12 @@ p {
   margin-left: auto;
 }
 
+.rail-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 6px 16px;
+}
+
 .rail .spacer {
   flex: 1;
 }
@@ -618,6 +624,13 @@ textarea.tall {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.board-secondary-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
 }
 
 .board-count-label {

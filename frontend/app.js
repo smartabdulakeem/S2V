@@ -2597,7 +2597,6 @@ async function pinImageToShot(segId, shotId, imagePath) {
 async function loadImageFolders() {
   if (isWebMode) return;
   const labels = [
-    document.getElementById("working-folder-label"),
     document.getElementById("working-folder-label-board"),
   ].filter(Boolean);
   if (!labels.length) return;
@@ -2622,7 +2621,7 @@ async function chooseWorkingFolder() {
     alert("Plan a storyboard first.");
     return;
   }
-  const btn = document.getElementById("btn-working-folder") || document.getElementById("btn-working-folder-board");
+  const btn = document.getElementById("btn-working-folder-board");
   setButtonBusy(btn, "Indexing folder…");
   setBoardBusy(true, "Indexing the images in that folder…");
   try {
@@ -2683,7 +2682,7 @@ window.useWholeLibrary = useWholeLibrary;
  * no effect until something else invalidated the index — and then cost a full
  * re-embed of every image. Indexing is incremental now, so this is quick.
  */
-async function refreshLibraryAndReplan() {
+async function refreshLibrary() {
   if (isWebMode) return;
   const btn = document.getElementById("btn-refresh-library");
   setButtonBusy(btn, "Refreshing…");
@@ -2737,7 +2736,17 @@ async function copyAllPrompts() {
   }
 }
 
-window.refreshLibraryAndReplan = refreshLibraryAndReplan;
+async function openTimelineFromBoard() {
+  if (!currentScriptData) {
+    alert("Plan a storyboard first.");
+    return;
+  }
+  switchPane("timeline");
+  renderTimelineScreen();
+}
+
+window.openTimelineFromBoard = openTimelineFromBoard;
+window.refreshLibrary = refreshLibrary;
 window.copyAllPrompts = copyAllPrompts;
 
 /** Accept the closest library image for every gap, in one action. */
