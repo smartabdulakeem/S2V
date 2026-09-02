@@ -1865,8 +1865,6 @@ function rhythmPositionFor(secs) {
     Math.abs(RHYTHM_SECONDS[pos] - want) < Math.abs(RHYTHM_SECONDS[best] - want) ? pos : best, "3");
 }
 
-let rhythmTimer = null;
-
 // ── Image Budget & Shot Rhythm Control ───────────────────────────────────────
 
 function getScriptWordCount() {
@@ -1941,54 +1939,20 @@ function onImageCountInput(val) {
   }
 }
 
-function onImageCountCommit(val) {
-  const count = Math.max(1, Math.min(500, parseInt(val, 10) || 1));
-  const input = document.getElementById("image-count");
-  if (input) input.value = count;
-  updateImageCountHint(count);
-  applyImageBudget(count);
-}
-
-function onRhythmSliderInput(pos) {
-  const secs = RHYTHM_SECONDS[pos] || 7;
-  const lbl = document.getElementById("rhythm-label");
-  if (lbl) lbl.textContent = `~${secs}s per shot`;
-
-  const estSecs = getScriptEstSeconds();
-  const impliedN = Math.max(1, Math.min(500, Math.round(estSecs / secs) || 1));
-  const input = document.getElementById("image-count");
-  if (input) input.value = impliedN;
-  updateImageCountHint(impliedN);
-
-  clearTimeout(rhythmTimer);
-  rhythmTimer = setTimeout(() => applyImageBudget(impliedN), 450);
-}
-
-function updateRhythmLabel(val) {
-  onRhythmSliderInput(val);
-}
-
-async function applyImageBudget(imageCount) {
-  if (isWebMode || !currentScriptData) return;
-  const count = Math.max(1, Math.min(500, parseInt(imageCount, 10) || 1));
-  setBoardBusy(true, `Planning budget for ${count} image${count === 1 ? '' : 's'}…`);
-  try {
-    const res = await window.pywebview.api.set_image_count(currentScriptData, count);
-    if (!res.success) {
-      alert("Could not update image budget: " + (res.error || "unknown error"));
-      return;
-    }
-    currentScriptData = res.script_data;
-    if (currentScriptPath) {
-      await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
-    }
-    await refreshStoryboardCoverage();
-  } catch (e) {
-    alert("Could not update image budget: " + e.message);
-  } finally {
-    setBoardBusy(false);
-  }
-}
+// The count box and the rhythm slider used to re-cut the film themselves, by
+// clock, through `set_image_count` -> `plan_image_budget`. Both are gone.
+//
+// The box is read by `replanPictures`, and clicking "Re-plan pictures" blurs it,
+// so one gesture started two planners on the same script: the clock cut (fast,
+// local) and the model plan (slow, two model calls). Both wrote `currentScriptData`
+// and both saved, so whichever finished last won. On the owner's film the clock
+// cut won: all 347 shots carried `run_index`, which only `plan_image_budget`
+// writes, the 15 runs came out near-uniform (19,18,19,21,22,24,22,25,25,23,32,
+// 26,27,25,19), and 26 of the model's 30 descriptions were left stranded on
+// shots now carrying `share_with`, where no prompt can ever reach them.
+//
+// A picture boundary is now only ever moved by the model, through
+// `plan_pictures_for_script`. Auto and Exact already cover what these offered.
 
 /** Re-cut every segment into shots of roughly `secs`, then re-plan the board. */
 async function applyShotRhythm(secs) {
@@ -2134,10 +2098,7 @@ window.setPlanMode = setPlanMode;
 window.replanPictures = replanPictures;
 
 window.applyShotRhythm = applyShotRhythm;
-window.applyImageBudget = applyImageBudget;
 window.onImageCountInput = onImageCountInput;
-window.onImageCountCommit = onImageCountCommit;
-window.onRhythmSliderInput = onRhythmSliderInput;
 
 // ── Replace: the one place a shot's image changes ─────────────────────────────
 
