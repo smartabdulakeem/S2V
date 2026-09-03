@@ -7,7 +7,7 @@
   "slice": null,
   "slice_title": "Slices A-F of PLAN-REVISION-FRONTEND-FIRST.md are all landed",
   "branch": "feat/image-budget",
-  "baseline_commit": "PENDING_COMMIT",
+  "baseline_commit": "3ee4eae",
   "baseline_tests": {
     "passed": 1249,
     "xfailed": 1,
@@ -74,7 +74,7 @@
       "summary": "Slice C complete: Task 12 test added to test_span_apply.py, Before Adam 347-line benchmark measured in 20.83s with 347 progress events, owner film repaired (33 pictures, 33/33 reachable descriptions, 0 stranded, backup intact), timing pill Node test added to test_narration_timing.py. Full suite: 1249 passed, 1 xfailed."
     },
     {
-      "commit": "PENDING_COMMIT",
+      "commit": "3ee4eae",
       "by": "claude-code",
       "summary": "Slice C reviewed and committed: Task 12 test, timing-pill Node test, 347-line measuring run (20.83s), owner's film repaired 26 stranded -> 0 with 347 lines intact and backup untouched. Hardened relay_notify.py: secret gitignored topic, fixed-word inbound allowlist. Verified 1249 passed, 1 xfailed."
     }
