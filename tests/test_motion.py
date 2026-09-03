@@ -111,14 +111,16 @@ def test_a_picture_held_for_minutes_barely_moves():
     held five seconds — the same distance over 120x the time, which is 120x
     slower. Nothing needs adding; this is here so nothing removes it.
     """
-    from pipeline.motion import travel_for, MOTION_STYLES
+    import pytest
+    from pipeline.motion import travel_for, MOTION_STYLES, DEFAULT_MOTION_AMOUNT
 
-    ceiling = MOTION_STYLES["ken_burns"]["max"]
+    # At the default camera amount in force (60%), the clamp ceiling is scaled:
+    ceiling = round(MOTION_STYLES["ken_burns"]["max"] * (DEFAULT_MOTION_AMOUNT / 100.0), 4)
 
-    assert travel_for("ken_burns", 600.0) == ceiling
-    assert travel_for("ken_burns", 75.0) == ceiling
-    # Sample at 3.0s: rate 0.05 * 3.0s = 0.15 < max 0.24 (at 5.0s rate*5.0=0.25 hits max clamp)
-    assert travel_for("ken_burns", 3.0) < ceiling
+    assert travel_for("ken_burns", 600.0, amount=DEFAULT_MOTION_AMOUNT) == pytest.approx(ceiling)
+    assert travel_for("ken_burns", 75.0, amount=DEFAULT_MOTION_AMOUNT) == pytest.approx(ceiling)
+    # Sample at 3.0s: rate 0.03 * 3.0s = 0.09 < max 0.144
+    assert travel_for("ken_burns", 3.0, amount=DEFAULT_MOTION_AMOUNT) < ceiling
 
 
 def test_the_static_style_still_holds_perfectly_still_at_any_length():

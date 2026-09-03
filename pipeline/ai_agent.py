@@ -44,7 +44,8 @@ def generate_storyboard_plan(
     narrative_tone: str = "",
     speaker_mode: str = "single",
     motion_style: str = "",
-    series_slug: str = ""
+    series_slug: str = "",
+    motion_amount: int = 60,
 ) -> dict:
     """
     Parse a plain script using AI (DeepSeek + Gemini Oversight, falling back to Gemini-only) into a storyboard.
@@ -103,6 +104,7 @@ def generate_storyboard_plan(
             # The camera moves are the motion style's to deal out, not the
             # planner's: a cached plan carries the moves it was first given.
             script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+            script_dict["project"]["motion_amount"] = int(motion_amount) if motion_amount is not None else 60
             if series_slug:
                 script_dict["project"]["series_slug"] = series_slug
             assign_effects(script_dict, motion_style)
@@ -134,6 +136,7 @@ def generate_storyboard_plan(
             # The camera moves are the motion style's to deal out, not the
             # planner's: a cached plan carries the moves it was first given.
             script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+            script_dict["project"]["motion_amount"] = int(motion_amount) if motion_amount is not None else 60
             if series_slug:
                 script_dict["project"]["series_slug"] = series_slug
             assign_effects(script_dict, motion_style)
@@ -168,6 +171,7 @@ def generate_storyboard_plan(
         # The camera moves are the motion style's to deal out, not the
         # planner's: a cached plan carries the moves it was first given.
         script_dict["project"]["motion_style"] = resolve_motion_style(motion_style)
+        script_dict["project"]["motion_amount"] = int(motion_amount) if motion_amount is not None else 60
         assign_effects(script_dict, motion_style)
         for s in script_dict["segments"]:
             s["voice_steering"] = ai_guideline

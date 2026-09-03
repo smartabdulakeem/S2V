@@ -294,3 +294,104 @@ def test_the_static_style_holds_the_frame_even_when_the_shot_asks_to_zoom(marker
     style sets the travel to zero, which collapses the move.
     """
     assert _zoom_ratio("static", marker_image, tmp_path) == 1.0
+
+
+# ── SLICE B TESTS: Camera Amount & Window Memory ──────────────────────────────
+
+@pytest.mark.parametrize("style", ["static", "gentle_drift", "ken_burns", "dynamic"])
+@pytest.mark.parametrize("amount", list(range(0, 105, 5)))
+def test_the_clamp_holds_at_every_amount(style, amount):
+    """1. The clamp holds at every amount: travel_for(style, 600.0) never exceeds max * (amount/100)."""
+    prof = MOTION_STYLES[style]
+    scaled_max = round(prof["max"] * (amount / 100.0), 4)
+    result = travel_for(style, 600.0, amount=amount)
+    assert result <= scaled_max + 1e-4
+
+
+@pytest.mark.parametrize("style", ["static", "gentle_drift", "ken_burns", "dynamic"])
+@pytest.mark.parametrize("amount", list(range(0, 105, 5)))
+@pytest.mark.parametrize("duration", [0.5, 2.0, 5.0, 12.0, 60.0])
+def test_the_pad_invariant(style, amount, duration):
+    """2. The pad invariant: 1 + travel_for(style, duration, amount) <= pad_factor_for(style)."""
+    travel = travel_for(style, duration, amount=amount)
+    pad = pad_factor_for(style)
+    assert 1.0 + travel <= pad + 1e-4
+
+
+def test_the_amount_actually_scales():
+    """3. Ken Burns at 50% travels half as far as at 100% at the same duration, and 0% travels zero on every style."""
+    t50 = travel_for("ken_burns", 3.0, amount=50)
+    t100 = travel_for("ken_burns", 3.0, amount=100)
+    assert t50 == pytest.approx(t100 * 0.5, abs=1e-4)
+
+    for style in ["static", "gentle_drift", "ken_burns", "dynamic"]:
+        assert travel_for(style, 5.0, amount=0) == 0.0
+        assert travel_for(style, 600.0, amount=0) == 0.0
+
+
+def test_the_cache_key_changes_with_the_amount():
+    """4. The cache key changes with the amount: same shot, same duration, two amounts -> two keys."""
+    from pipeline.composer import _get_shot_cache_key
+    shot = {"shot_id": 1, "query": "a scene"}
+    k60 = _get_shot_cache_key(shot, 5.0, 1280, 720, 30, motion_style="ken_burns", motion_amount=60)
+    k40 = _get_shot_cache_key(shot, 5.0, 1280, 720, 30, motion_style="ken_burns", motion_amount=40)
+    assert k60 != k40
+
+
+def test_existing_callers_are_unchanged():
+    """5. Existing callers are unchanged: calling travel_for without amount returns exactly what it returns today."""
+    for style in ["static", "gentle_drift", "ken_burns", "dynamic"]:
+        for dur in [1.0, 3.0, 7.0, 15.0, 60.0]:
+            assert travel_for(style, dur) == travel_for(style, dur, amount=None)
+
+
+def test_the_camera_choice_round_trips(tmp_path, monkeypatch):
+    """6. The camera choice round-trips: save_ui_defaults with motion_style and motion_amount returns both."""
+    from app import Api
+    settings_file = tmp_path / "settings.json"
+    settings_file.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("app.SETTINGS_PATH", str(settings_file))
+
+    api = Api()
+    saved = api.save_ui_defaults({"motion_style": "dynamic", "motion_amount": 45})
+    assert saved["success"] is True
+    assert saved["ui_defaults"]["motion_style"] == "dynamic"
+    assert saved["ui_defaults"]["motion_amount"] == 45
+
+    res = api.get_ui_defaults()
+    assert res["success"] is True
+    assert res["ui_defaults"]["motion_style"] == "dynamic"
+    assert res["ui_defaults"]["motion_amount"] == 45
+
+
+def test_window_geometry_is_validated_not_trusted():
+    """7. Window geometry is validated, not trusted: offscreen rect and below-minimum size fall back to safe defaults."""
+    from pipeline.window_geometry import validate_window_geometry, DEFAULT_WIDTH, DEFAULT_HEIGHT, MIN_WIDTH, MIN_HEIGHT
+
+    # Mock screen: 1920x1080 at (0, 0)
+    mock_screens = [{"x": 0, "y": 0, "width": 1920, "height": 1080}]
+
+    # Below-minimum size falls back to default_size
+    tiny = validate_window_geometry({"width": 400, "height": 300, "x": 100, "y": 100}, screens=mock_screens)
+    assert tiny["width"] == DEFAULT_WIDTH
+    assert tiny["height"] == DEFAULT_HEIGHT
+
+    # Negative offscreen coordinates fall back to centering/OS placement (x=None, y=None)
+    offscreen_neg = validate_window_geometry({"width": 1000, "height": 900, "x": -2500, "y": -1500}, screens=mock_screens)
+    assert offscreen_neg["x"] is None
+    assert offscreen_neg["y"] is None
+    assert offscreen_neg["width"] == DEFAULT_WIDTH
+
+    # Far beyond virtual screen coordinates fall back
+    offscreen_far = validate_window_geometry({"width": 1000, "height": 900, "x": 10000, "y": 8000}, screens=mock_screens)
+    assert offscreen_far["x"] is None
+    assert offscreen_far["y"] is None
+
+    # Valid geometry is preserved
+    valid = validate_window_geometry({"width": 1200, "height": 850, "x": 100, "y": 80, "maximized": False}, screens=mock_screens)
+    assert valid["width"] == 1200
+    assert valid["height"] == 850
+    assert valid["x"] == 100
+    assert valid["y"] == 80
+    assert valid["maximized"] is False
+

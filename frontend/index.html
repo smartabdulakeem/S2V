@@ -129,6 +129,11 @@
               <!-- Populated from pipeline/motion.py; sets how far the frame travels -->
             </select>
           </label>
+          <div class="f motion-amount-block">
+            <label for="pt-motion-amount">Amount: <span id="pt-motion-amount-val" class="mono">60%</span></label>
+            <input type="range" id="pt-motion-amount" min="0" max="100" step="5" value="60"
+                   oninput="onMotionAmountInput(this.value)">
+          </div>
         </div>
         <p class="mono">Only enabled voices appear here. Manage the full catalogue in Settings.</p>
         <p class="hint"><b>Camera motion.</b> How far each shot's frame travels per second, and which move follows which — consecutive shots never repeat a move.</p>
@@ -799,6 +804,20 @@
             <p class="mono">Tick the ones you use. Only enabled voices appear on the Script screen.</p>
             <div id="voice-engines-container">
               <!-- Dynamically populated from config/voices.json -->
+            </div>
+          </div>
+        </div>
+
+        <!-- WINDOW & DISPLAY -->
+        <div class="card collapsed" id="card-window-geometry">
+          <button type="button" class="card-toggle" aria-expanded="false" aria-controls="card-body-window">
+            <span class="chevron" aria-hidden="true">▶</span>
+            <h3>Window &amp; display</h3>
+          </button>
+          <div class="card-body" id="card-body-window" hidden>
+            <p class="hint">Smart Studio remembers its window size and screen position between sessions. If the window opens off-screen or at an inconvenient size, reset it here.</p>
+            <div class="row mt-sm">
+              <button type="button" class="ghost" id="btn-reset-window-size" onclick="resetWindowSize()">Reset window size (1000 &times; 900)</button>
             </div>
           </div>
         </div>

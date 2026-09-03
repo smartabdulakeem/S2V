@@ -131,14 +131,27 @@ const UI_FIELDS = {
   voice: "pt-voice", series_slug: "pt-series-slug",
   tone: "pt-tone", visual_type: "pt-style",
   motion_style: "pt-motion",
+  motion_amount: "pt-motion-amount",
 };
+
+function onMotionAmountInput(val) {
+  const el = document.getElementById("pt-motion-amount-val");
+  if (el) el.textContent = val + "%";
+  rememberUiChoices();
+}
+window.onMotionAmountInput = onMotionAmountInput;
 
 async function rememberUiChoices() {
   if (isWebMode) return;
   const defaults = {};
   for (const [key, id] of Object.entries(UI_FIELDS)) {
+    if (key === "motion_amount") continue;
     const el = document.getElementById(id);
     if (el && el.value) defaults[key] = el.value;
+  }
+  const motionAmtEl = document.getElementById("pt-motion-amount");
+  if (motionAmtEl && motionAmtEl.value !== "") {
+    defaults.motion_amount = parseInt(motionAmtEl.value, 10);
   }
   defaults.captions_enabled = captionsEnabled();
   const rhythm = document.getElementById("shot-rhythm-slider");
@@ -165,10 +178,17 @@ async function applyUiDefaults() {
     // failed to restore and the whole feature fell back to style_block with
     // nothing on screen to say so. Restore the niche, repopulate, then the type.
     for (const [key, id] of Object.entries(UI_FIELDS)) {
-      if (key === "visual_type") continue;
+      if (key === "visual_type" || key === "motion_amount") continue;
       const el = document.getElementById(id);
       if (!el || !d[key]) continue;
       if ([...el.options].some(o => o.value === d[key])) el.value = d[key];
+    }
+
+    const motionAmtEl = document.getElementById("pt-motion-amount");
+    if (motionAmtEl && d.motion_amount !== undefined) {
+      motionAmtEl.value = d.motion_amount;
+      const valEl = document.getElementById("pt-motion-amount-val");
+      if (valEl) valEl.textContent = d.motion_amount + "%";
     }
 
     await loadStylePresets();
@@ -1516,6 +1536,8 @@ async function planStoryboard() {
   const tone = document.getElementById("pt-tone").value;
   const motionEl = document.getElementById("pt-motion");
   const motionStyle = motionEl ? motionEl.value : "";
+  const motionAmountEl = document.getElementById("pt-motion-amount");
+  const motionAmount = motionAmountEl ? parseInt(motionAmountEl.value, 10) : 60;
 
   if (!text.trim()) {
     alert("Please paste or type script text before planning.");
@@ -1537,6 +1559,7 @@ async function planStoryboard() {
         visual_type: (document.getElementById("pt-style") || {}).value || "",
         narration_tone: tone,
         motion_style: motionStyle,
+        motion_amount: motionAmount,
         apply_era: (document.getElementById("pt-apply-era") || {}).checked !== false,
       },
       segments: paragraphs.map((p, i) => ({
@@ -1568,7 +1591,8 @@ async function planStoryboard() {
       tone,
       "single",
       motionStyle,
-      seriesSlug
+      seriesSlug,
+      motionAmount
     );
 
     if (res.started) {
@@ -1594,6 +1618,8 @@ window.onParseComplete = async function(result) {
     currentScriptData.project.visual_type = document.getElementById("pt-style").value || "";
     const applyEraEl = document.getElementById("pt-apply-era");
     currentScriptData.project.apply_era = applyEraEl ? applyEraEl.checked : true;
+    const motionAmtEl = document.getElementById("pt-motion-amount");
+    currentScriptData.project.motion_amount = motionAmtEl ? parseInt(motionAmtEl.value, 10) : 60;
     applyCaptionSetting();
     await saveDraftScript(true);
 
@@ -3347,8 +3373,9 @@ function drawTimelineSfxInspector(segIndex, sfxIndex) {
       <span class="k">segment</span><span class="v">Line ${segIndex + 1} (id: ${seg.segment_id})</span>
       <span class="k">offset</span><span class="v">+${sfx.offset_ms} ms</span>
     </div>
-    <p class="hint mt-sm">Drag along the lane to re-time across segments. Effects are heard in the render, not in the timeline preview.</p>
-    <div class="tl-insp-acts mt-sm">
+    <p class="hint mt-sm">Drag along the lane to re-time across segments. Click Audition sound to preview.</p>
+    <div class="tl-insp-acts mt-sm row-tight">
+      <button type="button" class="ghost" id="btn-tl-audition-sfx" onclick="previewCurrentSelectedSfx()">▶ Audition sound</button>
       <button type="button" class="ghost" onclick="deleteSelectedSfx()" style="color:var(--gap); border-color:var(--gap)">Delete sound effect</button>
     </div>
   `;
@@ -3404,8 +3431,12 @@ function renderSfxPickerList(sounds) {
             <td>${escapeHtml(query)}</td>
             <td class="mono">${dur}</td>
             <td>
-              <button type="button" class="primary" style="padding: 2px 8px; font-size:11px"
-                      onclick="addSfxFromLibraryItem('${escapeHtml(s.path || "")}')">Use</button>
+              <div class="row-tight">
+                <button type="button" class="ghost" style="padding: 2px 8px; font-size:11px"
+                        onclick="previewSfxItemAudio('${escapeHtml(s.path || "")}', this)">▶</button>
+                <button type="button" class="primary" style="padding: 2px 8px; font-size:11px"
+                        onclick="addSfxFromLibraryItem('${escapeHtml(s.path || "")}')">Use</button>
+              </div>
             </td>
           </tr>`;
         }).join("")}
@@ -4493,3 +4524,66 @@ async function clearLibraryCache() {
 
 // Importing an image now lives in the Replace modal (replaceWithOwnImage), so it
 // works on every shot and pins what it adds.
+
+let sfxAuditionAudio = null;
+
+async function playSfxPath(sfxPath, btnEl) {
+  if (!sfxPath) return;
+  try {
+    if (sfxAuditionAudio && !sfxAuditionAudio.paused) {
+      sfxAuditionAudio.pause();
+      sfxAuditionAudio.currentTime = 0;
+    }
+    if (!sfxAuditionAudio) {
+      sfxAuditionAudio = new Audio();
+    }
+    const projectDir = currentScriptPath ? currentScriptPath.replace(/[\\/][^\\/]*$/, "") : "";
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.prepare_sfx_preview) {
+      const res = await window.pywebview.api.prepare_sfx_preview(sfxPath, projectDir);
+      if (res && res.ok && res.src) {
+        sfxAuditionAudio.src = res.src;
+        sfxAuditionAudio.play().catch(e => console.warn("SFX play blocked:", e));
+      } else {
+        alert("Could not load sound preview: " + ((res && res.error) || "unknown error"));
+      }
+    }
+  } catch (err) {
+    console.error("Error playing SFX preview:", err);
+  }
+}
+
+function previewSfxItemAudio(sfxPath, btnEl) {
+  playSfxPath(sfxPath, btnEl);
+}
+
+function previewCurrentSelectedSfx() {
+  if (tlSelectedType !== "sfx" || !tlSelectedSfx) return;
+  const seg = (currentScriptData && currentScriptData.segments || [])[tlSelectedSfx.segIndex];
+  const sfx = seg && seg.sfx && seg.sfx[tlSelectedSfx.sfxIndex];
+  // A placed effect is {name, offset_ms} - the shape _overlay_sound_effects reads.
+  // It has never carried `path`, so reading that audited nothing, silently.
+  const ref = sfx && (sfx.path || sfx.name);
+  if (ref) {
+    playSfxPath(ref);
+  }
+}
+
+window.previewSfxItemAudio = previewSfxItemAudio;
+window.previewCurrentSelectedSfx = previewCurrentSelectedSfx;
+
+async function resetWindowSize() {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.reset_window_geometry) {
+      const res = await window.pywebview.api.reset_window_geometry();
+      if (res && res.success) {
+        alert("Window size reset to 1000 × 900.");
+      } else {
+        alert("Could not reset window size: " + ((res && res.error) || "unknown error"));
+      }
+    }
+  } catch (err) {
+    console.error("Failed to reset window size:", err);
+  }
+}
+window.resetWindowSize = resetWindowSize;
+

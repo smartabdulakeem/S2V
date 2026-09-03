@@ -471,6 +471,7 @@ class RenderOrchestrator:
                     visual_type=proj.get("visual_type", ""),
                     series_slug=proj.get("series_slug"),
                     motion_style=proj.get("motion_style"),
+                    motion_amount=proj.get("motion_amount", 60),
                 )
                 with self._lock:
                     segment_videos_map[seg_id] = seg_video

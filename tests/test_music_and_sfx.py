@@ -392,6 +392,9 @@ def test_the_timeline_music_and_sfx_helpers_are_all_defined():
         "openAddSfxMenu", "closeSfxPickerModal", "renderSfxPickerList",
         "filterSfxPicker", "addSfxFromComputer", "addSfxFromLibraryItem",
         "_insertSfxAtPlayhead", "timelineSfxPointerDown",
+        # Slice B additions
+        "onMotionAmountInput", "resetWindowSize",
+        "playSfxPath", "previewSfxItemAudio", "previewCurrentSelectedSfx",
     ]
     expr = "[" + ", ".join(f'typeof {n}' for n in names) + "]"
     kinds = _run_node_expr(expr)
@@ -421,3 +424,58 @@ def test_persist_current_script_writes_through_the_normal_save_path():
     )
     assert "isWebMode" in body, "persistCurrentScript must be a no-op in web mode"
     assert "currentScriptPath" in body, "persistCurrentScript must guard on a missing path"
+
+
+def test_auditioning_a_placed_effect_finds_the_file_the_render_will_use(tmp_path, monkeypatch):
+    """
+    A placed effect is {name, offset_ms} — the shape _overlay_sound_effects reads.
+    It has never carried a `path`. The audition button read sfx.path, got
+    undefined, and did nothing at all: no sound, no error, nothing in the console.
+
+    The preview must resolve a bare name exactly where the compositor resolves
+    it, under <project>/assets/sfx/, so what you audition is what renders.
+    """
+    import app as smart_studio_app
+
+    monkeypatch.setenv("SMART_STUDIO_DEVSERVER", "1")
+
+    project_dir = tmp_path / "projects" / "A Film"
+    sfx_dir = project_dir / "assets" / "sfx"
+    sfx_dir.mkdir(parents=True)
+    (sfx_dir / "clash.wav").write_bytes(b"RIFF0000WAVE")
+
+    monkeypatch.setattr(smart_studio_app, "BASE_DIR", str(tmp_path))
+
+    res = smart_studio_app.Api().prepare_sfx_preview("clash.wav", str(project_dir))
+
+    assert res["ok"] is True, f"a placed effect could not be auditioned: {res.get('error')}"
+    assert res.get("src"), "no playable source came back for a placed effect"
+
+
+def test_a_missing_effect_says_so_rather_than_failing_silently():
+    """Silence was the original bug. An unresolvable effect must report why."""
+    import app as smart_studio_app
+
+    res = smart_studio_app.Api().prepare_sfx_preview("no-such-sound.wav", "")
+    assert res["ok"] is False
+    assert "not found" in res["error"].lower()
+
+
+def test_the_audition_reads_the_field_the_insert_writes():
+    """
+    _insertSfxAtPlayhead pushes {name, offset_ms}. Whatever the audition reads
+    has to be a key that object actually has, or the button goes quiet again.
+    """
+    with open(APP_JS, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    insert = js[js.index("async function _insertSfxAtPlayhead"):]
+    insert = insert[:insert.index("\n}")]
+    assert "name:" in insert, "_insertSfxAtPlayhead no longer writes a name"
+
+    audition = js[js.index("function previewCurrentSelectedSfx"):]
+    audition = audition[:audition.index("\n}")]
+    assert "sfx.name" in audition, (
+        "previewCurrentSelectedSfx does not read sfx.name — the key a placed "
+        "effect actually carries. Reading only sfx.path audits nothing, silently."
+    )

@@ -1,0 +1,67 @@
+{
+  "protocol": "claude-code <-> antigravity relay",
+  "phase": "ANTIGRAVITY_COMPLETE",
+  "ready_for": "CLAUDE",
+  "brief_file": "ANTIGRAVITY-SLICE-B.md",
+  "feedback_file": "RELAY-FEEDBACK.md",
+  "slice": "B",
+  "slice_title": "Camera amount slider and window memory persistence",
+  "branch": "feat/image-budget",
+  "baseline_commit": "d05586a",
+  "baseline_tests": {
+    "passed": 734,
+    "xfailed": 1,
+    "failed": 0,
+    "command": "python -m pytest tests/ -q",
+    "approx_minutes": 9
+  },
+  "guardrails": {
+    "sole_git_committer": "claude-code",
+    "antigravity_may_commit": false,
+    "inline_style_count": 15,
+    "inline_style_cap": 19,
+    "shot_cache_key": "v10",
+    "shot_cache_key_must_bump_this_slice": false,
+    "line_endings": "CRLF",
+    "never_run": [
+      "git add -A",
+      "git checkout -- library/index.npz"
+    ],
+    "gitignored_secrets": [
+      "config/settings.json"
+    ]
+  },
+  "verification_gate": {
+    "required_before_build": true,
+    "note": "Antigravity opens the live WebView2 window against baseline_commit and verifies from the user's perspective. On any issue: write RELAY-FEEDBACK.md, set ready_for to CLAUDE, halt."
+  },
+  "updated_by": "antigravity",
+  "updated_at": "2026-09-03",
+  "history": [
+    {
+      "commit": "2fa5215",
+      "by": "claude-code",
+      "summary": "Slice F reviewed and committed: music mix fix, Music and SFX lanes, real Sounds tab, Library Images de-faked. Three Antigravity tests repaired before landing."
+    },
+    {
+      "commit": "d05586a",
+      "by": "claude-code",
+      "summary": "Fixed persistCurrentScript, undefined at seven call sites, which broke every music and SFX edit. Added two guards for undefined-helper regressions."
+    },
+    {
+      "commit": null,
+      "by": "claude-code",
+      "summary": "Slice B brief written and token handed to Antigravity."
+    },
+    {
+      "commit": null,
+      "by": "antigravity",
+      "summary": "Slice B complete (Jobs 1-3) plus sound effect preview auditioning in SFX modal & timeline inspector. 8 contract tests added, shot cache key bumped to v10, test_motion clamp updated. All tests pass (1243 passed, 1 xfailed)."
+    }
+  ],
+  "frontend_verification": {
+    "status": "PASSED",
+    "last_commit_verified": "d05586a",
+    "notes": "Live WebView2 gate passed: music volume change persists to disk, sound effects insert and persist cleanly without errors. Building Slice B and adding SFX auditioning per owner instruction."
+  }
+}

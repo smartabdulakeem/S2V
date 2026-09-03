@@ -117,11 +117,16 @@ def styles_for_ui() -> list:
     ]
 
 
-def travel_for(style, duration: float) -> float:
+DEFAULT_MOTION_AMOUNT = 60
+
+
+def travel_for(style, duration: float, amount: float | int | None = None) -> float:
     """
     How far the frame travels over a shot of this length, as a fraction.
 
     Zero for the static style, which is what makes it hold still.
+    Scales rate, min and max by amount (percentage 0-100, default 100% when None
+    so existing callers are unchanged, or scaled by amount when provided).
     """
     prof = motion_style_for(style)
     if prof["rate"] <= 0:
@@ -130,7 +135,25 @@ def travel_for(style, duration: float) -> float:
         seconds = max(0.0, float(duration))
     except (TypeError, ValueError):
         seconds = 0.0
-    return round(max(prof["min"], min(prof["max"], prof["rate"] * seconds)), 4)
+
+    if amount is None:
+        scale = 1.0
+    else:
+        try:
+            amt = float(amount)
+        except (TypeError, ValueError):
+            amt = DEFAULT_MOTION_AMOUNT
+        scale = max(0.0, min(100.0, amt)) / 100.0
+
+    if scale <= 0.0:
+        return 0.0
+
+    scaled_rate = prof["rate"] * scale
+    scaled_min = prof["min"] * scale
+    scaled_max = prof["max"] * scale
+    raw_travel = scaled_rate * seconds
+    return round(max(scaled_min, min(scaled_max, raw_travel)), 4)
+
 
 
 def pad_factor_for(style) -> float:

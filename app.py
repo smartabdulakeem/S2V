@@ -625,7 +625,8 @@ class Api:
             return {"success": False, "error": str(e), "brief": ""}
 
     UI_DEFAULT_KEYS = ("voice", "series_slug", "tone", "visual_style", "visual_type",
-                       "captions_enabled", "shot_rhythm_seconds", "image_count", "formats")
+                       "captions_enabled", "shot_rhythm_seconds", "image_count", "formats",
+                       "motion_style", "motion_amount")
 
     def save_ui_defaults(self, defaults: dict) -> dict:
         """
@@ -647,6 +648,20 @@ class Api:
 
     def get_ui_defaults(self) -> dict:
         return {"success": True, "ui_defaults": dict(self._settings.get("ui_defaults") or {})}
+
+    def reset_window_geometry(self) -> dict:
+        """
+        Reset window size to 1000x900 and clear stored geometry.
+        """
+        try:
+            if "window_geometry" in self._settings:
+                del self._settings["window_geometry"]
+                _save_settings(self._settings)
+            if self._window:
+                self._window.resize(1000, 900)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def save_project(self, script_data: dict) -> dict:
         """
@@ -1313,7 +1328,8 @@ class Api:
         narrative_tone: str = "",
         speaker_mode: str = "single",
         motion_style: str = "",
-        series_slug: str = ""
+        series_slug: str = "",
+        motion_amount: int = 60,
     ) -> dict:
         """
         Start plain-text parsing using the AI storyboard planner in a background thread.
@@ -1353,7 +1369,8 @@ class Api:
                     narrative_tone=narrative_tone,
                     speaker_mode=speaker_mode,
                     motion_style=motion_style,
-                    series_slug=series_slug
+                    series_slug=series_slug,
+                    motion_amount=motion_amount,
                 )
 
                 if not res.get("success"):
@@ -1667,6 +1684,46 @@ class Api:
                 return {"ok": False, "error": f"Music file not found: {bg_music}"}
 
             abs_path = os.path.abspath(music_path)
+            is_devserver = (
+                os.environ.get("SMART_STUDIO_DEVSERVER") == "1"
+                or (self._window is not None and type(self._window).__name__ == "DevWindow")
+            )
+            if is_devserver:
+                src = f"/media?path={urllib.parse.quote(abs_path)}"
+            else:
+                host, port, token = start_media_server(BASE_DIR)
+                src = f"http://{host}:{port}/media?token={token}&path={urllib.parse.quote(abs_path)}"
+
+            return {"ok": True, "src": src, "path": abs_path}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def prepare_sfx_preview(self, sfx_path: str, project_dir: str = "") -> dict:
+        """Tell the page where a sound effect file is so it can be previewed/auditioned."""
+        try:
+            import urllib.parse
+            from media_server import start_media_server
+
+            if not sfx_path:
+                return {"ok": False, "error": "No sound effect path provided"}
+
+            cand = sfx_path
+            if not os.path.isabs(cand):
+                if project_dir and os.path.exists(os.path.join(project_dir, cand)):
+                    cand = os.path.join(project_dir, cand)
+                elif project_dir and os.path.exists(os.path.join(project_dir, "assets", "sfx", cand)):
+                    # Where _overlay_sound_effects resolves a placed effect's bare
+                    # name, so an audition plays the file the render will use.
+                    cand = os.path.join(project_dir, "assets", "sfx", cand)
+                elif os.path.exists(os.path.join(BASE_DIR, cand)):
+                    cand = os.path.join(BASE_DIR, cand)
+                elif os.path.exists(os.path.join(BASE_DIR, "library", "sounds", cand)):
+                    cand = os.path.join(BASE_DIR, "library", "sounds", cand)
+
+            if not os.path.exists(cand):
+                return {"ok": False, "error": f"SFX file not found: {sfx_path}"}
+
+            abs_path = os.path.abspath(cand)
             is_devserver = (
                 os.environ.get("SMART_STUDIO_DEVSERVER") == "1"
                 or (self._window is not None and type(self._window).__name__ == "DevWindow")
@@ -2045,27 +2102,88 @@ def main():
     from media_server import start_media_server
     start_media_server(BASE_DIR)
 
-    window = webview.create_window(
-        title="Smart Studio",
-        url=os.path.join(BASE_DIR, "frontend", "index.html"),
-        js_api=api,
-        width=1000,
-        height=900,
-        min_size=(900, 750),
-        resizable=True,
+    from pipeline.window_geometry import (
+        validate_window_geometry, DEFAULT_WIDTH, DEFAULT_HEIGHT, MIN_WIDTH, MIN_HEIGHT
+    )
+
+    stored_geom = api._settings.get("window_geometry") or {}
+    screens = getattr(webview, "screens", None)
+    valid_geom = validate_window_geometry(stored_geom, screens=screens)
+
+    win_kwargs = {
+        "title": "Smart Studio",
+        "url": os.path.join(BASE_DIR, "frontend", "index.html"),
+        "js_api": api,
+        "width": valid_geom["width"],
+        "height": valid_geom["height"],
+        "min_size": (MIN_WIDTH, MIN_HEIGHT),
+        "resizable": True,
         # pywebview defaults text_select to False and injects
         #   body { user-select: none; cursor: default }
         # which made every word in the app unselectable — narration could not be
         # copied out or read with a screen reader.
-        text_select=True,
-    )
+        "text_select": True,
+    }
+    if valid_geom["x"] is not None and valid_geom["y"] is not None:
+        win_kwargs["x"] = valid_geom["x"]
+        win_kwargs["y"] = valid_geom["y"]
+
+    window = webview.create_window(**win_kwargs)
 
     api.set_window(window)
+
+    geom_tracker = {
+        "width": valid_geom["width"],
+        "height": valid_geom["height"],
+        "x": valid_geom["x"],
+        "y": valid_geom["y"],
+        "maximized": valid_geom.get("maximized", False),
+    }
+
+    def _on_resized(width, height):
+        if not geom_tracker["maximized"]:
+            geom_tracker["width"] = width
+            geom_tracker["height"] = height
+
+    def _on_moved(x, y):
+        if not geom_tracker["maximized"]:
+            geom_tracker["x"] = x
+            geom_tracker["y"] = y
+
+    def _on_maximized():
+        geom_tracker["maximized"] = True
+
+    def _on_restored():
+        geom_tracker["maximized"] = False
+
+    def _on_closing():
+        try:
+            if not geom_tracker["maximized"]:
+                if getattr(window, "width", None) is not None:
+                    geom_tracker["width"] = window.width
+                if getattr(window, "height", None) is not None:
+                    geom_tracker["height"] = window.height
+                if getattr(window, "x", None) is not None:
+                    geom_tracker["x"] = window.x
+                if getattr(window, "y", None) is not None:
+                    geom_tracker["y"] = window.y
+            api._settings["window_geometry"] = geom_tracker
+            _save_settings(api._settings)
+        except Exception:
+            pass
+
+    window.events.resized += _on_resized
+    window.events.moved += _on_moved
+    window.events.maximized += _on_maximized
+    window.events.restored += _on_restored
+    window.events.closing += _on_closing
 
     def _focus_window():
         # Without this the window opens behind everything and sits in the taskbar.
         try:
             window.restore()
+            if valid_geom.get("maximized"):
+                window.maximize()
             window.on_top = True
             window.on_top = False
         except Exception:

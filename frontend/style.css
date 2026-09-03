@@ -544,6 +544,26 @@ textarea.tall {
   line-height: 1.45;
 }
 
+.motion-amount-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.motion-amount-block label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-mute, #999);
+}
+
+.motion-amount-block input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent, #4f46e5);
+  cursor: pointer;
+}
+
 /* Settings Grid & Deck */
 .settings-grid {
   display: grid;

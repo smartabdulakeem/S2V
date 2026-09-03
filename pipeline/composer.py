@@ -301,7 +301,8 @@ def _resolve_pin_path(pin_file: str, project_dir: str, root: str = None) -> str:
 
 
 def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height: int, fps: int = 30,
-                        default_treatment: str = None, motion_style: str = None) -> str:
+                        default_treatment: str = None, motion_style: str = None,
+                        motion_amount: float | int | None = None) -> str:
     """Generate a SHA-1 hash for shot content cache lookup."""
     query_or_pin = str(shot.get("prompt_override") or shot.get("pin") or shot.get("query") or "")
     motion = json.dumps(shot.get("motion", {}), sort_keys=True)
@@ -322,10 +323,13 @@ def _get_shot_cache_key(shot: dict, resolved_duration: float, width: int, height
     # v7: prompt_recipe support, external prompt binding, and numbered slot matching.
     # v8: empty visual_type resolves to top style preset; style_presets override whitelist.
     # v9: visual_description in shot description pass obeys niche prompt_recipe, era, and cache.
+    # v10: motion_amount scales camera travel, so the same style at different amounts renders differently.
     style_key = resolve_motion_style(motion_style)
-    raw = (f"v9|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
-           f"{default_treatment or ''}|{style_key}")
+    amt_str = f"{motion_amount}" if motion_amount is not None else ""
+    raw = (f"v10|{query_or_pin}|{dur_str}|{motion}|{treatment}|{res_str}|{fps}|"
+           f"{default_treatment or ''}|{style_key}|{amt_str}")
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
 
 
 def _overlay_sound_effects(narration_path: str, sfx_list: list, output_audio_path: str, cache_dir: str, on_progress=None) -> str:
@@ -536,6 +540,7 @@ def render_shot_clip(
     on_progress=None,
     default_treatment: str | None = None,
     motion_style: str | None = None,
+    motion_amount: float | int | None = None,
 ) -> str:
     """
     Render a single shot into an MP4 clip using an FFmpeg filtergraph.
@@ -576,7 +581,7 @@ def render_shot_clip(
     # duration so the *rate* stays constant, and the project's motion style sets
     # that rate and the clamps around it. Static returns zero, which collapses
     # every expression below to a held frame whatever move the shot asked for.
-    travel = travel_for(motion_style, duration)
+    travel = travel_for(motion_style, duration, amount=motion_amount)
     pan_zoom = 1.0 + travel
 
     if motion_kind == "zoom_in":
@@ -770,6 +775,7 @@ def compose_segment(
     visual_type: str = "",
     series_slug: str = None,
     motion_style: str = None,
+    motion_amount: float | int | None = None,
 ) -> str:
     """
     Compose a single segment into an MP4 of resolution width x height.
@@ -842,7 +848,7 @@ def compose_segment(
     for i, shot in enumerate(shots):
         dur = resolved_durations[i]
         cache_key = _get_shot_cache_key(shot, dur, width, height, FPS, default_treatment=default_treatment,
-                                        motion_style=motion_style)
+                                        motion_style=motion_style, motion_amount=motion_amount)
         shot_mp4 = os.path.join(cache_dir, f"shot_{cache_key}.mp4")
 
         # Determine visual path for shot
@@ -875,7 +881,9 @@ def compose_segment(
                 on_progress=on_progress,
                 default_treatment=default_treatment,
                 motion_style=motion_style,
+                motion_amount=motion_amount,
             )
+
 
         shot_clip_paths.append(shot_mp4)
 
