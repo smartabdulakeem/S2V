@@ -1,15 +1,15 @@
 {
   "protocol": "claude-code <-> antigravity relay",
-  "phase": "ANTIGRAVITY_COMPLETE",
-  "ready_for": "CLAUDE",
-  "brief_file": "ANTIGRAVITY-SLICE-B.md",
+  "phase": "AWAITING_OWNER_DIRECTION",
+  "ready_for": "OWNER",
+  "brief_file": null,
   "feedback_file": "RELAY-FEEDBACK.md",
-  "slice": "B",
-  "slice_title": "Camera amount slider and window memory persistence",
+  "slice": null,
+  "slice_title": "Slices A-F of PLAN-REVISION-FRONTEND-FIRST.md are all landed",
   "branch": "feat/image-budget",
-  "baseline_commit": "d05586a",
+  "baseline_commit": "PENDING_COMMIT",
   "baseline_tests": {
-    "passed": 734,
+    "passed": 1249,
     "xfailed": 1,
     "failed": 0,
     "command": "python -m pytest tests/ -q",
@@ -35,7 +35,7 @@
     "required_before_build": true,
     "note": "Antigravity opens the live WebView2 window against baseline_commit and verifies from the user's perspective. On any issue: write RELAY-FEEDBACK.md, set ready_for to CLAUDE, halt."
   },
-  "updated_by": "antigravity",
+  "updated_by": "claude-code",
   "updated_at": "2026-09-03",
   "history": [
     {
@@ -57,11 +57,48 @@
       "commit": null,
       "by": "antigravity",
       "summary": "Slice B complete (Jobs 1-3) plus sound effect preview auditioning in SFX modal & timeline inspector. 8 contract tests added, shot cache key bumped to v10, test_motion clamp updated. All tests pass (1243 passed, 1 xfailed)."
+    },
+    {
+      "commit": "cc23e43",
+      "by": "claude-code",
+      "summary": "Slice B reviewed and committed: camera amount, cache key v10, window memory, motion_style persistence. Found and fixed a silent bug in the SFX auditioning - a placed effect carries `name`, never `path`, so Audition did nothing. Added tools/relay_watch.py, the transport the relay never had."
+    },
+    {
+      "commit": null,
+      "by": "claude-code",
+      "summary": "Slice C brief written and token handed to Antigravity."
+    },
+    {
+      "commit": null,
+      "by": "antigravity",
+      "summary": "Slice C complete: Task 12 test added to test_span_apply.py, Before Adam 347-line benchmark measured in 20.83s with 347 progress events, owner film repaired (33 pictures, 33/33 reachable descriptions, 0 stranded, backup intact), timing pill Node test added to test_narration_timing.py. Full suite: 1249 passed, 1 xfailed."
+    },
+    {
+      "commit": "PENDING_COMMIT",
+      "by": "claude-code",
+      "summary": "Slice C reviewed and committed: Task 12 test, timing-pill Node test, 347-line measuring run (20.83s), owner's film repaired 26 stranded -> 0 with 347 lines intact and backup untouched. Hardened relay_notify.py: secret gitignored topic, fixed-word inbound allowlist. Verified 1249 passed, 1 xfailed."
     }
   ],
   "frontend_verification": {
-    "status": "PASSED",
-    "last_commit_verified": "d05586a",
-    "notes": "Live WebView2 gate passed: music volume change persists to disk, sound effects insert and persist cleanly without errors. Building Slice B and adding SFX auditioning per owner instruction."
+    "status": "NOT_RUN",
+    "note": "Antigravity left this PENDING for Slice C and built anyway. The gate was skipped."
+  },
+  "owner_inbox": {
+    "topic": "smart-studio-relay-akeem",
+    "last_message": "I want to test it from here so start but in inform claude to start this loop from a new chat and ask him to inform the new chat properly so nothing will get lost",
+    "received_at": "2026-09-03T22:00:22Z"
+  },
+  "notifications": {
+    "outbound": "Claude Code built-in PushNotification (desktop + phone via Remote Control). No third party.",
+    "inbound": "tools/relay_notify.py --wait-reply. Secret topic in config/relay_notify.json (gitignored).",
+    "inbound_vocabulary": [
+      "go",
+      "stop",
+      "pause",
+      "resume",
+      "status"
+    ],
+    "inbound_is_untrusted": "Only those exact words are accepted. Never pass a reply to a shell, path or prompt.",
+    "wired_in": false
   }
 }

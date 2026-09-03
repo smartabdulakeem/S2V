@@ -105,3 +105,62 @@ def test_manual_mode_passes_the_count_straight_through():
         SmartStudioAPI().plan_pictures_for_script(script, image_count=1)
 
     assert seen["exact_count"] == 1
+
+
+# ── the whole chain ───────────────────────────────────────────────────────────
+
+def test_planning_after_spans_does_not_ask_the_model_to_describe_again():
+    """
+    `apply_spans` writes a description onto every owning shot. `plan_shots`
+    then runs `describe_shots`, which must recognise them as already written.
+
+    If it does not, every re-plan pays for the descriptions twice and — worse —
+    the second answer is written for a shot rather than for the span, which is
+    the exact defect this whole plan exists to remove.
+    """
+    from pipeline.shot_description import describe_shots
+
+    script = _script(5)
+    apply_spans(script, SPANS)
+
+    owning = [shot for _seg, shot in picture_owning_shots(script)]
+    shots_for_desc = [{"shot_id": s["shot_id"], "scene": s["scene"],
+                       "picture_number": i + 1, "first_line": i + 1, "last_line": i + 1,
+                       "visual_description": s.get("visual_description")}
+                      for i, s in enumerate(owning)]
+
+    class _MustNotBeCalled:
+        def identity(self):
+            return "gemini", "gemini-2.5-flash"
+
+        def complete_text(self, system, user="", max_tokens=2048):
+            raise AssertionError("describe_shots asked the model for descriptions it already had")
+
+    out = describe_shots(shots_for_desc, series_cfg={"prompt_recipe": "r"},
+                         provider=_MustNotBeCalled())
+
+    assert out["1a"] == "the first picture"
+    assert out["4a"] == "the second picture"
+
+
+def test_a_numbered_folder_image_still_binds_to_the_picture_it_names():
+    """
+    The numbering contract, across the new boundaries. `3.jpg` is the third
+    picture the film makes — whoever decided where that picture starts.
+    """
+    from pipeline.library import match_folder_images_by_slot
+
+    script = _script(9)
+    apply_spans(script, [
+        {"number": 1, "first_line": 1, "last_line": 4, "description": "first"},
+        {"number": 2, "first_line": 5, "last_line": 6, "description": "second"},
+        {"number": 3, "first_line": 7, "last_line": 9, "description": "third"},
+    ])
+
+    owners = picture_owning_shots(script)
+    assert len(owners) == 3
+
+    matched, fell_back = match_folder_images_by_slot(
+        ["/imgs/1_a.jpg", "/imgs/2_b.jpg", "/imgs/3_c.jpg"], len(owners))
+    assert fell_back is False
+    assert matched[2].endswith("3_c.jpg"), "picture 3 did not receive 3.jpg"

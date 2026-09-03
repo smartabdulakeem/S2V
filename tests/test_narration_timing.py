@@ -110,3 +110,63 @@ def test_the_audio_path_is_kept_beside_the_seconds():
 
     assert script["segments"][0]["narration_audio"] == "/fake/segment_1_audio.mp3"
     assert script["segments"][1]["narration_audio"] == "/fake/segment_2_audio.mp3"
+
+
+def test_timing_pill_reflects_measured_state():
+    """
+    Test 2 from Slice C: Given a script with all, some, and no segments carrying
+    narration_seconds > 0, updateTimingPill produces the measured / partial / estimated
+    text and the matching ok/warn class. Driven in Node with app.js loaded.
+    """
+    import json
+    import subprocess
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app_js_path = os.path.join(repo_root, "frontend", "app.js")
+    with open(app_js_path, "r", encoding="utf-8") as f:
+        js_code = f.read()
+
+    def run_pill(script_context):
+        setup = """
+let pillClasses = new Set();
+let pill = {
+    classList: {
+        toggle: (cls, force) => { if (force) pillClasses.add(cls); else pillClasses.delete(cls); },
+        contains: (cls) => pillClasses.has(cls)
+    },
+    textContent: ''
+};
+let document = {
+    getElementById: (id) => id === 'timing-pill' ? pill : null,
+    querySelectorAll: () => [],
+    addEventListener: () => {}
+};
+let window = { addEventListener: () => {} };
+"""
+        tail = f"""
+currentScriptData = {json.dumps(script_context)};
+updateTimingPill();
+console.log(JSON.stringify({{
+    text: pill.textContent,
+    is_ok: pillClasses.has('ok'),
+    is_warn: pillClasses.has('warn')
+}}));
+"""
+        res = subprocess.run(["node", "-"], input=setup + js_code + tail,
+                             capture_output=True, text=True, encoding="utf-8", check=True)
+        return json.loads(res.stdout.strip())
+
+    # 1. No segments measured -> estimated from word count, warn
+    none_res = run_pill({"segments": [{"narration_seconds": 0}, {"narration_seconds": None}]})
+    assert none_res["text"] == "estimated from word count"
+    assert none_res["is_warn"] is True and none_res["is_ok"] is False
+
+    # 2. Some segments measured -> X of Y measured, warn
+    some_res = run_pill({"segments": [{"narration_seconds": 4.5}, {"narration_seconds": 0}]})
+    assert some_res["text"] == "1 of 2 measured"
+    assert some_res["is_warn"] is True and some_res["is_ok"] is False
+
+    # 3. All segments measured -> timings measured, ok
+    all_res = run_pill({"segments": [{"narration_seconds": 4.5}, {"narration_seconds": 9.25}]})
+    assert all_res["text"] == "timings measured"
+    assert all_res["is_ok"] is True and all_res["is_warn"] is False
