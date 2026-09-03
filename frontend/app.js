@@ -3215,6 +3215,18 @@ function drawTimelineMusicInspector() {
   `;
 }
 
+/**
+ * Write currentScriptData back to its file, the way every other timeline edit
+ * does (see moveTimelinePictureBoundary). Slice F called this from seven places
+ * without ever defining it, so adding music or a sound effect died on a
+ * ReferenceError before anything reached disk.
+ */
+async function persistCurrentScript() {
+  if (isWebMode || !currentScriptData || !currentScriptPath) return false;
+  await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+  return true;
+}
+
 async function onTimelineMusicVolumeChange(val) {
   const db = parseInt(val, 10);
   if (!currentScriptData.project) currentScriptData.project = {};

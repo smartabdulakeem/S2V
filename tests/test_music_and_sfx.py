@@ -10,6 +10,7 @@ Covers:
 5. sfxToFilmTime maps segment + offset_ms to film time; round-trip equality.
 6. moveSfxEffect moves effect across segment boundary and preserves dropped film time.
 7. The Sounds tab reads a manifest, says empty when there is none, and the mockup stays gone.
+8. Every music/SFX helper the Timeline calls is actually defined in app.js.
 """
 
 import json
@@ -367,3 +368,56 @@ def test_timeline_tracks_and_lanes_in_index():
     assert 'id="tl-lane-music"' in html
     assert 'id="tl-lane-sfx"' in html
     assert 'id="sfx-picker-modal"' in html
+
+
+def test_the_timeline_music_and_sfx_helpers_are_all_defined():
+    """
+    Adding a sound effect died on "ReferenceError: persistCurrentScript is not
+    defined". Slice F called that helper from seven places and never wrote it,
+    so every music and SFX edit - volume, fades, add, remove, delete, drag -
+    threw before anything reached disk, and adding music threw before it could
+    prepare the preview, which is why it never played either.
+
+    test_frontend_controls only checks that onclick targets exist, so a helper
+    called from inside another function slips straight past it. This walks the
+    whole Slice F surface in a real JS runtime instead.
+    """
+    names = [
+        "persistCurrentScript",
+        "timelineMusicAudioEl", "prepareTimelineMusic", "timelineAddMusic",
+        "removeTimelineMusic", "selectTimelineMusic", "drawTimelineMusicInspector",
+        "onTimelineMusicVolumeChange", "onTimelineMusicFadeChange",
+        "filmTimeToSfx", "sfxToFilmTime", "moveSfxEffect",
+        "selectTimelineSfx", "drawTimelineSfxInspector", "deleteSelectedSfx",
+        "openAddSfxMenu", "closeSfxPickerModal", "renderSfxPickerList",
+        "filterSfxPicker", "addSfxFromComputer", "addSfxFromLibraryItem",
+        "_insertSfxAtPlayhead", "timelineSfxPointerDown",
+    ]
+    expr = "[" + ", ".join(f'typeof {n}' for n in names) + "]"
+    kinds = _run_node_expr(expr)
+
+    undefined = [n for n, k in zip(names, kinds) if k != "function"]
+    assert not undefined, (
+        "Slice F helpers referenced but not defined in app.js: " + ", ".join(undefined)
+    )
+
+
+def test_persist_current_script_writes_through_the_normal_save_path():
+    """
+    It must save the way every other timeline edit does - save_edited_script with
+    the current path and data - and must not throw when there is no path or when
+    the page is running outside the desktop shell.
+    """
+    with open(APP_JS, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert "async function persistCurrentScript()" in js,         "persistCurrentScript is not defined in app.js"
+
+    body_start = js.index("async function persistCurrentScript()")
+    body = js[body_start:body_start + 400]
+
+    assert "save_edited_script(currentScriptPath, currentScriptData)" in body, (
+        "persistCurrentScript does not go through save_edited_script"
+    )
+    assert "isWebMode" in body, "persistCurrentScript must be a no-op in web mode"
+    assert "currentScriptPath" in body, "persistCurrentScript must guard on a missing path"
