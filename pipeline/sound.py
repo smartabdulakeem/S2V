@@ -73,8 +73,12 @@ def load_beds(include_inbox: bool = True) -> list:
             beds.append({
                 "path": rel,
                 "abs_path": abs_path,
+                "name": os.path.basename(rel),
                 "query": rec.get("query", ""),
                 "duration": float(rec.get("duration") or 0.0),
+                "category": rec.get("category", "beds"),
+                "licence_type": rec.get("licence_type", "CC0"),
+                "attribution": rec.get("attribution", ""),
             })
     return beds
 

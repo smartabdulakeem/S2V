@@ -2339,8 +2339,58 @@ function timelineAudioEl() {
   return document.getElementById("tl-audio");
 }
 
+function timelineMusicAudioEl() {
+  return document.getElementById("tl-music-audio");
+}
+
+let tlMusicPreparing = false;
+async function prepareTimelineMusic() {
+  const musicAudio = timelineMusicAudioEl();
+  if (!musicAudio || !currentScriptData || !currentScriptData.project) return;
+  const bgMusic = currentScriptData.project.background_music;
+  if (!bgMusic) {
+    if (musicAudio.src) {
+      musicAudio.pause();
+      musicAudio.removeAttribute("src");
+      musicAudio.removeAttribute("data-music");
+      musicAudio.removeAttribute("data-project");
+    }
+    return;
+  }
+  const projectTitle = currentScriptData.project.title || "Untitled Project";
+  if (musicAudio.dataset.project === projectTitle && musicAudio.dataset.music === bgMusic && musicAudio.src) {
+    const db = currentScriptData.project.music_volume_db !== undefined ? currentScriptData.project.music_volume_db : -20;
+    musicAudio.volume = Math.min(1.0, Math.max(0.0, Math.pow(10, db / 20)));
+    return;
+  }
+  if (tlMusicPreparing) return;
+  tlMusicPreparing = true;
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.prepare_timeline_music) {
+      const projectDir = currentScriptPath ? currentScriptPath.replace(/[\\/][^\\/]*$/, "") : "";
+      const res = await window.pywebview.api.prepare_timeline_music(currentScriptData, projectDir);
+      if (res && res.ok && res.src) {
+        musicAudio.src = res.src;
+        musicAudio.dataset.project = projectTitle;
+        musicAudio.dataset.music = bgMusic;
+        const db = currentScriptData.project.music_volume_db !== undefined ? currentScriptData.project.music_volume_db : -20;
+        musicAudio.volume = Math.min(1.0, Math.max(0.0, Math.pow(10, db / 20)));
+        musicAudio.load();
+      }
+    }
+  } catch (err) {
+    console.error("Error preparing timeline music:", err);
+  } finally {
+    tlMusicPreparing = false;
+  }
+}
+
 function initTimelineAudio() {
   const audio = timelineAudioEl();
+  const musicAudio = timelineMusicAudioEl();
+  if (musicAudio) {
+    musicAudio.loop = true;
+  }
   if (!audio || audio.dataset.initialized) return;
   audio.dataset.initialized = "true";
 
@@ -2350,6 +2400,13 @@ function initTimelineAudio() {
       btn.innerHTML = "&#10074;&#10074;";
       btn.setAttribute("aria-label", "Pause");
       btn.title = "Pause";
+    }
+    const mAudio = timelineMusicAudioEl();
+    if (mAudio && mAudio.src) {
+      if (mAudio.duration) {
+        mAudio.currentTime = audio.currentTime % mAudio.duration;
+      }
+      mAudio.play().catch(() => {});
     }
     if (tlAnimFrameId) cancelAnimationFrame(tlAnimFrameId);
     tlAnimFrameId = requestAnimationFrame(tlAnimLoop);
@@ -2361,6 +2418,10 @@ function initTimelineAudio() {
       btn.innerHTML = "&#9654;";
       btn.setAttribute("aria-label", "Play");
       btn.title = "Play";
+    }
+    const mAudio = timelineMusicAudioEl();
+    if (mAudio && !mAudio.paused) {
+      mAudio.pause();
     }
     if (tlAnimFrameId) {
       cancelAnimationFrame(tlAnimFrameId);
@@ -2374,6 +2435,10 @@ function initTimelineAudio() {
       btn.innerHTML = "&#9654;";
       btn.setAttribute("aria-label", "Play");
       btn.title = "Play";
+    }
+    const mAudio = timelineMusicAudioEl();
+    if (mAudio && !mAudio.paused) {
+      mAudio.pause();
     }
     if (tlAnimFrameId) {
       cancelAnimationFrame(tlAnimFrameId);
@@ -2400,6 +2465,10 @@ function timelinePauseAudio() {
   if (audio && !audio.paused) {
     audio.pause();
   }
+  const mAudio = timelineMusicAudioEl();
+  if (mAudio && !mAudio.paused) {
+    mAudio.pause();
+  }
   if (tlAnimFrameId) {
     cancelAnimationFrame(tlAnimFrameId);
     tlAnimFrameId = null;
@@ -2419,6 +2488,11 @@ async function timelineTogglePlay() {
   const total = secs.reduce((a, b) => a + b, 0);
   if (tlPlayhead >= total - 0.05) {
     timelineSeek(0);
+  }
+
+  // Ensure music track is loaded if configured
+  if (currentScriptData && currentScriptData.project && currentScriptData.project.background_music) {
+    await prepareTimelineMusic();
   }
 
   const projectTitle = (currentScriptData && currentScriptData.project && currentScriptData.project.title) || "Untitled Project";
@@ -2480,6 +2554,8 @@ function renderTimelineScreen() {
   const ruler = document.getElementById("tl-ruler");
   const laneP = document.getElementById("tl-lane-pictures");
   const laneN = document.getElementById("tl-lane-narration");
+  const laneM = document.getElementById("tl-lane-music");
+  const laneS = document.getElementById("tl-lane-sfx");
   const laneC = document.getElementById("tl-lane-captions");
 
   initTimelineAudio();
@@ -2490,6 +2566,8 @@ function renderTimelineScreen() {
     ruler.innerHTML = "";
     laneP.innerHTML = `<p class="sub tl-empty">Plan a storyboard first. The Timeline shows the plan you already have.</p>`;
     laneN.innerHTML = "";
+    if (laneM) laneM.innerHTML = "";
+    if (laneS) laneS.innerHTML = "";
     laneC.innerHTML = "";
     const playBtn = document.getElementById("btn-tl-play");
     if (playBtn) playBtn.disabled = true;
@@ -2599,6 +2677,70 @@ function renderTimelineScreen() {
     at += secs[i] || 0;
   });
   laneN.innerHTML = nHtml;
+
+  // Music — one block across the whole film
+  if (laneM) {
+    const bgMusic = currentScriptData?.project?.background_music;
+    if (bgMusic) {
+      const fname = bgMusic.split(/[\\/]/).pop();
+      const volDb = currentScriptData.project.music_volume_db !== undefined ? currentScriptData.project.music_volume_db : -20;
+      const fadeIn = currentScriptData.project.music_fade_in || 0;
+      const fadeOut = currentScriptData.project.music_fade_out || 0;
+      const fades = (fadeIn || fadeOut) ? ` · in ${fadeIn}s, out ${fadeOut}s` : "";
+      const isSel = tlSelectedType === "music";
+      laneM.innerHTML = `
+        <div class="tl-music-block ${isSel ? "sel" : ""}"
+             onclick="selectTimelineMusic()"
+             style="left: 0px; width: ${(total * tlZoom).toFixed(1)}px;"
+             title="${escapeHtml(fname)} (${volDb} dB${fades})">
+          <span>&#9835; <b>${escapeHtml(fname)}</b> <i style="color:var(--ink-3); margin-left:6px">${volDb} dB${fades}</i></span>
+        </div>
+      `;
+    } else {
+      laneM.innerHTML = `
+        <div class="tl-music-empty" onclick="timelineAddMusic()" title="Click to add background music">
+          <span>+ Add background music</span>
+        </div>
+      `;
+    }
+  }
+
+  // Sound effects — placed at specific offsets within segments
+  if (laneS) {
+    let sfxHtml = "";
+    let sfxCount = 0;
+    segs.forEach((seg, segIdx) => {
+      const list = seg.sfx || [];
+      list.forEach((sfx, sfxIdx) => {
+        sfxCount++;
+        const t = sfxToFilmTime(segIdx, sfx.offset_ms);
+        const isSel = tlSelectedType === "sfx" && tlSelectedSfx && tlSelectedSfx.segIndex === segIdx && tlSelectedSfx.sfxIndex === sfxIdx;
+        const x = (t * tlZoom).toFixed(1);
+        sfxHtml += `
+          <div class="tl-sfx-chip ${isSel ? "sel" : ""}"
+               id="tl-sfx-${segIdx}-${sfxIdx}"
+               data-seg="${segIdx}"
+               data-sfx="${sfxIdx}"
+               style="left: ${x}px;"
+               onclick="selectTimelineSfx(${segIdx}, ${sfxIdx}, event)"
+               onpointerdown="timelineSfxPointerDown(event, ${segIdx}, ${sfxIdx})"
+               title="${escapeHtml(sfx.name)} · ${tlClock(t)} (line ${segIdx + 1} + ${sfx.offset_ms}ms)">
+            <span>&#9889; ${escapeHtml(sfx.name)}</span>
+          </div>
+        `;
+      });
+    });
+    if (sfxCount === 0) {
+      laneS.innerHTML = `
+        <div class="tl-sfx-empty" onclick="openAddSfxMenu()" title="Click to add sound effect at playhead">
+          <span>+ Add sound effect at playhead (${tlClock(tlPlayhead)})</span>
+        </div>
+      `;
+    } else {
+      laneS.innerHTML = sfxHtml;
+    }
+  }
+
   // An empty lane reads as broken rather than as "too small to letter".
   laneC.innerHTML = cHtml ||
     `<span class="tl-cap-hint mono">zoom in to read the narration line by line</span>`;
@@ -2624,6 +2766,11 @@ function timelineSeek(seconds, opts) {
     if (Math.abs(audio.currentTime - tlPlayhead) > 0.05) {
       audio.currentTime = tlPlayhead;
     }
+  }
+
+  const mAudio = timelineMusicAudioEl();
+  if (mAudio && mAudio.src && mAudio.duration && (!opts || !opts.fromAudio)) {
+    mAudio.currentTime = tlPlayhead % mAudio.duration;
   }
 
   const x = tlPlayhead * tlZoom;
@@ -2675,11 +2822,18 @@ function timelineSeekPicture(direction) {
   if (next) timelineSeek(next.startsAt + 0.01);
 }
 
+let tlSelectedType = "picture";
+let tlSelectedSfx = null;
+
 function selectTimelinePicture(number, opts) {
+  tlSelectedType = "picture";
+  tlSelectedSfx = null;
   tlSelected = number;
   document.querySelectorAll("#tl-lane-pictures .tl-clip").forEach((el, i) => {
     el.classList.toggle("sel", i + 1 === number);
   });
+  document.querySelectorAll("#tl-lane-music .tl-music-block").forEach(el => el.classList.remove("sel"));
+  document.querySelectorAll("#tl-lane-sfx .tl-sfx-chip").forEach(el => el.classList.remove("sel"));
   drawTimelineInspector(number);
   if (!(opts && opts.silent)) {
     const pic = tlPictures().find(p => p.number === number);
@@ -2706,6 +2860,59 @@ function tlLineStartTime(lineNumber) {
     at += secs[i] || 0;
   }
   return at;
+}
+
+/** Convert film playhead time in seconds to the owning segment index, segmentId, and offset_ms */
+function filmTimeToSfx(seconds, script) {
+  script = script || currentScriptData;
+  const rawLine = tlLineAt(seconds);
+  const segs = (script && script.segments) || [];
+  const clampedLine = Math.max(1, Math.min(rawLine, segs.length || 1));
+  const segIndex = clampedLine - 1;
+  const seg = segs[segIndex] || {};
+  const lineStart = tlLineStartTime(clampedLine);
+  const offsetSeconds = Math.max(0, seconds - lineStart);
+  const offsetMs = Math.round(offsetSeconds * 1000);
+  return {
+    segmentIndex: segIndex,
+    segmentId: seg.segment_id !== undefined ? seg.segment_id : (segIndex + 1),
+    offset_ms: offsetMs
+  };
+}
+
+/** Convert segment index or id and offset_ms to absolute film time in seconds */
+function sfxToFilmTime(segIndexOrId, offsetMs, script) {
+  script = script || currentScriptData;
+  const segs = (script && script.segments) || [];
+  let idx = -1;
+  if (typeof segIndexOrId === "number" && segIndexOrId >= 0 && segIndexOrId < segs.length) {
+    idx = segIndexOrId;
+  } else {
+    idx = segs.findIndex(s => s.segment_id === segIndexOrId);
+  }
+  if (idx < 0) idx = 0;
+  const lineStart = tlLineStartTime(idx + 1);
+  return lineStart + ((offsetMs || 0) / 1000.0);
+}
+
+/** Move an effect from one segment to another based on dropped film time, preserving dropped film time */
+function moveSfxEffect(fromSegIndex, sfxIndex, targetFilmSeconds, script) {
+  script = script || currentScriptData;
+  const segs = (script && script.segments) || [];
+  const fromSeg = segs[fromSegIndex];
+  if (!fromSeg || !fromSeg.sfx || !fromSeg.sfx[sfxIndex]) return null;
+
+  const effect = fromSeg.sfx.splice(sfxIndex, 1)[0];
+  const target = filmTimeToSfx(targetFilmSeconds, script);
+  const toSeg = segs[target.segmentIndex];
+  if (!toSeg.sfx) toSeg.sfx = [];
+  effect.offset_ms = target.offset_ms;
+  toSeg.sfx.push(effect);
+  return {
+    newSegIndex: target.segmentIndex,
+    newSfxIndex: toSeg.sfx.length - 1,
+    newOffsetMs: target.offset_ms
+  };
 }
 
 let tlDragState = null;
@@ -2899,9 +3106,18 @@ function drawTimelineInspector(number) {
   const frame = document.getElementById("tl-frame");
   if (!box) return;
 
+  if (tlSelectedType === "music") {
+    drawTimelineMusicInspector();
+    return;
+  }
+  if (tlSelectedType === "sfx" && tlSelectedSfx) {
+    drawTimelineSfxInspector(tlSelectedSfx.segIndex, tlSelectedSfx.sfxIndex);
+    return;
+  }
+
   const pic = tlPictures().find(p => p.number === number);
   if (!pic) {
-    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Click a picture on the timeline to cut, join, or drag its start.</p>`;
+    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Click a picture, music track, or sound effect on the timeline.</p>`;
     return;
   }
 
@@ -2947,6 +3163,405 @@ function drawTimelineInspector(number) {
     </div>`;
 }
 
+function selectTimelineMusic() {
+  tlSelectedType = "music";
+  tlSelected = null;
+  tlSelectedSfx = null;
+  document.querySelectorAll("#tl-lane-pictures .tl-clip").forEach(el => el.classList.remove("sel"));
+  document.querySelectorAll("#tl-lane-sfx .tl-sfx-chip").forEach(el => el.classList.remove("sel"));
+  const m = document.querySelector("#tl-lane-music .tl-music-block");
+  if (m) m.classList.add("sel");
+  drawTimelineMusicInspector();
+}
+
+function drawTimelineMusicInspector() {
+  const box = document.getElementById("tl-inspector");
+  if (!box) return;
+  const proj = (currentScriptData && currentScriptData.project) || {};
+  const bgMusic = proj.background_music || "";
+  const fname = bgMusic ? bgMusic.split(/[\\/]/).pop() : "No music";
+  const volDb = proj.music_volume_db !== undefined ? proj.music_volume_db : -20;
+  const fadeIn = proj.music_fade_in || 0;
+  const fadeOut = proj.music_fade_out || 0;
+
+  box.innerHTML = `
+    <span class="lbl">Inspector</span>
+    <h3>Background Music</h3>
+    <p class="sub mono" style="word-break:break-all">${escapeHtml(fname)}</p>
+    <div class="form-stacked mt-xs">
+      <div>
+        <label for="tl-music-vol">Level: <b id="tl-music-vol-val" class="mono">${volDb} dB</b></label>
+        <input type="range" id="tl-music-vol" min="-40" max="0" step="1" value="${volDb}"
+               class="w-full" oninput="onTimelineMusicVolumeChange(this.value)">
+      </div>
+      <div class="grid2 mt-xs">
+        <div>
+          <label for="tl-music-fadein">Fade in (s)</label>
+          <input type="number" id="tl-music-fadein" min="0" max="30" step="0.5" value="${fadeIn}"
+                 class="w-full mono" onchange="onTimelineMusicFadeChange('in', this.value)">
+        </div>
+        <div>
+          <label for="tl-music-fadeout">Fade out (s)</label>
+          <input type="number" id="tl-music-fadeout" min="0" max="30" step="0.5" value="${fadeOut}"
+                 class="w-full mono" onchange="onTimelineMusicFadeChange('out', this.value)">
+        </div>
+      </div>
+      <p class="hint">Preview level is honest: matches the final mix without ducking.</p>
+      <div class="tl-insp-acts mt-sm">
+        <button type="button" onclick="timelineAddMusic()">Change music file&hellip;</button>
+        <button type="button" class="ghost" onclick="removeTimelineMusic()">Remove music</button>
+      </div>
+    </div>
+  `;
+}
+
+async function onTimelineMusicVolumeChange(val) {
+  const db = parseInt(val, 10);
+  if (!currentScriptData.project) currentScriptData.project = {};
+  currentScriptData.project.music_volume_db = db;
+  const valEl = document.getElementById("tl-music-vol-val");
+  if (valEl) valEl.textContent = `${db} dB`;
+  const mAudio = timelineMusicAudioEl();
+  if (mAudio) {
+    mAudio.volume = Math.min(1.0, Math.max(0.0, Math.pow(10, db / 20)));
+  }
+  await persistCurrentScript();
+  renderTimelineScreen();
+}
+
+async function onTimelineMusicFadeChange(type, val) {
+  const sec = Math.max(0, parseFloat(val) || 0);
+  if (!currentScriptData.project) currentScriptData.project = {};
+  if (type === "in") {
+    currentScriptData.project.music_fade_in = sec;
+  } else {
+    currentScriptData.project.music_fade_out = sec;
+  }
+  await persistCurrentScript();
+  renderTimelineScreen();
+}
+
+async function timelineAddMusic() {
+  if (isWebMode) {
+    alert("File dialog requires native desktop mode.");
+    return;
+  }
+  try {
+    const projectDir = currentScriptPath ? currentScriptPath.replace(/[\\/][^\\/]*$/, "") : "";
+    const res = await window.pywebview.api.add_music_file(projectDir);
+    if (!res || !res.success) {
+      if (res && res.cancelled) return;
+      alert("Could not add music: " + ((res && res.error) || "unknown error"));
+      return;
+    }
+    if (!currentScriptData.project) currentScriptData.project = {};
+    currentScriptData.project.background_music = res.relative_path;
+    if (currentScriptData.project.music_volume_db === undefined) {
+      currentScriptData.project.music_volume_db = -20;
+    }
+    if (currentScriptData.project.music_fade_in === undefined) {
+      currentScriptData.project.music_fade_in = 0.0;
+    }
+    if (currentScriptData.project.music_fade_out === undefined) {
+      currentScriptData.project.music_fade_out = 0.0;
+    }
+    await persistCurrentScript();
+    await prepareTimelineMusic();
+    selectTimelineMusic();
+    renderTimelineScreen();
+  } catch (err) {
+    alert("Failed to add music: " + err);
+  }
+}
+
+async function removeTimelineMusic() {
+  if (!currentScriptData || !currentScriptData.project) return;
+  delete currentScriptData.project.background_music;
+  delete currentScriptData.project.music_volume_db;
+  delete currentScriptData.project.music_fade_in;
+  delete currentScriptData.project.music_fade_out;
+
+  const mAudio = timelineMusicAudioEl();
+  if (mAudio) {
+    mAudio.pause();
+    mAudio.removeAttribute("src");
+    mAudio.removeAttribute("data-music");
+    mAudio.removeAttribute("data-project");
+  }
+
+  await persistCurrentScript();
+  tlSelectedType = null;
+  renderTimelineScreen();
+  const box = document.getElementById("tl-inspector");
+  if (box) {
+    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Click a picture, music track, or sound effect on the timeline.</p>`;
+  }
+}
+
+function selectTimelineSfx(segIndex, sfxIndex, e) {
+  if (e) e.stopPropagation();
+  tlSelectedType = "sfx";
+  tlSelected = null;
+  tlSelectedSfx = { segIndex, sfxIndex };
+  document.querySelectorAll("#tl-lane-pictures .tl-clip").forEach(el => el.classList.remove("sel"));
+  document.querySelectorAll("#tl-lane-music .tl-music-block").forEach(el => el.classList.remove("sel"));
+  document.querySelectorAll("#tl-lane-sfx .tl-sfx-chip").forEach(el => {
+    const s = parseInt(el.dataset.seg, 10);
+    const x = parseInt(el.dataset.sfx, 10);
+    el.classList.toggle("sel", s === segIndex && x === sfxIndex);
+  });
+  drawTimelineSfxInspector(segIndex, sfxIndex);
+}
+
+function drawTimelineSfxInspector(segIndex, sfxIndex) {
+  const box = document.getElementById("tl-inspector");
+  if (!box) return;
+  const segs = (currentScriptData && currentScriptData.segments) || [];
+  const seg = segs[segIndex] || {};
+  const sfxList = seg.sfx || [];
+  const sfx = sfxList[sfxIndex];
+  if (!sfx) {
+    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Sound effect not found.</p>`;
+    return;
+  }
+  const filmTime = sfxToFilmTime(segIndex, sfx.offset_ms);
+
+  box.innerHTML = `
+    <span class="lbl">Inspector</span>
+    <h3>Sound Effect</h3>
+    <p class="sub mono" style="word-break:break-all"><b>${escapeHtml(sfx.name)}</b></p>
+    <div class="tl-insp-grid mono mt-xs">
+      <span class="k">film time</span><span class="v brass">${tlClock(filmTime)} (${filmTime.toFixed(2)}s)</span>
+      <span class="k">segment</span><span class="v">Line ${segIndex + 1} (id: ${seg.segment_id})</span>
+      <span class="k">offset</span><span class="v">+${sfx.offset_ms} ms</span>
+    </div>
+    <p class="hint mt-sm">Drag along the lane to re-time across segments. Effects are heard in the render, not in the timeline preview.</p>
+    <div class="tl-insp-acts mt-sm">
+      <button type="button" class="ghost" onclick="deleteSelectedSfx()" style="color:var(--gap); border-color:var(--gap)">Delete sound effect</button>
+    </div>
+  `;
+}
+
+async function deleteSelectedSfx() {
+  if (tlSelectedType !== "sfx" || !tlSelectedSfx) return;
+  const seg = (currentScriptData.segments || [])[tlSelectedSfx.segIndex];
+  if (!seg || !seg.sfx) return;
+  seg.sfx.splice(tlSelectedSfx.sfxIndex, 1);
+  tlSelectedType = null;
+  tlSelectedSfx = null;
+  await persistCurrentScript();
+  renderTimelineScreen();
+  const box = document.getElementById("tl-inspector");
+  if (box) {
+    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Click a picture, music track, or sound effect on the timeline.</p>`;
+  }
+}
+
+async function openAddSfxMenu() {
+  const modal = document.getElementById("sfx-picker-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  if (!soundLibraryData.length) {
+    await loadSoundLibrary();
+  }
+  renderSfxPickerList(soundLibraryData);
+}
+
+function closeSfxPickerModal() {
+  const modal = document.getElementById("sfx-picker-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function renderSfxPickerList(sounds) {
+  const list = document.getElementById("sfx-modal-list");
+  if (!list) return;
+  if (!sounds || sounds.length === 0) {
+    list.innerHTML = `<p class="sub p-sm">No sounds in library.</p>`;
+    return;
+  }
+  list.innerHTML = `
+    <table>
+      <thead><tr><th>Name</th><th>Query</th><th>Duration</th><th>Action</th></tr></thead>
+      <tbody>
+        ${sounds.map(s => {
+          const name = s.name || (s.path ? s.path.split("/").pop() : "Sound");
+          const query = s.query || "—";
+          const dur = s.duration ? `${s.duration.toFixed(1)}s` : "—";
+          return `<tr>
+            <td><b>${escapeHtml(name)}</b></td>
+            <td>${escapeHtml(query)}</td>
+            <td class="mono">${dur}</td>
+            <td>
+              <button type="button" class="primary" style="padding: 2px 8px; font-size:11px"
+                      onclick="addSfxFromLibraryItem('${escapeHtml(s.path || "")}')">Use</button>
+            </td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function filterSfxPicker(query) {
+  const q = (query || "").toLowerCase();
+  const filtered = soundLibraryData.filter(s => {
+    return (s.name || "").toLowerCase().includes(q) ||
+           (s.query || "").toLowerCase().includes(q) ||
+           (s.category || "").toLowerCase().includes(q);
+  });
+  renderSfxPickerList(filtered);
+}
+
+async function addSfxFromComputer() {
+  if (isWebMode) {
+    alert("File dialog requires native desktop mode.");
+    return;
+  }
+  try {
+    const projectDir = currentScriptPath ? currentScriptPath.replace(/[\\/][^\\/]*$/, "") : "";
+    const res = await window.pywebview.api.add_sfx_file(projectDir);
+    if (!res || !res.success) {
+      if (res && res.cancelled) return;
+      alert("Could not import effect: " + ((res && res.error) || "unknown error"));
+      return;
+    }
+    await _insertSfxAtPlayhead(res.name);
+    closeSfxPickerModal();
+  } catch (err) {
+    alert("Failed to add sound effect: " + err);
+  }
+}
+
+async function addSfxFromLibraryItem(soundRelPath) {
+  try {
+    const projectDir = currentScriptPath ? currentScriptPath.replace(/[\\/][^\\/]*$/, "") : "";
+    const res = await window.pywebview.api.add_sfx_from_library(soundRelPath, projectDir);
+    if (!res || !res.success) {
+      alert("Could not import effect: " + ((res && res.error) || "unknown error"));
+      return;
+    }
+    await _insertSfxAtPlayhead(res.name);
+    closeSfxPickerModal();
+  } catch (err) {
+    alert("Failed to add sound effect: " + err);
+  }
+}
+
+async function _insertSfxAtPlayhead(name) {
+  const target = filmTimeToSfx(tlPlayhead);
+  const segs = currentScriptData.segments || [];
+  const seg = segs[target.segmentIndex];
+  if (!seg) return;
+  if (!Array.isArray(seg.sfx)) seg.sfx = [];
+  seg.sfx.push({
+    name: name,
+    offset_ms: target.offset_ms
+  });
+  await persistCurrentScript();
+  tlSelectedType = "sfx";
+  tlSelectedSfx = { segIndex: target.segmentIndex, sfxIndex: seg.sfx.length - 1 };
+  renderTimelineScreen();
+  drawTimelineSfxInspector(target.segmentIndex, seg.sfx.length - 1);
+}
+
+let tlSfxDragState = null;
+
+function timelineSfxPointerDown(e, segIndex, sfxIndex) {
+  if (e.button !== 0 && e.pointerType === "mouse") return;
+  e.stopPropagation();
+  e.preventDefault();
+
+  const handle = e.currentTarget;
+  selectTimelineSfx(segIndex, sfxIndex, e);
+
+  try {
+    handle.setPointerCapture(e.pointerId);
+  } catch (_) {}
+
+  const secs = segmentSecondsList(currentScriptData);
+  const total = secs.reduce((a, b) => a + b, 0);
+  const seg = currentScriptData.segments[segIndex];
+  const sfx = seg.sfx[sfxIndex];
+  const initialTime = sfxToFilmTime(segIndex, sfx.offset_ms);
+
+  tlSfxDragState = {
+    pointerId: e.pointerId,
+    handle: handle,
+    segIndex: segIndex,
+    sfxIndex: sfxIndex,
+    sfxName: sfx.name,
+    initialTime: initialTime,
+    currentTime: initialTime,
+    totalFilmTime: total,
+    cancelled: false
+  };
+
+  handle.classList.add("dragging");
+
+  const onPointerMove = (ev) => {
+    if (!tlSfxDragState || tlSfxDragState.pointerId !== ev.pointerId) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (tlSfxDragState.cancelled) return;
+
+    const lanes = document.getElementById("tl-lanes");
+    if (!lanes) return;
+    const rect = lanes.getBoundingClientRect();
+    const filmTime = Math.max(0, Math.min(tlSfxDragState.totalFilmTime, (ev.clientX - rect.left) / tlZoom));
+    tlSfxDragState.currentTime = filmTime;
+    tlSfxDragState.handle.style.left = `${(filmTime * tlZoom).toFixed(1)}px`;
+    tlSfxDragState.handle.title = `${tlSfxDragState.sfxName} · ${tlClock(filmTime)}`;
+  };
+
+  const onPointerUp = async (ev) => {
+    if (!tlSfxDragState || tlSfxDragState.pointerId !== ev.pointerId) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerCancel);
+
+    const state = tlSfxDragState;
+    tlSfxDragState = null;
+
+    try {
+      state.handle.releasePointerCapture(ev.pointerId);
+    } catch (_) {}
+    state.handle.classList.remove("dragging");
+
+    if (state.cancelled) {
+      renderTimelineScreen();
+      return;
+    }
+
+    const res = moveSfxEffect(state.segIndex, state.sfxIndex, state.currentTime);
+    await persistCurrentScript();
+    if (res) {
+      tlSelectedType = "sfx";
+      tlSelectedSfx = { segIndex: res.newSegIndex, sfxIndex: res.newSfxIndex };
+    }
+    renderTimelineScreen();
+    if (tlSelectedSfx) {
+      drawTimelineSfxInspector(tlSelectedSfx.segIndex, tlSelectedSfx.sfxIndex);
+    }
+  };
+
+  const onPointerCancel = (ev) => {
+    if (!tlSfxDragState) return;
+    tlSfxDragState.cancelled = true;
+    tlSfxDragState.handle.classList.remove("dragging");
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerCancel);
+    renderTimelineScreen();
+  };
+
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerCancel);
+}
+
 /** Clicking anywhere in the lanes moves the playhead there. */
 function timelineScrubFrom(event) {
   const lanes = document.getElementById("tl-lanes");
@@ -2960,6 +3575,25 @@ window.setTimelineZoom = setTimelineZoom;
 window.timelineNudge = timelineNudge;
 window.timelineSeekPicture = timelineSeekPicture;
 window.selectTimelinePicture = selectTimelinePicture;
+window.selectTimelineMusic = selectTimelineMusic;
+window.selectTimelineSfx = selectTimelineSfx;
+window.drawTimelineMusicInspector = drawTimelineMusicInspector;
+window.drawTimelineSfxInspector = drawTimelineSfxInspector;
+window.onTimelineMusicVolumeChange = onTimelineMusicVolumeChange;
+window.onTimelineMusicFadeChange = onTimelineMusicFadeChange;
+window.timelineAddMusic = timelineAddMusic;
+window.removeTimelineMusic = removeTimelineMusic;
+window.openAddSfxMenu = openAddSfxMenu;
+window.closeSfxPickerModal = closeSfxPickerModal;
+window.renderSfxPickerList = renderSfxPickerList;
+window.filterSfxPicker = filterSfxPicker;
+window.addSfxFromComputer = addSfxFromComputer;
+window.addSfxFromLibraryItem = addSfxFromLibraryItem;
+window.deleteSelectedSfx = deleteSelectedSfx;
+window.filmTimeToSfx = filmTimeToSfx;
+window.sfxToFilmTime = sfxToFilmTime;
+window.moveSfxEffect = moveSfxEffect;
+window.timelineSfxPointerDown = timelineSfxPointerDown;
 window.timelineScrubFrom = timelineScrubFrom;
 window.timelineSeek = timelineSeek;
 window.timelineTogglePlay = timelineTogglePlay;
@@ -2971,19 +3605,27 @@ window.timelineHandleKeyDown = timelineHandleKeyDown;
 window.timelineHandleCancel = timelineHandleCancel;
 window.moveTimelinePictureBoundary = moveTimelinePictureBoundary;
 
-// Spacebar toggles playback; Escape cancels drag
+// Spacebar toggles playback; Escape cancels drag; Delete/Backspace deletes selected SFX
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && tlDragState) {
     e.preventDefault();
     timelineHandleCancel(e);
     return;
   }
-  if (e.key === " " || e.code === "Space") {
-    const el = document.activeElement;
-    const tag = el && el.tagName ? el.tagName.toUpperCase() : "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el && el.isContentEditable)) {
+  const el = document.activeElement;
+  const tag = el && el.tagName ? el.tagName.toUpperCase() : "";
+  const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el && el.isContentEditable);
+  if (isInput) return;
+
+  if (e.key === "Delete" || e.key === "Backspace") {
+    if (tlSelectedType === "sfx" && tlSelectedSfx) {
+      e.preventDefault();
+      deleteSelectedSfx();
       return;
     }
+  }
+
+  if (e.key === " " || e.code === "Space") {
     const timelinePane = document.querySelector('.pane[data-pane="timeline"]');
     if (timelinePane && timelinePane.getAttribute("data-on") === "1") {
       e.preventDefault();
@@ -3713,13 +4355,65 @@ async function exportTimelineToWolfCut() {
 }
 window.exportTimelineToWolfCut = exportTimelineToWolfCut;
 
-// ── Library Screen Management ────────────────────────────────────────────────
 function switchLibTab(tab) {
   document.getElementById("tab-lib-images").className = `lib-tab ${tab === 'images' ? 'active' : ''}`;
   document.getElementById("tab-lib-sounds").className = `lib-tab ${tab === 'sounds' ? 'active' : ''}`;
 
   document.getElementById("lib-content-images").style.display = tab === "images" ? "flex" : "none";
   document.getElementById("lib-content-sounds").style.display = tab === "sounds" ? "flex" : "none";
+  if (tab === "sounds") {
+    loadSoundLibrary();
+  }
+}
+
+let soundLibraryData = [];
+
+async function loadSoundLibrary() {
+  if (isWebMode) return;
+  try {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_sound_library) return;
+    const res = await window.pywebview.api.get_sound_library();
+    soundLibraryData = res.sounds || [];
+    renderSoundLibrary(soundLibraryData);
+  } catch (e) {
+    console.error("Failed to load sound library:", e);
+  }
+}
+
+function renderSoundLibrary(sounds) {
+  const tbody = document.getElementById("lib-sounds-tbody");
+  const empty = document.getElementById("lib-sounds-empty");
+  const countPill = document.getElementById("lib-sounds-count-pill");
+  if (!tbody) return;
+
+  if (countPill) {
+    countPill.textContent = `${sounds.length} sound${sounds.length === 1 ? "" : "s"}`;
+  }
+
+  if (!sounds || sounds.length === 0) {
+    tbody.innerHTML = "";
+    if (empty) empty.classList.remove("hidden");
+    return;
+  }
+  if (empty) empty.classList.add("hidden");
+
+  tbody.innerHTML = sounds.map(s => {
+    const name = s.name || (s.path ? s.path.split("/").pop() : "Unknown");
+    const query = s.query || "—";
+    const cat = s.category || "beds";
+    const durSec = parseFloat(s.duration) || 0;
+    const dur = `${Math.floor(durSec / 60)}:${String(Math.floor(durSec % 60)).padStart(2, "0")}`;
+    const lic = s.licence_type || "CC0";
+    const attr = s.attribution || "—";
+    return `<tr>
+      <td><b>${escapeHtml(name)}</b></td>
+      <td>${escapeHtml(query)}</td>
+      <td><span class="pill p-ok">${escapeHtml(cat)}</span></td>
+      <td class="mono">${dur}</td>
+      <td><span class="pill p-mute">${escapeHtml(lic)}</span></td>
+      <td class="mono text-muted" style="font-size:11px">${escapeHtml(attr)}</td>
+    </tr>`;
+  }).join("");
 }
 
 async function loadLibraryData(query = "") {
@@ -3732,6 +4426,8 @@ async function loadLibraryData(query = "") {
     document.getElementById("lib-counts-label").textContent =
       `${res.total_images} images · ${res.sounds_count} sounds${pending}`;
     document.getElementById("house-active-count").textContent = res.total_images;
+    document.getElementById("house-retired-count").textContent = res.retired_count;
+    await loadSoundLibrary();
   } catch (e) {
     console.error("Failed to load library data:", e);
   }

@@ -504,12 +504,24 @@ class RenderOrchestrator:
             master_audio_path = os.path.join(self.cache_dir, "master_narration.mp3")
             stitch_master_audio(segment_audio_paths, master_audio_path)
 
+            bg_music = proj.get("background_music")
+            if bg_music and not os.path.isabs(bg_music):
+                cand = os.path.join(os.path.dirname(os.path.abspath(script_path)), bg_music)
+                if os.path.exists(cand):
+                    bg_music = cand
+                else:
+                    cand2 = os.path.join(self.base_dir, bg_music)
+                    if os.path.exists(cand2):
+                        bg_music = cand2
+
             stitch_segments(
                 segment_paths=segment_paths,
                 output_path=output_path,
                 master_audio_path=master_audio_path,
-                background_music=proj.get("background_music"),
-                music_volume_db=proj.get("music_volume_db", -20),
+                background_music=bg_music,
+                music_volume_db=float(proj.get("music_volume_db", -20)),
+                music_fade_in=float(proj.get("music_fade_in", 0.0) or 0.0),
+                music_fade_out=float(proj.get("music_fade_out", 0.0) or 0.0),
                 on_progress=lambda msg: self._log(msg),
             )
         except Exception as e:

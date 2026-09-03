@@ -286,6 +286,7 @@
       <div class="tl-top">
         <div class="tl-preview">
           <audio id="tl-audio" preload="metadata"></audio>
+          <audio id="tl-music-audio" preload="metadata" loop></audio>
           <div class="tl-frame" id="tl-frame">
             <p class="sub">Plan a storyboard first, then this shows the picture on screen at the playhead.</p>
           </div>
@@ -310,6 +311,8 @@
           <span class="tl-ruler-corner mono">tracks</span>
           <span class="tl-track-name">Pictures</span>
           <span class="tl-track-name">Narration</span>
+          <span class="tl-track-name">Music</span>
+          <span class="tl-track-name">Sound effects</span>
           <span class="tl-track-name">Captions</span>
         </div>
         <div class="tl-scroll" id="tl-scroll">
@@ -317,6 +320,8 @@
             <div class="tl-ruler" id="tl-ruler"></div>
             <div class="tl-lane" id="tl-lane-pictures"></div>
             <div class="tl-lane" id="tl-lane-narration"></div>
+            <div class="tl-lane" id="tl-lane-music"></div>
+            <div class="tl-lane" id="tl-lane-sfx"></div>
             <div class="tl-lane" id="tl-lane-captions"></div>
             <div class="tl-playhead" id="tl-playhead"></div>
           </div>
@@ -391,7 +396,7 @@
     <div class="pane" data-pane="library">
       <div class="row-between">
         <h2>Library</h2>
-        <span class="mono" id="lib-counts-label">0 images &middot; 87 sounds &middot; 12 music beds</span>
+        <span class="mono" id="lib-counts-label">0 images &middot; 0 sounds</span>
       </div>
 
       <div class="lib-tabs">
@@ -413,21 +418,12 @@
           <!-- Dynamically populated from backend library API -->
         </div>
 
-        <div class="grid2">
-          <div class="card">
-            <h3>Coverage</h3>
-            <div class="kv"><span>Landscapes &amp; terrain</span><b style="color:var(--ok)">strong</b></div>
-            <div class="kv"><span>Architecture</span><b style="color:var(--ok)">strong</b></div>
-            <div class="kv"><span>Crowds &amp; councils</span><b style="color:var(--warn)">thin</b></div>
-            <div class="kv"><span>Battle &amp; aftermath</span><b style="color:var(--warn)">thin</b></div>
-          </div>
-          <div class="card">
-            <h3>Housekeeping</h3>
-            <div class="kv"><span>Active indexed images</span><b id="house-active-count">1,309</b></div>
-            <div class="kv"><span>Retired</span><b>6</b></div>
-            <div class="row">
-              <button type="button" class="ghost" onclick="clearLibraryCache()">Clear Cache</button>
-            </div>
+        <div class="card">
+          <h3>Housekeeping</h3>
+          <div class="kv"><span>Active indexed images</span><b id="house-active-count">&mdash;</b></div>
+          <div class="kv"><span>Retired</span><b id="house-retired-count">&mdash;</b></div>
+          <div class="row">
+            <button type="button" class="ghost" onclick="clearLibraryCache()">Clear Cache</button>
           </div>
         </div>
         <p class="hint">Permanent deletion lives <b>here</b>, never on the storyboard. Rejecting a shot on the storyboard is about fit, not quality.</p>
@@ -436,18 +432,19 @@
       <!-- SOUNDS TAB CONTENT -->
       <div id="lib-content-sounds" class="lib-content-col" style="display:none">
         <div class="card">
-          <h3>Sound Library &amp; Music Beds</h3>
-          <p class="sub">87 sound effects and 12 ambient sound beds ducked under narration.</p>
+          <div class="row-between">
+            <h3>Sound Library &amp; Music Beds</h3>
+            <span class="pill p-ok" id="lib-sounds-count-pill">0 sounds</span>
+          </div>
+          <p class="sub" id="lib-sounds-sub">Ambient sound beds ducked under narration.</p>
           <div class="tbl mt-sm">
-            <table>
-              <thead><tr><th>Track</th><th>Category</th><th>Duration</th><th>Type</th></tr></thead>
-              <tbody>
-                <tr><td>Desert Wind Ambience</td><td>Ambience</td><td class="mono">3:45</td><td><span class="pill p-ok">sound bed</span></td></tr>
-                <tr><td>Horses Galloping</td><td>SFX</td><td class="mono">0:12</td><td><span class="pill p-mute">effect</span></td></tr>
-                <tr><td>Sword Clash Heavy</td><td>SFX</td><td class="mono">0:03</td><td><span class="pill p-mute">effect</span></td></tr>
+            <table id="lib-sounds-table">
+              <thead><tr><th>Track</th><th>Search Query</th><th>Category</th><th>Duration</th><th>Licence</th><th>Attribution</th></tr></thead>
+              <tbody id="lib-sounds-tbody">
               </tbody>
             </table>
           </div>
+          <div id="lib-sounds-empty" class="hidden text-muted mt-sm">The sound library is empty.</div>
         </div>
       </div>
     </div>
@@ -859,6 +856,36 @@
 
       <div class="row-end">
         <button type="button" class="ghost" onclick="closeReplaceModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SFX PICKER MODAL -->
+  <div id="sfx-picker-modal" class="modal-overlay hidden">
+    <div class="dlg dlg-wide">
+      <div class="dlg-head">
+        <h3>Add Sound Effect at Playhead</h3>
+        <button type="button" class="ghost dlg-close" onclick="closeSfxPickerModal()" aria-label="Close">Cancel &times;</button>
+      </div>
+      <p class="sub">Effects are placed at the current playhead position and heard in the final render.</p>
+
+      <div class="modal-sec">
+        <span class="lbl">Choose from computer</span>
+        <button type="button" class="primary" onclick="addSfxFromComputer()">Choose audio file (.wav, .mp3)&hellip;</button>
+      </div>
+
+      <div class="modal-sec">
+        <div class="row-between">
+          <span class="lbl">Or choose from Sound Library</span>
+          <input type="search" id="sfx-modal-search" placeholder="Search sounds..." oninput="filterSfxPicker(this.value)" class="search-wide">
+        </div>
+        <div id="sfx-modal-list" class="tbl mt-xs modal-scroll-tbl">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div class="row-end">
+        <button type="button" class="ghost" onclick="closeSfxPickerModal()">Cancel</button>
       </div>
     </div>
   </div>

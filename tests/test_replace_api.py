@@ -95,3 +95,20 @@ def test_retire_reports_a_missing_file_instead_of_claiming_success(api):
     res = api.retire_library_image("library/images/never_existed.jpg")
     assert res["success"] is False
     assert "not found" in res["error"]
+
+
+def test_the_housekeeping_retired_count_follows_the_retire_button(api, tmp_path):
+    """
+    The Library screen printed "Retired: 6" from a literal. Six is the file count
+    of library/_rejected/, a folder nothing has written since retiring was built,
+    so the number never moved when an image was actually retired. It has to now.
+    """
+    before = api.get_library_data()
+    assert before["retired_count"] == 0
+    assert before["total_images"] == 3
+
+    assert api.retire_library_image("library/images/img_1.jpg")["success"] is True
+
+    after = api.get_library_data()
+    assert after["retired_count"] == 1, "retiring an image left the Housekeeping figure behind"
+    assert after["total_images"] == 2, "the retired image is still counted as active"

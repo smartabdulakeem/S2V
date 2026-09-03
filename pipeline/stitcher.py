@@ -12,12 +12,32 @@ from pathlib import Path
 from pipeline.ffmpeg_locate import find_ffmpeg
 
 
+def build_music_filter(
+    music_volume_db: float = -20,
+    music_fade_in: float = 0.0,
+    music_fade_out: float = 0.0,
+    film_duration: float = 0.0,
+) -> str:
+    """Build the FFmpeg filter_complex string for background music mixing."""
+    volume_factor = 10 ** (music_volume_db / 20)
+    parts = [f"[2:a]volume={volume_factor:.4f}"]
+    if music_fade_in and music_fade_in > 0:
+        parts.append(f"afade=t=in:st=0:d={music_fade_in:.3f}")
+    if music_fade_out and music_fade_out > 0 and film_duration > 0:
+        fade_out_start = max(0.0, film_duration - music_fade_out)
+        parts.append(f"afade=t=out:st={fade_out_start:.3f}:d={music_fade_out:.3f}")
+    music_chain = ",".join(parts)
+    return f"{music_chain}[music];[1:a][music]amix=inputs=2:duration=first:dropout_transition=3:normalize=0[aout]"
+
+
 def stitch_segments(
     segment_paths: list[str],
     output_path: str,
     master_audio_path: str,
     background_music: str | None = None,
     music_volume_db: int = -20,
+    music_fade_in: float = 0.0,
+    music_fade_out: float = 0.0,
     on_progress=None,
 ) -> str:
     """
@@ -71,10 +91,16 @@ def stitch_segments(
             if on_progress:
                 on_progress("Mixing background music...")
 
-            volume_factor = 10 ** (music_volume_db / 20)
-            music_filter = (
-                f"[1:a][2:a]amix=inputs=2:duration=first:dropout_transition=3"
-                f",volume={volume_factor:.4f}[aout]"
+            film_duration = 0.0
+            if music_fade_out and music_fade_out > 0:
+                from pipeline.narration_timing import probe_seconds
+                film_duration = probe_seconds(master_audio_path) or 0.0
+
+            music_filter = build_music_filter(
+                music_volume_db=music_volume_db,
+                music_fade_in=music_fade_in,
+                music_fade_out=music_fade_out,
+                film_duration=film_duration,
             )
             cmd2 = [
                 ffmpeg, "-y",

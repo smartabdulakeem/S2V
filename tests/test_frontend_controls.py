@@ -121,3 +121,44 @@ def test_the_duplicates_are_gone():
     assert "btn-open-wolfcut-board" not in html, "btn-open-wolfcut-board still in index.html"
     assert "btn-start-render-board" not in html, "btn-start-render-board still in index.html"
     assert "btn-render-film" in html, "btn-render-film missing in index.html"
+
+
+def test_the_invented_coverage_card_is_gone():
+    """
+    The Images tab printed a coverage breakdown - "Landscapes & terrain: strong",
+    "Battle & aftermath: thin" - from four literals with inline colours. Nothing
+    in the library carries a category: manifest.jsonl records subject, setting,
+    light and shot, and no taxonomy exists anywhere to score against. This is the
+    Spending panel again, so the card goes rather than gets faked.
+    """
+    with open(INDEX_HTML, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    invented = [
+        "Landscapes &amp; terrain",
+        "Crowds &amp; councils",
+        "Battle &amp; aftermath",
+    ]
+    found = [phrase for phrase in invented if phrase in html]
+    assert not found, f"Invented coverage rows are back in index.html: {found}"
+
+
+def test_housekeeping_figures_come_from_the_backend():
+    """
+    Both Housekeeping numbers must be written by loadLibraryData, never typed.
+    "Retired" was a literal 6, and "Active indexed images" shipped a 1,309
+    placeholder that stood until - and only if - the backend answered.
+    """
+    with open(INDEX_HTML, "r", encoding="utf-8") as f:
+        html = f.read()
+    with open(APP_JS, "r", encoding="utf-8") as f:
+        js = f.read()
+
+    assert 'id="house-retired-count"' in html, "Retired has no id for app.js to write into"
+    assert "1,309" not in html, "the 1,309 placeholder is back in index.html"
+
+    active = re.search(r'"house-active-count"\)\.textContent\s*=\s*res\.total_images', js)
+    assert active, "app.js no longer writes Active indexed images from the backend"
+
+    retired = re.search(r'"house-retired-count"\)\.textContent\s*=\s*res\.retired_count', js)
+    assert retired, "app.js does not write Retired from the backend"

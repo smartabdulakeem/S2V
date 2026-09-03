@@ -72,7 +72,7 @@ not a description of it.
 - **A stale `cache/` causes phantom failures.** Tests touching `describe_shots` must patch
   `_load_disk_cache` / `_save_disk_cache` rather than read the real `cache/planning/`.
 - **The shot cache key is `v9`** (`composer.py`). If what a shot renders can change, bump it.
-- **Inline `style="` in `index.html` is capped at 19** and is currently at 19, all dynamic state.
+- **Inline `style="` in `index.html` is capped at 19** and is currently at 15, all dynamic state.
   Layout goes in `style.css`.
 - **Full suite is ~8 minutes.** Current baseline: **507 passed, 1 xfailed, 0 failures**.
 - Python is not on PATH: `C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe`.

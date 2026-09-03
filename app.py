@@ -1144,13 +1144,29 @@ class Api:
             "sounds_pending": count(os.path.join(sounds_dir, "_inbox")),
         }
 
+    def _count_retired(self) -> int:
+        """
+        How many images "Retire it" has moved out of the retrieval pool.
+
+        The Library screen printed a flat 6, which is the file count of
+        library/_rejected/ — a folder nothing in this codebase has written
+        since retiring was implemented. The honest number is what sits in
+        library/_retired/, where retire_library_image puts things.
+        """
+        retired_dir = os.path.join(BASE_DIR, "library", "_retired")
+        if not os.path.isdir(retired_dir):
+            return 0
+        exts = (".jpg", ".jpeg", ".png", ".webp")
+        return len([f for f in os.listdir(retired_dir) if f.lower().endswith(exts)])
+
     def get_library_data(self, query: str = "") -> dict:
-        """Return library image count, coverage stats, and matching images."""
+        """Return library image counts and matching images."""
         images_dir = os.path.join(BASE_DIR, "library", "images")
         sounds = self._count_sounds()
+        retired = self._count_retired()
 
         if not os.path.exists(images_dir):
-            return {"total_images": 0, "images": [], **sounds}
+            return {"total_images": 0, "images": [], "retired_count": retired, **sounds}
 
         img_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
         if query:
@@ -1168,7 +1184,17 @@ class Api:
         return {
             "total_images": len(img_files),
             "images": images_info,
+            "retired_count": retired,
             **sounds,
+        }
+
+    def get_sound_library(self) -> dict:
+        """Return usable sound beds and effects from the sound library manifest."""
+        from pipeline.sound import load_beds
+        beds = load_beds(include_inbox=True)
+        return {
+            "total_sounds": len(beds),
+            "sounds": beds,
         }
 
     def delete_library_image(self, filename: str) -> dict:
@@ -1611,6 +1637,143 @@ class Api:
             return res
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def prepare_timeline_music(self, script_data: dict, project_dir: str = "") -> dict:
+        """Tell the page where the background music file is so it can be previewed."""
+        try:
+            import urllib.parse
+            from media_server import start_media_server
+
+            proj = (script_data or {}).get("project", {})
+            bg_music = proj.get("background_music")
+            if not bg_music:
+                return {"ok": False, "error": "No background music configured"}
+
+            project_dir = self._resolve_project_dir(script_data, project_dir)
+            if not os.path.isabs(bg_music):
+                cand = os.path.join(project_dir, bg_music)
+                if os.path.exists(cand):
+                    music_path = cand
+                else:
+                    cand2 = os.path.join(BASE_DIR, bg_music)
+                    if os.path.exists(cand2):
+                        music_path = cand2
+                    else:
+                        return {"ok": False, "error": f"Music file not found: {bg_music}"}
+            else:
+                music_path = bg_music
+
+            if not os.path.exists(music_path):
+                return {"ok": False, "error": f"Music file not found: {bg_music}"}
+
+            abs_path = os.path.abspath(music_path)
+            is_devserver = (
+                os.environ.get("SMART_STUDIO_DEVSERVER") == "1"
+                or (self._window is not None and type(self._window).__name__ == "DevWindow")
+            )
+            if is_devserver:
+                src = f"/media?path={urllib.parse.quote(abs_path)}"
+            else:
+                host, port, token = start_media_server(BASE_DIR)
+                src = f"http://{host}:{port}/media?token={token}&path={urllib.parse.quote(abs_path)}"
+
+            return {"ok": True, "src": src, "path": abs_path}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def add_music_file(self, project_dir: str = "", file_path: str = "") -> dict:
+        """Open a file picker (or use file_path) and copy the chosen audio into <project>/assets/music/."""
+        try:
+            import shutil
+            source = file_path
+            if not source:
+                if self._window is None:
+                    return {"success": False, "cancelled": True, "error": "Window not available for file dialog"}
+                picked = self._window.create_file_dialog(
+                    dialog_type=10,  # OPEN_DIALOG
+                    allow_multiple=False,
+                    file_types=("Audio files (*.mp3;*.wav;*.ogg;*.m4a;*.aac)", "All files (*.*)"),
+                )
+                if not picked:
+                    return {"success": False, "cancelled": True}
+                source = picked[0]
+
+            if not os.path.exists(source):
+                return {"success": False, "error": f"File does not exist: {source}"}
+
+            if not project_dir:
+                project_dir = os.path.join(BASE_DIR, "output")
+            target_dir = os.path.join(project_dir, "assets", "music")
+            os.makedirs(target_dir, exist_ok=True)
+
+            filename = os.path.basename(source)
+            dest = os.path.join(target_dir, filename)
+            if os.path.abspath(source) != os.path.abspath(dest):
+                shutil.copy2(source, dest)
+
+            rel_path = f"assets/music/{filename}"
+            return {"success": True, "relative_path": rel_path, "filename": filename}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def add_sfx_file(self, project_dir: str = "", file_path: str = "") -> dict:
+        """Open a file picker (or use file_path) and copy the chosen effect into <project>/assets/sfx/."""
+        try:
+            import shutil
+            source = file_path
+            if not source:
+                if self._window is None:
+                    return {"success": False, "cancelled": True, "error": "Window not available for file dialog"}
+                picked = self._window.create_file_dialog(
+                    dialog_type=10,  # OPEN_DIALOG
+                    allow_multiple=False,
+                    file_types=("Audio files (*.wav;*.mp3;*.ogg)", "All files (*.*)"),
+                )
+                if not picked:
+                    return {"success": False, "cancelled": True}
+                source = picked[0]
+
+            if not os.path.exists(source):
+                return {"success": False, "error": f"File does not exist: {source}"}
+
+            if not project_dir:
+                project_dir = os.path.join(BASE_DIR, "output")
+            target_dir = os.path.join(project_dir, "assets", "sfx")
+            os.makedirs(target_dir, exist_ok=True)
+
+            filename = os.path.basename(source)
+            dest = os.path.join(target_dir, filename)
+            if os.path.abspath(source) != os.path.abspath(dest):
+                shutil.copy2(source, dest)
+
+            return {"success": True, "name": filename, "filename": filename}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def add_sfx_from_library(self, sound_rel_path: str, project_dir: str = "") -> dict:
+        """Copy a sound from the library into <project>/assets/sfx/."""
+        try:
+            import shutil
+            if not sound_rel_path:
+                return {"success": False, "error": "No sound path specified"}
+
+            source = sound_rel_path if os.path.isabs(sound_rel_path) else os.path.join(BASE_DIR, sound_rel_path)
+            if not os.path.exists(source):
+                return {"success": False, "error": f"Library sound not found: {sound_rel_path}"}
+
+            if not project_dir:
+                project_dir = os.path.join(BASE_DIR, "output")
+            target_dir = os.path.join(project_dir, "assets", "sfx")
+            os.makedirs(target_dir, exist_ok=True)
+
+            filename = os.path.basename(source)
+            dest = os.path.join(target_dir, filename)
+            if os.path.abspath(source) != os.path.abspath(dest):
+                shutil.copy2(source, dest)
+
+            return {"success": True, "name": filename, "filename": filename}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def export_wolfcut_timeline(self, script_data: dict, project_dir: str = "") -> dict:
         """
