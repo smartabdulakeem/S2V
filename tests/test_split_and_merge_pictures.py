@@ -12,8 +12,8 @@ and merging is flipping that one field and nothing else.
 
 import pytest
 
-from pipeline.picture_plan import (apply_spans, merge_picture, picture_boundaries,
-                                   split_picture)
+from pipeline.picture_plan import (apply_spans, merge_picture, move_picture_boundary,
+                                   picture_boundaries, split_picture)
 
 
 def script(lines=12):
@@ -216,3 +216,99 @@ def test_a_shot_less_segment_can_still_be_merged_away():
 
     assert merge_picture(s, 7)["success"] is True
     assert picture_boundaries(s) == [1, 5, 9]
+
+
+# ── moving boundaries ────────────────────────────────────────────────────────
+
+def test_a_moved_boundary_keeps_the_description():
+    """
+    Moving a boundary preserves visual descriptions on both pictures.
+    Naive merge + split destroys them.
+    """
+    s = planned()  # pic 1: 1-4 "the first", pic 2: 5-8 "the second", pic 3: 9-12 "the third"
+
+    # 1. move_picture_boundary preserves both
+    out = move_picture_boundary(s, 5, 7)
+    assert out["success"] is True
+    assert out["moved_to"] == 7
+    d = descriptions(s)
+    assert d[1] == "the first"
+    assert d[7] == "the second"
+    assert d[5] == ""
+
+    # 2. Assert that naive merge then split LOSES the description
+    s2 = planned()
+    merge_picture(s2, 5)
+    split_picture(s2, 7)
+    d2 = descriptions(s2)
+    assert d2[1] == "the first"
+    assert d2[7] == "", "naive merge then split must lose the description"
+
+
+def test_the_bound_image_travels():
+    """Resolved image and score travel from from_line to to_line."""
+    s = planned()
+    # Set resolved on picture 2 (starts at line 5)
+    s["segments"][4]["shots"][0]["resolved"] = "library/images/pic2.jpg"
+    s["segments"][4]["shots"][0]["resolved_score"] = 0.95
+
+    out = move_picture_boundary(s, 5, 7)
+    assert out["success"] is True
+    assert s["segments"][6]["shots"][0].get("resolved") == "library/images/pic2.jpg"
+    assert s["segments"][6]["shots"][0].get("resolved_score") == 0.95
+    assert "resolved" not in s["segments"][4]["shots"][0]
+
+
+def test_clamping_at_neighbouring_boundaries():
+    """Dragging past neighbours clamps cleanly to prev+1 and next-1."""
+    s = planned()  # boundaries are [1, 5, 9]
+    # Move boundary 5 before previous boundary (1): clamps to 1 + 1 = 2
+    out1 = move_picture_boundary(s, 5, 0)
+    assert out1["success"] is True
+    assert out1["moved_to"] == 2
+    assert picture_boundaries(s) == [1, 2, 9]
+
+    # Move boundary 2 past next boundary (9): clamps to 9 - 1 = 8
+    out2 = move_picture_boundary(s, 2, 20)
+    assert out2["success"] is True
+    assert out2["moved_to"] == 8
+    assert picture_boundaries(s) == [1, 8, 9]
+
+
+def test_picture_count_never_changes():
+    """len(picture_boundaries) is identical before and after every successful move."""
+    s = planned()
+    initial_count = len(picture_boundaries(s))
+    for target in (2, 3, 4, 6, 7, 8):
+        current_b2 = picture_boundaries(s)[1]
+        out = move_picture_boundary(s, current_b2, target)
+        assert out["success"] is True
+        assert len(picture_boundaries(s)) == initial_count
+        assert out["pictures"] == initial_count
+
+
+def test_move_refusals():
+    """No picture at from_line, or from_line is first boundary: both refuse."""
+    s = planned()  # boundaries [1, 5, 9]
+    # No picture starts at line 3
+    out1 = move_picture_boundary(s, 3, 4)
+    assert out1["success"] is False
+    assert "3" in out1["error"]
+
+    # Picture 1 starts at line 1 and cannot move
+    out2 = move_picture_boundary(s, 1, 2)
+    assert out2["success"] is False
+    assert "1" in out2["error"]
+
+
+def test_noop_move_leaves_script_identical():
+    """Moving to the same line returns success and leaves script unchanged."""
+    import json
+    s = planned()
+    before_json = json.dumps(s, sort_keys=True)
+    out = move_picture_boundary(s, 5, 5)
+    assert out["success"] is True
+    assert out["moved_to"] == 5
+    after_json = json.dumps(s, sort_keys=True)
+    assert before_json == after_json
+

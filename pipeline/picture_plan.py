@@ -687,3 +687,97 @@ def merge_picture(script_data: dict, at_line: int) -> dict:
 
     return {"success": True, "script_data": script_data,
             "pictures": len(picture_boundaries(script_data)), "merged_at": line}
+
+
+def move_picture_boundary(script_data: dict, from_line: int, to_line: int) -> dict:
+    """
+    Move the boundary where a picture starts, keeping both pictures' identity.
+
+    The picture that starts at `from_line` starts at `to_line` instead. It keeps
+    its description, its prompt and whatever image is bound to it — only the
+    narration it covers changes. The picture before it keeps everything too; it
+    simply holds for longer or shorter.
+    """
+    segments = script_data.get("segments") or []
+    try:
+        from_line = int(from_line)
+        to_line = int(to_line)
+    except (TypeError, ValueError):
+        return {"success": False, "error": "Line numbers must be integers."}
+
+    if not 1 <= from_line <= len(segments):
+        return {"success": False, "error": f"There is no script line {from_line}."}
+
+    starts = picture_boundaries(script_data)
+    if from_line not in starts:
+        return {"success": False, "error": f"No picture starts at line {from_line}."}
+
+    if from_line == starts[0]:
+        return {"success": False, "error": f"Picture 1 starts at line {from_line} and cannot be moved."}
+
+    idx = starts.index(from_line)
+    prev_boundary = starts[idx - 1]
+    next_boundary = starts[idx + 1] if idx + 1 < len(starts) else len(segments) + 1
+
+    # Clamp to_line into (prev_boundary, next_boundary) and within script
+    min_line = prev_boundary + 1
+    max_line = next_boundary - 1
+    clamped_to = max(min_line, min(to_line, max_line))
+
+    if clamped_to == from_line:
+        return {
+            "success": True,
+            "script_data": script_data,
+            "pictures": len(starts),
+            "moved_from": from_line,
+            "moved_to": from_line,
+        }
+
+    transfer_keys = (
+        "visual_description",
+        "prompt",
+        "resolved",
+        "resolved_score",
+        "run_index",
+        "run_position",
+    )
+
+    prev_owner = _first_shot(segments[prev_boundary - 1], prev_boundary)
+    prev_owner_id = prev_owner.get("shot_id")
+
+    curr_owner = _first_shot(segments[from_line - 1], from_line)
+    saved_data = {k: curr_owner[k] for k in transfer_keys if k in curr_owner}
+
+    new_owner = _first_shot(segments[clamped_to - 1], clamped_to)
+    new_owner_id = new_owner.get("shot_id")
+
+    # 1. Update lines between prev_boundary and clamped_to (they belong to prev_owner)
+    for i in range(prev_boundary + 1, clamped_to):
+        shot = _first_shot(segments[i - 1], i)
+        shot["share_with"] = prev_owner_id
+
+    # 2. Make clamped_to the new owner of this picture
+    new_owner["share_with"] = None
+    for k, v in saved_data.items():
+        new_owner[k] = v
+
+    # 3. If from_line != clamped_to, clear saved keys from old owner shot
+    curr_owner = _first_shot(segments[from_line - 1], from_line)
+    if from_line != clamped_to:
+        for k in transfer_keys:
+            curr_owner.pop(k, None)
+
+    # 4. Update lines from clamped_to + 1 up to next_boundary (they belong to new_owner)
+    for i in range(clamped_to + 1, next_boundary):
+        shot = _first_shot(segments[i - 1], i)
+        shot["share_with"] = new_owner_id
+
+
+    return {
+        "success": True,
+        "script_data": script_data,
+        "pictures": len(picture_boundaries(script_data)),
+        "moved_from": from_line,
+        "moved_to": clamped_to,
+    }
+

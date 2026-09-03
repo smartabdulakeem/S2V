@@ -1005,6 +1005,20 @@ class Api:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def move_picture_boundary_to(self, script_data: dict, from_line: int, to_line: int) -> dict:
+        """Move the boundary where a picture starts to a new narration line."""
+        try:
+            from pipeline.picture_plan import move_picture_boundary
+            from pipeline.text_parser import assign_effects, style_of
+
+            out = move_picture_boundary(script_data, from_line, to_line)
+            if out.get("success"):
+                assign_effects(script_data, style_of(script_data))
+            return out
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
     def fill_gaps_with_nearest(self, script_data: dict, allow_reuse: bool = True) -> dict:
         """
         Accept the closest library image for every gap, in one action.

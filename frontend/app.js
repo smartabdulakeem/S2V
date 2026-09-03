@@ -2537,16 +2537,41 @@ function renderTimelineScreen() {
   ruler.innerHTML = ticks;
 
   // Pictures — one clip per picture, width is the time it holds
-  laneP.innerHTML = pics.map(pic => {
+  laneP.innerHTML = pics.map((pic, idx) => {
     const w = Math.max(2, pic.seconds * tlZoom);
     const img = tlImageFor(pic);
     const state = tlStateFor(pic);
     const narrow = w < 78;
+    // role="slider" promises a range, so state the range it can actually reach:
+    // one line past the picture before, one line short of the picture after.
+    const hMin = idx > 0 ? pics[idx - 1].firstLine + 1 : 1;
+    const hMax = idx + 1 < pics.length ? pics[idx + 1].firstLine - 1 : segs.length;
+    const handleHtml = idx > 0
+      ? `<div class="tl-clip-handle"
+              tabindex="0"
+              role="slider"
+              aria-label="Start of picture ${String(pic.number).padStart(2, "0")}, line ${pic.firstLine}"
+              aria-valuenow="${pic.firstLine}"
+              aria-valuemin="${hMin}"
+              aria-valuemax="${hMax}"
+              data-pic="${pic.number}"
+              data-from-line="${pic.firstLine}"
+              onpointerdown="timelineHandlePointerDown(event, ${pic.number})"
+              onpointermove="timelineHandlePointerMove(event)"
+              onpointerup="timelineHandlePointerUp(event)"
+              onpointercancel="timelineHandleCancel(event)"
+              onkeydown="timelineHandleKeyDown(event, ${pic.number})">
+           <span class="tl-handle-bar"></span>
+         </div>`
+      : "";
     return `
       <div class="tl-clip ${state === "gap" ? "gap" : state === "weak" ? "weak" : ""} ${tlSelected === pic.number ? "sel" : ""}"
+           id="tl-clip-${pic.number}"
+           data-pic="${pic.number}"
            style="left:${(pic.startsAt * tlZoom).toFixed(1)}px; width:${w.toFixed(1)}px"
            onclick="selectTimelinePicture(${pic.number})"
            title="Picture ${pic.number} — ${pic.seconds.toFixed(1)}s — script lines ${pic.firstLine}-${pic.lastLine}">
+        ${handleHtml}
         <span class="tl-clip-head mono">
           <b>${narrow ? pic.number : `Pic ${String(pic.number).padStart(2, "0")}`}</b>
           ${narrow ? "" : `<i>${pic.seconds.toFixed(1)}s</i>`}
@@ -2673,6 +2698,202 @@ function tlLineAt(seconds) {
   return secs.length;
 }
 
+/** Spoken seconds elapsed before a script line starts, 1-based. */
+function tlLineStartTime(lineNumber) {
+  const secs = segmentSecondsList(currentScriptData);
+  let at = 0;
+  for (let i = 0; i < lineNumber - 1 && i < secs.length; i++) {
+    at += secs[i] || 0;
+  }
+  return at;
+}
+
+let tlDragState = null;
+
+function timelineHandlePointerDown(e, picNumber) {
+  if (e.button !== 0 && e.pointerType === "mouse") return;
+  e.stopPropagation();
+  e.preventDefault();
+
+  const handle = e.currentTarget;
+  const pics = tlPictures();
+  const pic = pics.find(p => p.number === picNumber);
+  const prevPic = pics.find(p => p.number === picNumber - 1);
+  const nextPic = pics.find(p => p.number === picNumber + 1);
+  if (!pic || !prevPic) return;
+
+  const totalLines = (currentScriptData.segments || []).length;
+  const minLine = prevPic.firstLine + 1;
+  const maxLine = nextPic ? nextPic.firstLine - 1 : totalLines;
+
+  selectTimelinePicture(picNumber, { silent: true });
+
+  try {
+    handle.setPointerCapture(e.pointerId);
+  } catch (_) {}
+
+  tlDragState = {
+    pointerId: e.pointerId,
+    handle: handle,
+    picNumber: picNumber,
+    fromLine: pic.firstLine,
+    currentLine: pic.firstLine,
+    minLine: minLine,
+    maxLine: maxLine,
+    prevPicNumber: prevPic.number,
+    prevStartsAt: prevPic.startsAt,
+    picEndAt: pic.startsAt + pic.seconds,
+    prevClip: document.getElementById("tl-clip-" + prevPic.number),
+    currClip: document.getElementById("tl-clip-" + pic.number),
+    cancelled: false
+  };
+
+  handle.classList.add("dragging");
+}
+
+function timelineHandlePointerMove(e) {
+  if (!tlDragState || tlDragState.pointerId !== e.pointerId) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (tlDragState.cancelled) return;
+
+  const lanes = document.getElementById("tl-lanes");
+  if (!lanes) return;
+  const rect = lanes.getBoundingClientRect();
+  const seconds = (e.clientX - rect.left) / tlZoom;
+
+  const rawLine = tlLineAt(seconds);
+  const clampedLine = Math.max(tlDragState.minLine, Math.min(rawLine, tlDragState.maxLine));
+
+  if (clampedLine !== tlDragState.currentLine) {
+    tlDragState.currentLine = clampedLine;
+
+    // Fast CSS preview:
+    const newStartsAt = tlLineStartTime(clampedLine);
+    const prevSeconds = newStartsAt - tlDragState.prevStartsAt;
+    const currSeconds = tlDragState.picEndAt - newStartsAt;
+
+    if (tlDragState.prevClip) {
+      tlDragState.prevClip.style.width = `${Math.max(2, prevSeconds * tlZoom).toFixed(1)}px`;
+      const prevSub = tlDragState.prevClip.querySelector(".tl-clip-head i");
+      if (prevSub) prevSub.textContent = `${prevSeconds.toFixed(1)}s`;
+    }
+    if (tlDragState.currClip) {
+      tlDragState.currClip.style.left = `${(newStartsAt * tlZoom).toFixed(1)}px`;
+      tlDragState.currClip.style.width = `${Math.max(2, currSeconds * tlZoom).toFixed(1)}px`;
+      const currSub = tlDragState.currClip.querySelector(".tl-clip-head i");
+      if (currSub) currSub.textContent = `${currSeconds.toFixed(1)}s`;
+    }
+
+    tlDragState.handle.setAttribute("aria-valuenow", clampedLine);
+    tlDragState.handle.title = `Line ${clampedLine} · holds ${currSeconds.toFixed(1)}s`;
+  }
+}
+
+async function timelineHandlePointerUp(e) {
+  if (!tlDragState || tlDragState.pointerId !== e.pointerId) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const state = tlDragState;
+  tlDragState = null;
+
+  try {
+    state.handle.releasePointerCapture(e.pointerId);
+  } catch (_) {}
+  state.handle.classList.remove("dragging");
+
+  if (state.cancelled || state.currentLine === state.fromLine) {
+    renderTimelineScreen();
+    if (tlSelected) drawTimelineInspector(tlSelected);
+    return;
+  }
+
+  await moveTimelinePictureBoundary(state.fromLine, state.currentLine, state.picNumber);
+}
+
+function timelineHandleCancel(e) {
+  if (!tlDragState) return;
+  tlDragState.cancelled = true;
+  tlDragState.handle.classList.remove("dragging");
+  try {
+    tlDragState.handle.releasePointerCapture(tlDragState.pointerId);
+  } catch (_) {}
+  tlDragState = null;
+  renderTimelineScreen();
+  if (tlSelected) drawTimelineInspector(tlSelected);
+}
+
+async function timelineHandleKeyDown(e, picNumber) {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const pics = tlPictures();
+  const pic = pics.find(p => p.number === picNumber);
+  const prevPic = pics.find(p => p.number === picNumber - 1);
+  const nextPic = pics.find(p => p.number === picNumber + 1);
+  if (!pic || !prevPic) return;
+
+  const totalLines = (currentScriptData.segments || []).length;
+  const minLine = prevPic.firstLine + 1;
+  const maxLine = nextPic ? nextPic.firstLine - 1 : totalLines;
+
+  const step = e.shiftKey ? 5 : 1;
+  const dir = e.key === "ArrowLeft" ? -1 : 1;
+  const targetLine = Math.max(minLine, Math.min(pic.firstLine + (dir * step), maxLine));
+
+  if (targetLine === pic.firstLine) return;
+
+  await moveTimelinePictureBoundary(pic.firstLine, targetLine, picNumber);
+}
+
+async function moveTimelinePictureBoundary(fromLine, toLine, focusPicNumber) {
+  if (isWebMode || !currentScriptData) return;
+  try {
+    const res = await window.pywebview.api.move_picture_boundary_to(currentScriptData, fromLine, toLine);
+    if (!res || !res.success) {
+      alert((res && res.error) || "Could not move boundary.");
+      renderTimelineScreen();
+      return;
+    }
+    currentScriptData = res.script_data;
+    if (currentScriptPath) {
+      await window.pywebview.api.save_edited_script(currentScriptPath, currentScriptData);
+    }
+    // Update local coverage mapping for instant continuity
+    if (coverageReport && coverageReport.shot_reports) {
+      const oldRep = coverageReport.shot_reports.find(r => r.segment_id === fromLine);
+      if (oldRep) {
+        let newRep = coverageReport.shot_reports.find(r => r.segment_id === toLine);
+        if (!newRep) {
+          newRep = { ...oldRep, segment_id: toLine, shot_id: `${toLine}a` };
+          coverageReport.shot_reports.push(newRep);
+        } else {
+          newRep.best_url = oldRep.best_url;
+          newRep.best_path = oldRep.best_path;
+          newRep.best_score = oldRep.best_score;
+          newRep.state = oldRep.state;
+        }
+      }
+    }
+    renderTimelineScreen();
+    if (tlSelected) {
+      drawTimelineInspector(tlSelected);
+    }
+    if (focusPicNumber) {
+      setTimeout(() => {
+        const handle = document.querySelector(`.tl-clip-handle[data-pic="${focusPicNumber}"]`);
+        if (handle) handle.focus();
+      }, 50);
+    }
+  } catch (e) {
+    alert("Could not move boundary: " + e.message);
+    renderTimelineScreen();
+  }
+}
+
 function drawTimelineInspector(number) {
   const box = document.getElementById("tl-inspector");
   const frame = document.getElementById("tl-frame");
@@ -2680,7 +2901,7 @@ function drawTimelineInspector(number) {
 
   const pic = tlPictures().find(p => p.number === number);
   if (!pic) {
-    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Click a picture on the timeline.</p>`;
+    box.innerHTML = `<span class="lbl">Inspector</span><p class="sub">Click a picture on the timeline to cut, join, or drag its start.</p>`;
     return;
   }
 
@@ -2714,8 +2935,11 @@ function drawTimelineInspector(number) {
       ${canCutHere
         ? `<button type="button" onclick="splitPictureAt(${headLine})"
              title="A new picture starts at the playhead">&#9986; Cut here &mdash; line ${headLine}</button>`
-        : `<button type="button" disabled
-             title="Move the playhead inside this picture, past its first line">Cut at the playhead</button>`}
+        : `<button type="button" class="tl-cut-disabled" disabled
+             title="Move the playhead inside this picture, past its first line">
+             <span class="tl-btn-title">&#9986; Cut at the playhead</span>
+             <span class="tl-btn-reason">Playhead must be inside this picture, past line ${pic.firstLine}</span>
+           </button>`}
       ${pic.number > 1
         ? `<button type="button" onclick="mergePictureAt(${pic.firstLine})">&uarr; Join to picture ${String(pic.number - 1).padStart(2, "0")}</button>`
         : ""}
@@ -2740,9 +2964,20 @@ window.timelineScrubFrom = timelineScrubFrom;
 window.timelineSeek = timelineSeek;
 window.timelineTogglePlay = timelineTogglePlay;
 window.timelinePauseAudio = timelinePauseAudio;
+window.timelineHandlePointerDown = timelineHandlePointerDown;
+window.timelineHandlePointerMove = timelineHandlePointerMove;
+window.timelineHandlePointerUp = timelineHandlePointerUp;
+window.timelineHandleKeyDown = timelineHandleKeyDown;
+window.timelineHandleCancel = timelineHandleCancel;
+window.moveTimelinePictureBoundary = moveTimelinePictureBoundary;
 
-// Spacebar toggles playback when Timeline pane is active and not focused in an input
+// Spacebar toggles playback; Escape cancels drag
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && tlDragState) {
+    e.preventDefault();
+    timelineHandleCancel(e);
+    return;
+  }
   if (e.key === " " || e.code === "Space") {
     const el = document.activeElement;
     const tag = el && el.tagName ? el.tagName.toUpperCase() : "";
