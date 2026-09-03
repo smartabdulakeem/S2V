@@ -8,7 +8,7 @@ import json
 import os
 import subprocess
 
-from pipeline.composer import _find_ffmpeg
+from pipeline.ffmpeg_locate import find_ffmpeg
 from pipeline.narration_timing import probe_seconds
 
 
@@ -125,7 +125,7 @@ def build_timeline_audio(script_data: dict, project_dir: str) -> dict:
                 escaped = os.path.abspath(path).replace("\\", "/").replace("'", "'\\''")
                 f.write(f"file '{escaped}'\n")
 
-        ffmpeg_bin = _find_ffmpeg()
+        ffmpeg_bin = find_ffmpeg()
         cmd = [
             ffmpeg_bin, "-y",
             "-f", "concat",

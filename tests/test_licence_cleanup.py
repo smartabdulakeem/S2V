@@ -132,7 +132,6 @@ def test_5_notices_file_exists_and_complete():
     content = notices_path.read_text(encoding="utf-8")
 
     required_components = [
-        "moviepy",
         "Pillow",
         "openai-whisper",
         "open-clip-torch",
@@ -158,3 +157,106 @@ def test_5_notices_file_exists_and_complete():
 
     assert "Bootloader Exception" in content or "bootloader exception" in content.lower()
     assert "TODO(owner): EULA clause" in content
+
+
+def test_6_build_workflow_ships_no_ffmpeg():
+    """Assert .github/workflows/build.yml does not download or bundle ffmpeg, edge_tts, or moviepy, but keeps realesrgan."""
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "build.yml"
+    assert workflow_path.exists(), "build.yml not found"
+    content = workflow_path.read_text(encoding="utf-8")
+    assert len(content) > 100, "build.yml is empty or truncated"
+    assert "name: Build Windows EXE" in content, "Missing expected build workflow header"
+    assert "pyinstaller" in content.lower(), "Missing pyinstaller in build.yml"
+
+    # Negatives: no ffmpeg downloading/bundling, no edge_tts, no moviepy
+    assert "gyan.dev" not in content
+    assert "ffmpeg-release-essentials" not in content
+    assert '--add-data "vendor;vendor"' not in content
+    assert "edge_tts" not in content
+    assert "moviepy" not in content
+
+    # Positive assertion: Real-ESRGAN upscaling MUST keep shipping
+    assert "vendor/realesrgan;vendor/realesrgan" in content
+
+
+def test_7_one_finder_in_ffmpeg_locate():
+    """pipeline/composer.py, pipeline/stitcher.py and pipeline/voiceover.py contain no _find_ffmpeg or _find_ffprobe."""
+    targets = [
+        REPO_ROOT / "pipeline" / "composer.py",
+        REPO_ROOT / "pipeline" / "stitcher.py",
+        REPO_ROOT / "pipeline" / "voiceover.py",
+    ]
+    for target in targets:
+        assert target.exists(), f"{target} does not exist"
+        code = target.read_text(encoding="utf-8")
+        assert "def _find_ffmpeg" not in code, f"Found def _find_ffmpeg in {target.name}"
+        assert "def _find_ffprobe" not in code, f"Found def _find_ffprobe in {target.name}"
+
+
+def test_8_setup_bat_names_existing_files():
+    """Extract every -r <name>.txt from setup.bat and assert each named file exists in the repo."""
+    import re
+    setup_bat = REPO_ROOT / "setup.bat"
+    assert setup_bat.exists(), "setup.bat missing"
+    bat_text = setup_bat.read_text(encoding="utf-8", errors="ignore")
+    matches = re.findall(r"-r\s+([A-Za-z0-9_\-\.]+)\.txt", bat_text)
+    assert len(matches) > 0, "No -r requirements files found in setup.bat"
+    for match in matches:
+        filename = f"{match}.txt"
+        file_path = REPO_ROOT / filename
+        assert file_path.exists(), f"setup.bat references '{filename}' which does not exist in repo root"
+
+
+def test_9_moviepy_is_gone():
+    """moviepy is absent from requirements.txt, pipeline/, app.py, and cli.py."""
+    req_text = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "moviepy" not in req_text.lower(), "moviepy found in requirements.txt"
+
+    py_files = [REPO_ROOT / "app.py", REPO_ROOT / "cli.py"] + list((REPO_ROOT / "pipeline").rglob("*.py"))
+    for py_file in py_files:
+        code = py_file.read_text(encoding="utf-8")
+        assert "moviepy" not in code.lower(), f"moviepy found in {py_file.relative_to(REPO_ROOT)}"
+
+
+def test_10_find_ffmpeg_prefers_path_over_vendor(monkeypatch, tmp_path):
+    """find_ffmpeg prefers system PATH over vendor, falls back to vendor, and raises FFmpegMissing if neither."""
+    import shutil
+    from pipeline.ffmpeg_locate import find_ffmpeg, find_ffprobe, FFmpegMissing
+
+    # Ensure no override env var is interfering
+    monkeypatch.delenv("IMAGEIO_FFMPEG_EXE", raising=False)
+    monkeypatch.delenv("IMAGEIO_FFPROBE_EXE", raising=False)
+
+    fake_path_bin = tmp_path / "fake_path_ffmpeg.exe"
+    fake_path_bin.write_text("fake binary")
+
+    # 1. Point shutil.which at temp file via monkeypatch: PATH comes back even though vendor exists
+    monkeypatch.setattr(shutil, "which", lambda cmd: str(fake_path_bin) if cmd == "ffmpeg" else None)
+    found = find_ffmpeg()
+    assert os.path.abspath(found) == os.path.abspath(str(fake_path_bin))
+
+    # 2. Make which return None: assert the vendor path comes back.
+    #    vendor/ is gitignored and is no longer created by CI, so a clean checkout has
+    #    no vendor ffmpeg. Skipping there is the point of this change, not a weakening:
+    #    step 1 above still proves PATH wins, and step 3 still proves the raise.
+    expected_vendor = os.path.abspath(str(REPO_ROOT / "vendor" / "ffmpeg" / "bin" / "ffmpeg.exe"))
+    if not os.path.exists(expected_vendor):
+        pytest.skip("no vendor ffmpeg on this machine; PATH and raise branches still asserted")
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+    vendor_found = find_ffmpeg()
+    assert os.path.abspath(vendor_found) == expected_vendor
+
+    # 3. Hide both PATH and vendor: assert FFmpegMissing is raised with download URL
+    orig_exists = os.path.exists
+    def fake_exists(path):
+        if "vendor" in str(path) and "ffmpeg" in str(path):
+            return False
+        return orig_exists(path)
+
+    monkeypatch.setattr(os.path, "exists", fake_exists)
+    with pytest.raises(FFmpegMissing) as exc_info:
+        find_ffmpeg()
+
+    err_msg = str(exc_info.value)
+    assert "https://ffmpeg.org/download.html" in err_msg
+    assert "setup.bat" not in err_msg

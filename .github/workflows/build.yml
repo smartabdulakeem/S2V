@@ -27,19 +27,6 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Download FFmpeg
-        run: |
-          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-          $zip = "ffmpeg.zip"
-          Invoke-WebRequest -Uri $url -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath "ffmpeg_tmp" -Force
-          $inner = Get-ChildItem "ffmpeg_tmp" -Directory | Select-Object -First 1
-          New-Item -ItemType Directory -Force -Path "vendor\ffmpeg\bin"
-          Copy-Item "$($inner.FullName)\bin\ffmpeg.exe"  "vendor\ffmpeg\bin\"
-          Copy-Item "$($inner.FullName)\bin\ffprobe.exe" "vendor\ffmpeg\bin\"
-          Copy-Item "$($inner.FullName)\bin\ffplay.exe"  "vendor\ffmpeg\bin\"
-        shell: powershell
-
       - name: Build with PyInstaller
         run: |
           pyinstaller `
@@ -48,7 +35,7 @@ jobs:
             --onedir `
             --add-data "frontend;frontend" `
             --add-data "samples;samples" `
-            --add-data "vendor;vendor" `
+            --add-data "vendor/realesrgan;vendor/realesrgan" `
             --add-data "config/.gitkeep;config" `
             --hidden-import "pipeline.validator" `
             --hidden-import "pipeline.voiceover" `
@@ -60,12 +47,9 @@ jobs:
             --hidden-import "pipeline.text_parser" `
             --hidden-import "webview" `
             --hidden-import "webview.platforms.edgechromium" `
-            --hidden-import "edge_tts" `
             --hidden-import "whisper" `
             --hidden-import "PIL" `
-            --hidden-import "moviepy" `
             --collect-all "webview" `
-            --collect-all "edge_tts" `
             --collect-all "whisper" `
             app.py
         shell: powershell

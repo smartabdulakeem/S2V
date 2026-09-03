@@ -116,7 +116,7 @@ def test_range_request_returns_206_and_exact_slice(media_server):
 
 def test_prepare_timeline_audio_returns_http_and_never_file():
     from app import Api
-    from pipeline.composer import _find_ffmpeg
+    from pipeline.ffmpeg_locate import find_ffmpeg
     import subprocess
 
     api = Api()
@@ -125,7 +125,7 @@ def test_prepare_timeline_audio_returns_http_and_never_file():
     audio_path = os.path.join(proj_dir, "seg1.mp3")
 
     # Generate a real valid mp3 with ffmpeg
-    ffmpeg = _find_ffmpeg()
+    ffmpeg = find_ffmpeg()
     subprocess.run([
         ffmpeg, "-y",
         "-f", "lavfi",

@@ -4,8 +4,8 @@ import glob
 import shutil
 import tempfile
 import subprocess
-import pytest
-from pipeline.composer import compose_segment, _find_ffprobe, _find_ffmpeg
+from pipeline.composer import compose_segment
+from pipeline.ffmpeg_locate import find_ffprobe, find_ffmpeg
 
 
 def _segment_fixture(min_seconds: float = 10.0):
@@ -25,7 +25,7 @@ def _segment_fixture(min_seconds: float = 10.0):
 
     for audio, visual, srt in _candidates():
         probe = subprocess.run(
-            [_find_ffprobe(), "-i", audio, "-show_entries", "format=duration",
+            [find_ffprobe(), "-i", audio, "-show_entries", "format=duration",
              "-v", "quiet", "-of", "csv=p=0"],
             capture_output=True, text=True,
         )
@@ -45,7 +45,7 @@ def test_compose_segment_duration_match():
     """
     audio_path, visual_path, srt_path = _segment_fixture()
 
-    ffprobe = _find_ffprobe()
+    ffprobe = find_ffprobe()
     dur_cmd = [ffprobe, "-i", audio_path, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
     input_dur = float(subprocess.run(dur_cmd, capture_output=True, text=True, check=True).stdout.strip())
     assert input_dur > 10.0, f"Expected >10s audio duration, got {input_dur}"
@@ -102,7 +102,7 @@ def test_composer_corner_brightness_vignette_check():
 
     audio_path, visual_path, srt_path = _segment_fixture()
 
-    ffmpeg = _find_ffmpeg()
+    ffmpeg = find_ffmpeg()
     temp_cache = tempfile.mkdtemp()
     try:
         output_mp4 = compose_segment(

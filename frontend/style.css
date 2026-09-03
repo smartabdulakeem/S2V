@@ -1930,6 +1930,25 @@ tbody tr:last-child td {
   display: none;
 }
 
+.ffmpeg-banner {
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 12px 24px;
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid var(--warn);
+  color: var(--ink);
+}
+.ffmpeg-banner a {
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 600;
+}
+.ffmpeg-banner.hidden {
+  display: none;
+}
+
 .llm-planning-box {
   margin-top: 14px;
   padding: 12px 14px;

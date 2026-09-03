@@ -25,38 +25,7 @@ FPS = 30
 _CACHED_ENCODER = None
 
 
-def _find_ffmpeg() -> str:
-    """Find FFmpeg binary path robustly across environments."""
-    env_path = os.environ.get("IMAGEIO_FFMPEG_EXE", "")
-    if env_path and os.path.exists(env_path):
-        return env_path
-    
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    vendor_ffmpeg = os.path.join(base_dir, "vendor", "ffmpeg", "bin", "ffmpeg.exe")
-    if os.path.exists(vendor_ffmpeg):
-        return vendor_ffmpeg
-
-    found = shutil.which("ffmpeg")
-    if found:
-        return found
-    return "ffmpeg"
-
-
-def _find_ffprobe() -> str:
-    """Find ffprobe binary path robustly across environments."""
-    env_path = os.environ.get("IMAGEIO_FFPROBE_EXE", "")
-    if env_path and os.path.exists(env_path):
-        return env_path
-    
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    vendor_ffprobe = os.path.join(base_dir, "vendor", "ffmpeg", "bin", "ffprobe.exe")
-    if os.path.exists(vendor_ffprobe):
-        return vendor_ffprobe
-
-    found = shutil.which("ffprobe")
-    if found:
-        return found
-    return "ffprobe"
+from pipeline.ffmpeg_locate import find_ffmpeg, find_ffprobe
 
 
 def _get_best_encoder(on_progress=None) -> tuple[str, list[str]]:
@@ -194,7 +163,7 @@ def _add_ambient_bed(narration_path: str, segment_dict: dict, duration: float,
         if not bed:
             return narration_path
 
-        ffmpeg = _find_ffmpeg()
+        ffmpeg = find_ffmpeg()
         bed_track = os.path.join(cache_dir, f"segment_{segment_id}_bed.wav")
         sound.build_bed_track(bed["abs_path"], duration, bed_track, ffmpeg)
 
@@ -396,7 +365,7 @@ def _overlay_sound_effects(narration_path: str, sfx_list: list, output_audio_pat
     if on_progress:
         on_progress(f"Mixing {len(valid_sfx)} sound effects into voiceover")
         
-    ffmpeg_bin = _find_ffmpeg()
+    ffmpeg_bin = find_ffmpeg()
     cmd = [ffmpeg_bin, "-y", "-i", narration_path]
     for path, _ in valid_sfx:
         cmd.extend(["-i", path])
@@ -694,7 +663,7 @@ def render_shot_clip(
                     "motion": m_type
                 })
 
-    ffmpeg_bin = _find_ffmpeg()
+    ffmpeg_bin = find_ffmpeg()
     encoder, enc_args = _get_best_encoder(on_progress)
 
     cmd = [ffmpeg_bin, "-y", "-loop", "1", "-i", visual_path]
@@ -822,7 +791,7 @@ def compose_segment(
     final_audio_path = _overlay_sound_effects(audio_path, sfx, mixed_audio_path, cache_dir, on_progress)
 
     # Calculate total segment audio duration strictly using ffprobe
-    ffprobe_bin = _find_ffprobe()
+    ffprobe_bin = find_ffprobe()
     probe_cmd = [
         ffprobe_bin, "-i", final_audio_path,
         "-show_entries", "format=duration",
@@ -911,7 +880,7 @@ def compose_segment(
         shot_clip_paths.append(shot_mp4)
 
     # If single shot segment, combine visual + audio directly
-    ffmpeg_bin = _find_ffmpeg()
+    ffmpeg_bin = find_ffmpeg()
     if len(shot_clip_paths) == 1:
         combine_cmd = [
             ffmpeg_bin, "-y",

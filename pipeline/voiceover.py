@@ -48,26 +48,12 @@ except Exception:
 
 # ── FFmpeg Finder ─────────────────────────────────────────────────────────────
 
-def _find_ffmpeg() -> str:
-    env_path = os.environ.get("IMAGEIO_FFMPEG_EXE", "")
-    if env_path and os.path.exists(env_path):
-        return env_path
-    
-    # Check default vendor path
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    vendor_ffmpeg = os.path.join(base_dir, "vendor", "ffmpeg", "bin", "ffmpeg.exe")
-    if os.path.exists(vendor_ffmpeg):
-        return vendor_ffmpeg
-
-    found = shutil.which("ffmpeg")
-    if found:
-        return found
-    raise RuntimeError("FFmpeg not found. Please run setup.bat first.")
+from pipeline.ffmpeg_locate import find_ffmpeg
 
 
 def _transcode_to_mp3(input_bytes: bytes, output_path: str, is_raw_pcm: bool = False, sample_rate: int = 24000):
     """Write bytes to a temp file and transcode to MP3 using FFmpeg."""
-    ffmpeg = _find_ffmpeg()
+    ffmpeg = find_ffmpeg()
     with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as tmp:
         tmp_path = tmp.name
         tmp.write(input_bytes)
@@ -131,7 +117,7 @@ def master_audio(input_path: str, output_path: str = None, chain: str = None) ->
     and its path returned — a render must never be lost to a cosmetic filter.
     """
     target = output_path or input_path
-    ffmpeg = _find_ffmpeg()
+    ffmpeg = find_ffmpeg()
     tmp_out = target + ".mastered.mp3"
     cmd = [
         ffmpeg, "-y", "-i", input_path,
@@ -350,7 +336,7 @@ def _generate_with_local_supertonic(
                 raise RuntimeError("No audio parts were generated for speaker-switching narration.")
                 
             # Concatenate all parts using FFmpeg concat demuxer
-            ffmpeg = _find_ffmpeg()
+            ffmpeg = find_ffmpeg()
             
             # Write list file
             list_path = os.path.join(tempfile.gettempdir(), f"s2v_seg_{segment_id}_list.txt")
@@ -1056,13 +1042,8 @@ def _mastering_enabled() -> bool:
         return True
 
 
-def get_audio_duration(mp3_path: str) -> float:
-    from moviepy.editor import AudioFileClip
-    with AudioFileClip(mp3_path) as clip:
-        return clip.duration
-
 def stitch_master_audio(segment_audio_paths: list[str], output_path: str):
-    ffmpeg = _find_ffmpeg()
+    ffmpeg = find_ffmpeg()
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
         list_file = f.name
         for path in segment_audio_paths:

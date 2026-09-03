@@ -9,24 +9,7 @@ import tempfile
 from pathlib import Path
 
 
-def _find_ffmpeg() -> str:
-    """Return path to ffmpeg binary. Prefers vendor copy, falls back to system PATH."""
-    vendor_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "vendor", "ffmpeg", "bin", "ffmpeg.exe"
-    )
-    if os.path.exists(vendor_path):
-        return vendor_path
-
-    # Try system PATH
-    import shutil
-    system_ffmpeg = shutil.which("ffmpeg")
-    if system_ffmpeg:
-        return system_ffmpeg
-
-    raise FileNotFoundError(
-        "FFmpeg was not found. Please run setup.bat first to install it automatically."
-    )
+from pipeline.ffmpeg_locate import find_ffmpeg
 
 
 def stitch_segments(
@@ -45,7 +28,7 @@ def stitch_segments(
     if on_progress:
         on_progress("Stitching segments into final video...")
 
-    ffmpeg = _find_ffmpeg()
+    ffmpeg = find_ffmpeg()
     Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
 
     # Write the concat list file

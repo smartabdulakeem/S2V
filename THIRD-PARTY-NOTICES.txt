@@ -8,54 +8,28 @@ distributed with Smart Studio.
 TABLE OF CONTENTS
 ================================================================================
 
-1.  moviepy (MIT)
-2.  Pillow (PIL / HPND / CMU MIT-like)
-3.  openai-whisper (MIT)
-4.  open-clip-torch (MIT)
-5.  CLIP ViT-B-32 weights (MIT)
-6.  requests (Apache-2.0)
-7.  rapidocr-onnxruntime (Apache-2.0)
-8.  kokoro-onnx (Apache-2.0)
-9.  pywebview (BSD-3-Clause)
-10. numpy (BSD-3-Clause)
-11. scipy (BSD-3-Clause)
-12. torch (BSD-3-Clause)
-13. Real-ESRGAN (BSD-3-Clause)
-14. ncnn (BSD-3-Clause)
-15. onnxruntime (MIT)
-16. PyInstaller (GPL-2.0 with Bootloader Exception)
-17. Supertonic (Code) (MIT)
-18. Supertonic (Model Weights) (OpenRAIL-M)
-19. Microsoft Visual C++ Runtime (vcomp140.dll) (Microsoft Redistributable Terms)
+1.  Pillow (PIL / HPND / CMU MIT-like)
+2.  openai-whisper (MIT)
+3.  open-clip-torch (MIT)
+4.  CLIP ViT-B-32 weights (MIT)
+5.  requests (Apache-2.0)
+6.  rapidocr-onnxruntime (Apache-2.0)
+7.  kokoro-onnx (Apache-2.0)
+8.  pywebview (BSD-3-Clause)
+9.  numpy (BSD-3-Clause)
+10. scipy (BSD-3-Clause)
+11. torch (BSD-3-Clause)
+12. Real-ESRGAN (BSD-3-Clause)
+13. ncnn (BSD-3-Clause)
+14. onnxruntime (MIT)
+15. PyInstaller (GPL-2.0 with Bootloader Exception)
+16. Supertonic (Code) (MIT)
+17. Supertonic (Model Weights) (OpenRAIL-M)
+18. Microsoft Visual C++ Runtime (vcomp140.dll) (Microsoft Redistributable Terms)
 
 
 ================================================================================
-1. moviepy
-================================================================================
-License: MIT
-Copyright (c) 2015 Zulko
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-
-================================================================================
-2. Pillow
+1. Pillow
 ================================================================================
 License: Historical PIL Software License / HPND / CMU MIT-like
 Copyright (c) 1997-2011 by Secret Labs AB
@@ -80,7 +54,7 @@ THIS SOFTWARE.
 
 
 ================================================================================
-3. openai-whisper
+2. openai-whisper
 ================================================================================
 License: MIT
 Copyright (c) 2022 OpenAI
@@ -105,7 +79,7 @@ SOFTWARE.
 
 
 ================================================================================
-4. open-clip-torch
+3. open-clip-torch
 ================================================================================
 License: MIT
 Copyright (c) 2021 Gabriel Ilharco, Mitchell Wortsman, Nicholas Carlini,
@@ -132,7 +106,7 @@ SOFTWARE.
 
 
 ================================================================================
-5. CLIP ViT-B-32 weights
+4. CLIP ViT-B-32 weights
 ================================================================================
 License: MIT
 Copyright (c) 2021 OpenAI
@@ -157,7 +131,7 @@ SOFTWARE.
 
 
 ================================================================================
-6. requests
+5. requests
 ================================================================================
 License: Apache-2.0
 Copyright 2019 Kenneth Reitz
@@ -176,7 +150,7 @@ limitations under the License.
 
 
 ================================================================================
-7. rapidocr-onnxruntime
+6. rapidocr-onnxruntime
 ================================================================================
 License: Apache-2.0
 Copyright (c) 2021 RapidAI
@@ -195,7 +169,7 @@ limitations under the License.
 
 
 ================================================================================
-8. kokoro-onnx
+7. kokoro-onnx
 ================================================================================
 License: Apache-2.0
 Copyright 2024 hexgrad / kokoro-onnx contributors
@@ -214,7 +188,7 @@ limitations under the License.
 
 
 ================================================================================
-9. pywebview
+8. pywebview
 ================================================================================
 License: BSD-3-Clause
 Copyright (c) 2014-2024 Roman Sirokov and contributors
@@ -246,7 +220,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ================================================================================
-10. numpy
+9. numpy
 ================================================================================
 License: BSD-3-Clause
 Copyright (c) 2005-2024, NumPy Developers.
@@ -279,7 +253,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ================================================================================
-11. scipy
+10. scipy
 ================================================================================
 License: BSD-3-Clause
 Copyright (c) 2001-2002 Enthought, Inc. 2003-2024, SciPy Developers.
@@ -312,7 +286,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ================================================================================
-12. torch (PyTorch)
+11. torch (PyTorch)
 ================================================================================
 License: BSD-3-Clause
 Copyright (c) 2016-     Facebook, Inc    (Adam Paszke)
@@ -352,7 +326,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ================================================================================
-13. Real-ESRGAN
+12. Real-ESRGAN
 ================================================================================
 License: BSD-3-Clause
 Copyright (c) 2021, Xintao Wang
@@ -384,7 +358,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ================================================================================
-14. ncnn
+13. ncnn
 ================================================================================
 License: BSD-3-Clause
 Copyright (C) 2017 THL A29 Limited, a Tencent company. All rights reserved.
@@ -416,7 +390,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ================================================================================
-15. onnxruntime
+14. onnxruntime
 ================================================================================
 License: MIT
 Copyright (c) Microsoft Corporation. All rights reserved.
@@ -441,7 +415,7 @@ SOFTWARE.
 
 
 ================================================================================
-16. PyInstaller
+15. PyInstaller
 ================================================================================
 License: GPL-2.0 with PyInstaller Bootloader Exception
 Copyright (c) 2010-2023, PyInstaller Development Team
@@ -459,7 +433,7 @@ and commercially-licensed applications compiled and packaged using PyInstaller."
 
 
 ================================================================================
-17. Supertonic (Code)
+16. Supertonic (Code)
 ================================================================================
 License: MIT
 Copyright (c) 2024 Supertonic Authors
@@ -484,7 +458,7 @@ SOFTWARE.
 
 
 ================================================================================
-18. Supertonic (Model Weights)
+17. Supertonic (Model Weights)
 ================================================================================
 License: OpenRAIL-M
 Attribution: Supertonic Text-to-Speech Model Weights (c) 2024 Supertonic Team.
@@ -506,7 +480,7 @@ use restrictions which must be passed on to all end users:
 
 
 ================================================================================
-19. Microsoft Visual C++ Runtime (vcomp140.dll)
+18. Microsoft Visual C++ Runtime (vcomp140.dll)
 ================================================================================
 License: Microsoft Visual Studio 2015/2017/2019/2022 Redistributable Terms
 Copyright (c) Microsoft Corporation. All rights reserved.
@@ -515,3 +489,22 @@ The release binary vcomp140.dll is distributed under Microsoft's Software Licens
 Terms for Microsoft Visual Studio Redistributable code. Distribution is limited
 to release versions of the runtime files in object code form, in accordance with
 the Microsoft Visual Studio license and redistributable terms.
+
+================================================================================
+EXTERNAL TOOLS (NOT DISTRIBUTED WITH SMART STUDIO)
+================================================================================
+
+FFmpeg / FFprobe
+----------------
+Smart Studio invokes an external FFmpeg / FFprobe binary installed separately
+by the user on their system to render video and measure audio durations.
+
+No FFmpeg or FFprobe binaries are bundled, packaged, or distributed with
+Smart Studio.
+
+FFmpeg is open-source software licensed under the GNU Lesser General Public
+License (LGPL) version 2.1 or later, or GNU General Public License (GPL)
+version 2 or later, depending on the compile-time configuration and external
+codecs enabled in the user's installed build. Full source code, documentation,
+and licensing details are available from the FFmpeg project at:
+https://ffmpeg.org/

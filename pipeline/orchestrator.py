@@ -21,7 +21,8 @@ from pipeline.voiceover import generate_voiceover, stitch_master_audio
 from pipeline.captions import generate_captions
 from pipeline.library import project_world_anchor
 from pipeline.visuals import fetch_visual, _get_dimensions, segment_keyword, segment_pin
-from pipeline.composer import compose_segment, _find_ffprobe
+from pipeline.composer import compose_segment
+from pipeline.ffmpeg_locate import find_ffprobe
 from pipeline.stitcher import stitch_segments
 
 
@@ -294,7 +295,7 @@ class RenderOrchestrator:
 
         # ── STAGE B: Build Timeline in One Pass (Stage 3/7) ───────────────────
         self._emit("stage", name="Building Timeline", stage_num=3, total_stages=7)
-        ffprobe_bin = _find_ffprobe()
+        ffprobe_bin = find_ffprobe()
         total_audio_duration = 0.0
 
         for seg in segments:

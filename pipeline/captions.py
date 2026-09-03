@@ -21,8 +21,8 @@ _TRANSCRIBE_LOCK = threading.Lock()
 def _ensure_ffmpeg_on_path():
     """Ensure vendor/ffmpeg directory is in os.environ['PATH'] for whisper subprocess calls."""
     try:
-        from pipeline.composer import _find_ffmpeg
-        ffmpeg_bin = _find_ffmpeg()
+        from pipeline.ffmpeg_locate import find_ffmpeg
+        ffmpeg_bin = find_ffmpeg()
         ffmpeg_dir = os.path.dirname(ffmpeg_bin)
         if ffmpeg_dir and ffmpeg_dir not in os.environ.get("PATH", ""):
             os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
@@ -98,8 +98,8 @@ def create_srt_from_tts_timings(
 
     if audio_duration is None and audio_path and os.path.exists(audio_path):
         try:
-            from pipeline.composer import _find_ffprobe
-            ffprobe = _find_ffprobe()
+            from pipeline.ffmpeg_locate import find_ffprobe
+            ffprobe = find_ffprobe()
             cmd = [ffprobe, "-i", audio_path, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
             res = subprocess.run(cmd, capture_output=True, text=True)
             if res.returncode == 0 and res.stdout.strip():

@@ -5,7 +5,7 @@ import subprocess
 import pytest
 from pipeline.orchestrator import RenderOrchestrator
 from pipeline.captions import get_whisper_load_count
-from pipeline.composer import _find_ffprobe
+from pipeline.ffmpeg_locate import find_ffprobe
 
 def test_whisper_singleton_load_count():
     """Verify that Whisper model is loaded at most once across renders."""
@@ -28,7 +28,7 @@ def test_parallel_render_duration_and_frame_count_match():
     output_path = res["output"]
     assert os.path.exists(output_path), "Final stitched MP4 missing"
 
-    ffprobe = _find_ffprobe()
+    ffprobe = find_ffprobe()
     dur_cmd = [ffprobe, "-i", output_path, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
     frames_cmd = [ffprobe, "-i", output_path, "-select_streams", "v:0", "-show_entries", "stream=nb_frames", "-v", "quiet", "-of", "csv=p=0"]
 

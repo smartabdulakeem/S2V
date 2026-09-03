@@ -5,13 +5,17 @@ import argparse
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 
-# Add vendor ffmpeg to PATH so moviepy/ffmpeg can find it
+# Put vendor ffmpeg on PATH for child processes if present, without overriding system PATH
 _vendor_ffmpeg = os.path.join(BASE_DIR, "vendor", "ffmpeg", "bin")
 if os.path.exists(_vendor_ffmpeg):
-    os.environ["PATH"] = _vendor_ffmpeg + os.pathsep + os.environ.get("PATH", "")
-    os.environ["IMAGEIO_FFMPEG_EXE"] = os.path.join(_vendor_ffmpeg, "ffmpeg.exe")
+    import shutil
+    if not shutil.which("ffmpeg"):
+        os.environ["PATH"] = _vendor_ffmpeg + os.pathsep + os.environ.get("PATH", "")
+    elif _vendor_ffmpeg not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + _vendor_ffmpeg
 
 from pipeline.orchestrator import RenderOrchestrator
+from pipeline.ffmpeg_locate import find_ffmpeg, find_ffprobe, FFmpegMissing
 from app import _load_settings
 
 # Child processes must not flash a console window over the UI (pythonw launch).
@@ -20,6 +24,12 @@ _install_noconsole()
 
 
 def main():
+    try:
+        find_ffmpeg()
+        find_ffprobe()
+    except FFmpegMissing as e:
+        sys.stderr.write(f"{e}\n")
+
     parser = argparse.ArgumentParser(description="Smart Studio command line renderer.")
     parser.add_argument("script_path", help="Path to the JSON script file to render.")
     args = parser.parse_args()

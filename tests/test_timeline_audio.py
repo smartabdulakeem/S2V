@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pipeline.composer import _find_ffmpeg
+from pipeline.ffmpeg_locate import find_ffmpeg
 from pipeline.narration_timing import probe_seconds
 from pipeline.timeline_audio import build_timeline_audio
 
@@ -20,7 +20,7 @@ from pipeline.timeline_audio import build_timeline_audio
 def _create_sine_mp3(path: str, duration: float) -> str:
     """Generate a valid, playable mp3 file of an exact duration using ffmpeg."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    ffmpeg = _find_ffmpeg()
+    ffmpeg = find_ffmpeg()
     cmd = [
         ffmpeg, "-y",
         "-f", "lavfi",

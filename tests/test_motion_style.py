@@ -17,7 +17,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from pipeline.composer import _find_ffmpeg, _get_shot_cache_key, render_shot_clip
+from pipeline.composer import _get_shot_cache_key, render_shot_clip
+from pipeline.ffmpeg_locate import find_ffmpeg
 from pipeline.motion import (
     DEFAULT_MOTION_STYLE,
     MOTION_STYLES,
@@ -244,7 +245,7 @@ def marker_image(tmp_path_factory):
 
 
 def _marker_size(video, t, out_png):
-    subprocess.run([_find_ffmpeg(), "-y", "-ss", str(t), "-i", video, "-frames:v", "1", out_png],
+    subprocess.run([find_ffmpeg(), "-y", "-ss", str(t), "-i", video, "-frames:v", "1", out_png],
                    capture_output=True, text=True)
     frame = np.asarray(Image.open(out_png).convert("L"))
     cols = np.where(frame.max(axis=0) > 128)[0]

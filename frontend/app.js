@@ -97,6 +97,29 @@ async function initApp() {
   await loadMotionStyles();
   await applyUiDefaults();
   await restoreLastProject();
+  await checkFfmpegStatus();
+}
+
+async function checkFfmpegStatus() {
+  if (isWebMode || typeof window.pywebview === "undefined" || !window.pywebview.api) {
+    return;
+  }
+  try {
+    if (window.pywebview.api.check_ffmpeg) {
+      const res = await window.pywebview.api.check_ffmpeg();
+      const banner = document.getElementById("ffmpeg-missing-banner");
+      if (!banner) return;
+      if (res && !res.available) {
+        const msg = res.message || "FFmpeg is not installed on this computer. Smart Studio needs it to build video and to measure narration. Install it from https://ffmpeg.org/download.html, make sure it is on your PATH, then restart Smart Studio.";
+        banner.textContent = msg;
+        banner.classList.remove("hidden");
+      } else {
+        banner.classList.add("hidden");
+      }
+    }
+  } catch (e) {
+    console.error("Failed to check ffmpeg status:", e);
+  }
 }
 
 

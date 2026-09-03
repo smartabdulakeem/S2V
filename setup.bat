@@ -57,75 +57,28 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: ── Step 2: Check / download FFmpeg ──────────────────────────────────────────
+:: ── Step 2: Check FFmpeg ───────────────────────────────────────────────────
 echo.
 echo [2/5] Checking FFmpeg...
 
-
-if exist "vendor\ffmpeg\bin\ffmpeg.exe" (
-    echo    FFmpeg already installed in vendor\ffmpeg\
-    goto ffmpeg_done
-)
-
-:: Check if FFmpeg is on the system PATH
 ffmpeg -version >nul 2>&1
 if %errorlevel% equ 0 (
-    echo    FFmpeg found on system PATH -- skipping vendor download.
+    echo    FFmpeg found on system PATH.
     goto ffmpeg_done
 )
 
-echo    FFmpeg not found. Downloading static Windows build (~80 MB)...
-echo    Please wait -- this may take a few minutes depending on your connection.
+if exist "vendor\ffmpeg\bin\ffmpeg.exe" (
+    echo    FFmpeg found in vendor\ffmpeg\
+    goto ffmpeg_done
+)
+
 echo.
-
-if not exist "vendor\ffmpeg" mkdir "vendor\ffmpeg"
-
-:: Download FFmpeg essentials build from gyan.dev
-set FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
-set FFMPEG_ZIP=vendor\ffmpeg_download.zip
-
-powershell -NoProfile -Command ^
-    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; ^
-    $wc = New-Object System.Net.WebClient; ^
-    $wc.DownloadFile('%FFMPEG_URL%', '%FFMPEG_ZIP%')"
-
-if not exist "%FFMPEG_ZIP%" (
-    echo.
-    echo  ERROR: FFmpeg download failed.
-    echo  Please check your internet connection and try again.
-    echo  If the problem persists, download FFmpeg manually from:
-    echo    https://www.gyan.dev/ffmpeg/builds/
-    echo  Place ffmpeg.exe in vendor\ffmpeg\bin\ffmpeg.exe
-    echo.
-    pause
-    exit /b 1
-)
-
-echo    Extracting FFmpeg...
-powershell -NoProfile -Command ^
-    "Expand-Archive -Path '%FFMPEG_ZIP%' -DestinationPath 'vendor\ffmpeg_extract' -Force"
-
-:: Find the bin folder inside the extracted archive (folder name changes with version)
-for /d %%D in (vendor\ffmpeg_extract\*) do (
-    if exist "%%D\bin\ffmpeg.exe" (
-        xcopy "%%D\bin" "vendor\ffmpeg\bin\" /E /I /Q /Y >nul
-    )
-)
-
-:: Clean up temp files
-del /q "%FFMPEG_ZIP%" >nul 2>&1
-rmdir /s /q "vendor\ffmpeg_extract" >nul 2>&1
-
-if not exist "vendor\ffmpeg\bin\ffmpeg.exe" (
-    echo.
-    echo  ERROR: Could not extract FFmpeg correctly.
-    echo  Please manually place ffmpeg.exe in vendor\ffmpeg\bin\
-    echo.
-    pause
-    exit /b 1
-)
-
-echo    FFmpeg installed successfully.
+echo  FFmpeg is not installed on this computer. Smart Studio needs it to build
+echo  video and to measure narration. Install it from https://ffmpeg.org/download.html,
+echo  make sure it is on your PATH, then restart Smart Studio.
+echo.
+echo  Setup will continue, but video rendering will be unavailable until FFmpeg is installed.
+echo.
 
 :ffmpeg_done
 
@@ -145,13 +98,13 @@ if %errorlevel% neq 0 (
 )
 
 :: Install the rest of the requirements
-%PYCMD% -m pip install -r requirements-desktop.txt --quiet
+%PYCMD% -m pip install -r requirements.txt --quiet
 
 if %errorlevel% neq 0 (
     echo.
     echo  ERROR: Package installation failed.
     echo  Try running this command manually to see the full error:
-    echo    %PYCMD% -m pip install -r requirements-desktop.txt
+    echo    %PYCMD% -m pip install -r requirements.txt
     echo.
     pause
     exit /b 1

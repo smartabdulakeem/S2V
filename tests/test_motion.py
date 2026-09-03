@@ -19,7 +19,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from pipeline.composer import resolve_motion_effect, render_shot_clip, _find_ffmpeg
+from pipeline.composer import resolve_motion_effect, render_shot_clip
+from pipeline.ffmpeg_locate import find_ffmpeg
 
 
 # ── The resolver ──────────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ def source_image(tmp_path_factory):
 
 
 def _frame(video, t, out_png):
-    subprocess.run([_find_ffmpeg(), "-y", "-ss", str(t), "-i", video, "-frames:v", "1", out_png],
+    subprocess.run([find_ffmpeg(), "-y", "-ss", str(t), "-i", video, "-frames:v", "1", out_png],
                    capture_output=True, text=True)
     return out_png
 

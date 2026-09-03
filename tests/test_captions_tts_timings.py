@@ -14,7 +14,7 @@ from pipeline.captions import (
     get_whisper_load_count,
 )
 from pipeline.voiceover import _generate_with_google_tts
-from pipeline.composer import _find_ffprobe
+from pipeline.ffmpeg_locate import find_ffprobe
 
 
 def _get_test_google_api_key() -> str:
@@ -86,7 +86,7 @@ def test_google_tts_v1beta1_timepoints_and_zero_whisper_calls():
         # 2. Verify Audio Output is sane
         assert os.path.exists(out_mp3) and os.path.getsize(out_mp3) > 1000, "Generated MP3 audio is invalid"
 
-        ffprobe = _find_ffprobe()
+        ffprobe = find_ffprobe()
         dur_cmd = [ffprobe, "-i", out_mp3, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
         dur = float(subprocess.run(dur_cmd, capture_output=True, text=True, check=True).stdout.strip())
         assert dur > 2.0, f"Expected audio duration > 2.0s, got {dur:.2f}s"
@@ -151,7 +151,7 @@ def test_caption_timing_correctness_and_monotonicity():
         assert len(tts_entries) > 0, "TTS timepoint SRT empty"
 
         # Probe exact audio duration
-        ffprobe = _find_ffprobe()
+        ffprobe = find_ffprobe()
         dur_cmd = [ffprobe, "-i", out_mp3, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
         audio_dur = float(subprocess.run(dur_cmd, capture_output=True, text=True, check=True).stdout.strip())
 

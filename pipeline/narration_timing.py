@@ -49,8 +49,8 @@ def probe_seconds(path: str):
     if not path or not os.path.exists(path):
         return None
     try:
-        from pipeline.composer import _find_ffprobe
-        cmd = [_find_ffprobe(), "-i", path, "-show_entries", "format=duration",
+        from pipeline.ffmpeg_locate import find_ffprobe
+        cmd = [find_ffprobe(), "-i", path, "-show_entries", "format=duration",
                "-v", "quiet", "-of", "csv=p=0"]
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         value = float(res.stdout.strip())

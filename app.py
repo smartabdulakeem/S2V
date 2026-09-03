@@ -18,11 +18,14 @@ _install_noconsole()
 
 SETTINGS_PATH = os.path.join(BASE_DIR, "config", "settings.json")
 
-# Add vendor ffmpeg to PATH so moviepy/ffmpeg can find it
+# Put vendor ffmpeg on PATH for child processes if present, without overriding system PATH
 _vendor_ffmpeg = os.path.join(BASE_DIR, "vendor", "ffmpeg", "bin")
 if os.path.exists(_vendor_ffmpeg):
-    os.environ["PATH"] = _vendor_ffmpeg + os.pathsep + os.environ.get("PATH", "")
-    os.environ["IMAGEIO_FFMPEG_EXE"] = os.path.join(_vendor_ffmpeg, "ffmpeg.exe")
+    import shutil
+    if not shutil.which("ffmpeg"):
+        os.environ["PATH"] = _vendor_ffmpeg + os.pathsep + os.environ.get("PATH", "")
+    elif _vendor_ffmpeg not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + _vendor_ffmpeg
 
 
 def _load_settings() -> dict:
@@ -64,6 +67,42 @@ class Api:
 
     def set_window(self, window):
         self._window = window
+
+    def check_ffmpeg(self) -> dict:
+        """Report whether ffmpeg and ffprobe are available, with paths or plain-English guidance."""
+        from pipeline.ffmpeg_locate import find_ffmpeg, find_ffprobe, FFmpegMissing, _FFMPEG_MESSAGE
+
+        ffmpeg_path = None
+        ffprobe_path = None
+        ffmpeg_error = None
+        ffprobe_error = None
+
+        try:
+            ffmpeg_path = find_ffmpeg()
+        except FFmpegMissing as e:
+            ffmpeg_error = str(e)
+        except Exception as e:
+            ffmpeg_error = str(e)
+
+        try:
+            ffprobe_path = find_ffprobe()
+        except FFmpegMissing as e:
+            ffprobe_error = str(e)
+        except Exception as e:
+            ffprobe_error = str(e)
+
+        available = bool(ffmpeg_path and ffprobe_path)
+        message = None
+        if not available:
+            message = ffmpeg_error or ffprobe_error or _FFMPEG_MESSAGE
+
+        return {
+            "available": available,
+            "ffmpeg_path": ffmpeg_path,
+            "ffprobe_path": ffprobe_path,
+            "message": message,
+            "download_url": "https://ffmpeg.org/download.html",
+        }
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
