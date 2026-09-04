@@ -2,14 +2,14 @@
   "protocol": "claude-code <-> antigravity relay",
   "phase": "CLAUDE_REVIEWED_HANDOFF_READY",
   "ready_for": "ANTIGRAVITY",
-  "brief_file": "ANTIGRAVITY-SLICE-L.md",
+  "brief_file": "ANTIGRAVITY-SLICE-M.md",
   "feedback_file": "RELAY-FEEDBACK.md",
-  "slice": "L",
-  "slice_title": "The Timeline at Low Zoom: handle hit areas, label thresholds, zoom-to-selection",
+  "slice": "M",
+  "slice_title": "Undo for Timeline Edits (closes Milestone 3)",
   "branch": "feat/image-budget",
-  "baseline_commit": "502e01b",
+  "baseline_commit": "6a9effa",
   "baseline_tests": {
-    "passed": 1286,
+    "passed": 1296,
     "xfailed": 1,
     "failed": 0,
     "command": "python -m pytest tests/ -q",
@@ -34,7 +34,7 @@
   "verification_gate": {
     "required_before_build": true,
     "blocking": false,
-    "note": "Slice L Job 1 is a measurement job: open the live window on Before Adam, press 0 to fit, and record clip and handle offsetWidths to reports/verification_gate/slice_l_dom.json before changing anything. The whole slice turns on whether the handle is really being clipped to the clip's width, so measure it rather than assume it. If it is not, say so and Job 2 changes shape."
+    "note": "Slice M Job 1 is a measurement: record JSON.stringify(currentScriptData).length and one structuredClone time on Before Adam to reports/verification_gate/slice_m_dom.json, and pick the undo stack depth from those numbers rather than guessing."
   },
   "updated_by": "claude-code",
   "updated_at": "2026-09-04",
@@ -133,6 +133,16 @@
       "commit": "502e01b",
       "by": "claude-code",
       "summary": "Slice K closed by Claude at the owner's instruction. Job 1 (live verification gate) was Antigravity's and cleared the debt Slices I and J carried. Job 2 was WITHDRAWN - the artifact measured scrollLeft_after 68167 against max 68758, so no clamping occurred and the 0.27px drift was sub-pixel rounding; the premise was wrong in principle too, since a clamp to max leaves the playhead at playhead_px - laneWidth + clientWidth, always on screen. Job 3 shipped: zoom floor 1 -> 0.2 px/s in setTimelineZoom and #tl-zoom's min, plus step=any which solved Job 4 outright by making slider and tlZoom agree exactly. The existing clamp test asserted the old floor and was split rather than relaxed: a 33-minute film must now survive unclamped at 0.4, and a 5000s film must still clamp at 0.2. Three tests added, five mutations run, five caught. Suite 1286 passed, 1 xfailed - 1283 + 3 exactly, no regressions from widening the zoom range."
+    },
+    {
+      "commit": null,
+      "by": "antigravity",
+      "summary": "Slice L complete: Job 1 live DOM measured on Before Adam (zoom 0.689, 7 overflowing clip heads, narrowest clip 10px; recorded in reports/verification_gate/slice_l_dom.json). Job 2 boundary handles escaped parent clip to straddle clip seams in laneP with min 8px hit area, overlap suppression (later boundary wins), and keyboard/ARIA accessibility fully preserved. Job 3 micro-clip label threshold (< 24px) omits text while keeping hover titles. Job 4 zoomTimelineToSelection mapped to '.' key under timeline pane gate with [0.2, 60] clamp and safe no-op on empty selection/film. 8 contract tests added in tests/test_timeline_low_zoom.py, all 7 Rule 4 deliberate break mutations caught and restored cleanly. Full test suite: 1293 passed, 1 skipped, 1 xfailed, 0 failures."
+    },
+    {
+      "commit": "6a9effa",
+      "by": "claude-code",
+      "summary": "Slice L reviewed and committed. Handles now render into the lane at the seam with translateX(-50%) instead of nested inside an overflow:hidden clip, with 8px overlap suppression, a micro-label threshold at 24px, and zoomTimelineToSelection on the dot key. Nine of ten independent mutations caught; the one escape was correct, since the tlSelected guard is redundant against the pic check below it. Review found one regression the slice introduced: timelineHandlePointerMove updates currClip.style.left but never handle.style.left, which was free when the handle was a child of the clip and is not now, so the handle sat still while the edge slid away. No test drove pointermove. Fixed with the file's own idiom, since tlSfxDragState already moves its handle that way, plus two tests: one drives a real drag, one asserts handles are emitted after every clip because the CSS assertion alone cannot catch a nested cropped handle. The slice_l_dom.json artifact independently confirms Slice K in a real browser: actually_fits true, 799 against 823. Suite 1296 passed, 1 xfailed."
     }
   ],
   "frontend_verification": {
@@ -162,7 +172,7 @@
   },
   "milestone": 3,
   "milestone_title": "Visual & Interactive Polish",
-  "milestone_note": "Milestone 3 is ACTIVE. Slice I landed keyboard transport, Slice J anchored zoom, Slice K the live verification gate and the zoom floor. Slice L is the other half of Slice K: dropping the floor to 0.2 px/s fixed the view and broke the controls, so the boundary handle needs a hit area that survives a 3px clip. Magnetic snapping was considered and deliberately dropped - boundaries already quantise to narration lines.",
+  "milestone_note": "Milestone 3 is ACTIVE and Slice M is its LAST slice. I gave the Timeline a keyboard, J anchored the zoom, K lowered the floor and cleared the live-verification debt, L made the handles survive that floor. Every one of those makes an edit easier to perform and none of them makes one reversible - there is no undo anywhere in the app. Slice M adds it, then the relay stops at the owner gate before Milestone 4.",
   "driver": {
     "script": "tools/relay_loop.py",
     "spawns": "claude -p, fresh context per slice",
@@ -171,16 +181,14 @@
     "max_slices_default": 8
   },
   "review_findings": [
-    "Slice J's tests scored 10 of 10 on independent mutation and Slice K's floor fix scored 5 of 5. Test quality is now consistently high; the Slice G and H pattern of tests that could not fail has not recurred.",
-    "Slice K Job 2's premise was wrong and its own artifact disproved it. Worth noting as a reviewer lesson rather than a builder one: the brief predicted a clamp that the measurement showed never happened, and the artifact's note asserted the clamp anyway, contradicting the numbers printed directly above it. Measurements beat predictions, including the reviewer's.",
-    "Antigravity stopped after Slice K Job 1 without code changes and without setting ready_for back to CLAUDE, so the watcher never fired and the relay sat idle until the owner noticed. Both the revised Slice K brief and Slice L now spell out the handback steps explicitly as a numbered section.",
-    "Lowering the zoom floor to 0.2 px/s is verified safe across the whole suite (1286 passed, 0 failures) but it degrades the mouse controls, which is what Slice L exists for. tlTickInterval was checked across the widened range and holds: 600s ticks at 0.2 px/s is a label every 120px against the 90px it targets."
+    "Slice L introduced, and review caught, a drag regression invisible to every test: moving the handle out of the clip meant it stopped riding along when the clip's left edge moved, and nothing drove pointermove. The lesson is that a structural move needs a test for the behaviour the old structure was providing for free.",
+    "Slice L Job 1 recorded narrow_handle: null - the measurement the brief called the number the slice turns on - and Job 2 proceeded unchanged rather than reshaping as the brief instructed. The artifact was also taken only at fit zoom (0.689 px/s), where narrowest_clip.offsetWidth is 10px, the same as the handle width, so nothing was cropped at the zoom measured. Job 2 was right in principle but is not evidenced by the artifact.",
+    "Test quality is holding: Slice J 10/10 on independent mutation, K 5/5, L 9/10 with a correct escape. The Slice G and H pattern of tests that could not fail has not recurred in four slices."
   ],
   "known_gaps": [
-    "The boundary handle is 10px at left:0 inside a clip that sets overflow:hidden, so at low zoom it is clipped to the clip's own width - a 3px clip has a 3px grab target. Slice L Job 2. Measured widths are still to be recorded live.",
-    "Drag resolution is (e.clientX - rect.left) / tlZoom, so at the 0.2 floor one pixel of mouse travel is five seconds. The keyboard path on a focused handle moves one line per press regardless of zoom and is the accessible fallback; Slice L must not regress it.",
-    "The three picture-boundary deltas from Slice H Job 3 were reported but not written to an artifact, and Slice J's Job 4 render benchmark left no script and no artifact - only numbers in a history entry. Same shape twice. If either matters, measure again and record.",
-    "The 1/2/3 and transport keys do not check ctrlKey/altKey/metaKey, so Ctrl+1 switches panes. The app binds no modifier shortcuts anywhere and WebView2 has no tab bar, so this is cosmetic. Fix it the next time that listener is opened.",
-    "Magnetic snapping is not implemented and was deliberately excluded from Slice L. Boundaries already quantise to narration line starts via tlLineAt/tlLineStartTime. If snapping is wanted, it should snap the playhead to boundaries, not boundaries to the playhead - a separate slice."
+    "There is no undo anywhere in the app. A case-insensitive grep for undo or redo across frontend/app.js returns 0 hits. Slice M.",
+    "The global keydown listener checks no modifiers, so Ctrl+1 switches panes and Ctrl+0 fits. Slice M Job 3 fixes it, since that slice opens the listener anyway.",
+    "moveTimelinePictureBoundary mutates coverageReport.shot_reports alongside the script and does not go through persistCurrentScript at all. Any snapshot scheme hooked into the persistence layer would therefore miss boundary moves, the most visible edit, and would leave the coverage report drifting from the script. Slice M Jobs 2 and 4.",
+    "The three picture-boundary deltas from Slice H Job 3, and Slice J Job 4's render benchmark, were both reported as numbers with no script and no artifact. Same shape twice. If either matters, measure again and record it."
   ]
 }
