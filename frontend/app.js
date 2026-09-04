@@ -2361,6 +2361,189 @@ let tlAnimFrameId = null;
 let tlCurrentFramePic = null;
 let tlAudioPreparing = false;
 
+// ── Slice G: Timeline Audio Sync (Jobs 1, 2, 3) ─────────────────────────────
+let tlSfxSchedule = [];
+let tlSfxCursor = 0;
+let tlSfxLastPlayhead = 0;
+let tlSfxAudioPool = {};
+let tlActiveSfxElements = [];
+
+/**
+ * Job 2: Pure function for honest music volume preview.
+ * Applies linear fade-in and fade-out matching ffmpeg afade.
+ */
+function musicGainAt(filmTime, totalSeconds, project) {
+  const proj = project || {};
+  const db = proj.music_volume_db !== undefined ? parseFloat(proj.music_volume_db) : -20.0;
+  const baseGain = Math.min(1.0, Math.max(0.0, Math.pow(10, db / 20.0)));
+
+  const fadeIn = Math.max(0.0, parseFloat(proj.music_fade_in) || 0.0);
+  const fadeOut = Math.max(0.0, parseFloat(proj.music_fade_out) || 0.0);
+  const t = Math.max(0.0, parseFloat(filmTime) || 0.0);
+  const total = Math.max(0.0, parseFloat(totalSeconds) || 0.0);
+
+  let fadeFactor = 1.0;
+
+  if (fadeIn > 0.0 && t < fadeIn) {
+    fadeFactor = Math.min(fadeFactor, Math.max(0.0, t / fadeIn));
+  }
+  if (fadeOut > 0.0 && total > 0.0 && t > (total - fadeOut)) {
+    fadeFactor = Math.min(fadeFactor, Math.max(0.0, (total - t) / fadeOut));
+  }
+
+  return Math.min(1.0, Math.max(0.0, baseGain * fadeFactor));
+}
+
+/**
+ * Job 3: Pure function to calculate target music time and drift.
+ * Deadband defaults to 0.25s to prevent stutter.
+ */
+function checkMusicDrift(narrationTime, musicDuration, currentMusicTime, deadband = 0.25) {
+  if (!musicDuration || musicDuration <= 0) {
+    return { needsCorrection: false, targetTime: 0, drift: 0 };
+  }
+  const targetTime = narrationTime % musicDuration;
+  const drift = Math.abs(currentMusicTime - targetTime);
+  return {
+    needsCorrection: drift > deadband,
+    targetTime: targetTime,
+    drift: drift
+  };
+}
+
+/**
+ * Job 1: Build the sorted schedule of sound effects across the film.
+ */
+function buildTimelineSfxSchedule() {
+  tlSfxSchedule = [];
+  const segs = (currentScriptData && currentScriptData.segments) || [];
+  segs.forEach((seg, segIdx) => {
+    const list = seg.sfx || [];
+    list.forEach((sfx, sfxIdx) => {
+      const t = sfxToFilmTime(segIdx, sfx.offset_ms);
+      const name = (sfx.name || "").trim();
+      if (name) {
+        tlSfxSchedule.push({
+          filmTime: t,
+          name: name,
+          segIndex: segIdx,
+          sfxIndex: sfxIdx
+        });
+      }
+    });
+  });
+  tlSfxSchedule.sort((a, b) => a.filmTime - b.filmTime);
+  resetTimelineSfxCursor(tlPlayhead);
+  preloadTimelineSfx();
+}
+
+/**
+ * Job 1: Reset cursor to current playhead without firing effects (e.g. on seek).
+ */
+function resetTimelineSfxCursor(playheadTime) {
+  const t = Math.max(0.0, parseFloat(playheadTime) || 0.0);
+  tlSfxLastPlayhead = t;
+  const idx = tlSfxSchedule.findIndex(item => item.filmTime >= t);
+  tlSfxCursor = idx === -1 ? tlSfxSchedule.length : idx;
+  stopAllTimelineSfx();
+}
+
+/**
+ * Job 1: Fire effects whose filmTime falls between prev frame and curr playhead.
+ */
+function processTimelineSfxCrossing(currTime) {
+  if (!tlSfxSchedule.length) return;
+  const prev = tlSfxLastPlayhead;
+  const curr = currTime;
+
+  if (curr >= prev) {
+    while (tlSfxCursor < tlSfxSchedule.length) {
+      const item = tlSfxSchedule[tlSfxCursor];
+      if (item.filmTime <= curr) {
+        if (item.filmTime >= prev - 0.001) {
+          playTimelineSfx(item.name);
+        }
+        tlSfxCursor++;
+      } else {
+        break;
+      }
+    }
+  } else {
+    resetTimelineSfxCursor(curr);
+  }
+  tlSfxLastPlayhead = curr;
+}
+
+/**
+ * Job 1: Play an instance of a preloaded sound effect.
+ */
+function playTimelineSfx(sfxName) {
+  if (!sfxName) return;
+  const base = tlSfxAudioPool[sfxName];
+  if (!base || !base.src) return;
+  let a = base;
+  if (!a.paused) {
+    a = base.cloneNode();
+  }
+  a.currentTime = 0;
+  a.volume = 1.0;
+  a.play().catch(err => console.warn("Timeline SFX play failed:", err));
+  tlActiveSfxElements.push(a);
+  a.onended = () => {
+    const i = tlActiveSfxElements.indexOf(a);
+    if (i !== -1) tlActiveSfxElements.splice(i, 1);
+  };
+}
+
+/**
+ * Job 1: Stop in-flight sound effects on pause/seek.
+ */
+function stopAllTimelineSfx() {
+  while (tlActiveSfxElements.length) {
+    const a = tlActiveSfxElements.pop();
+    if (a) {
+      try {
+        a.pause();
+        a.currentTime = 0;
+      } catch (e) {}
+    }
+  }
+  for (const name in tlSfxAudioPool) {
+    const a = tlSfxAudioPool[name];
+    if (a && !a.paused) {
+      try {
+        a.pause();
+        a.currentTime = 0;
+      } catch (e) {}
+    }
+  }
+}
+
+/**
+ * Job 1: Preload distinct sound effects through media server.
+ */
+async function preloadTimelineSfx() {
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.prepare_sfx_preview) return;
+  const projectDir = currentScriptPath ? currentScriptPath.replace(/[\\/][^\\/]*$/, "") : "";
+  const distinct = new Set(tlSfxSchedule.map(s => s.name));
+  for (const name of distinct) {
+    if (!tlSfxAudioPool[name]) {
+      try {
+        const res = await window.pywebview.api.prepare_sfx_preview(name, projectDir);
+        if (res && res.ok && res.src) {
+          const audio = new Audio();
+          audio.src = res.src;
+          audio.preload = "auto";
+          tlSfxAudioPool[name] = audio;
+        }
+      } catch (e) {
+        console.warn("Preload sfx failed:", name, e);
+      }
+    }
+  }
+}
+
+
 function timelineAudioEl() {
   return document.getElementById("tl-audio");
 }
@@ -2384,9 +2567,10 @@ async function prepareTimelineMusic() {
     return;
   }
   const projectTitle = currentScriptData.project.title || "Untitled Project";
+  const secs = segmentSecondsList(currentScriptData);
+  const total = secs.reduce((a, b) => a + b, 0);
   if (musicAudio.dataset.project === projectTitle && musicAudio.dataset.music === bgMusic && musicAudio.src) {
-    const db = currentScriptData.project.music_volume_db !== undefined ? currentScriptData.project.music_volume_db : -20;
-    musicAudio.volume = Math.min(1.0, Math.max(0.0, Math.pow(10, db / 20)));
+    musicAudio.volume = musicGainAt(tlPlayhead, total, currentScriptData.project);
     return;
   }
   if (tlMusicPreparing) return;
@@ -2399,8 +2583,7 @@ async function prepareTimelineMusic() {
         musicAudio.src = res.src;
         musicAudio.dataset.project = projectTitle;
         musicAudio.dataset.music = bgMusic;
-        const db = currentScriptData.project.music_volume_db !== undefined ? currentScriptData.project.music_volume_db : -20;
-        musicAudio.volume = Math.min(1.0, Math.max(0.0, Math.pow(10, db / 20)));
+        musicAudio.volume = musicGainAt(tlPlayhead, total, currentScriptData.project);
         musicAudio.load();
       }
     }
@@ -2427,6 +2610,8 @@ function initTimelineAudio() {
       btn.setAttribute("aria-label", "Pause");
       btn.title = "Pause";
     }
+    buildTimelineSfxSchedule();
+    resetTimelineSfxCursor(audio.currentTime);
     const mAudio = timelineMusicAudioEl();
     if (mAudio && mAudio.src) {
       if (mAudio.duration) {
@@ -2449,6 +2634,7 @@ function initTimelineAudio() {
     if (mAudio && !mAudio.paused) {
       mAudio.pause();
     }
+    stopAllTimelineSfx();
     if (tlAnimFrameId) {
       cancelAnimationFrame(tlAnimFrameId);
       tlAnimFrameId = null;
@@ -2466,6 +2652,7 @@ function initTimelineAudio() {
     if (mAudio && !mAudio.paused) {
       mAudio.pause();
     }
+    stopAllTimelineSfx();
     if (tlAnimFrameId) {
       cancelAnimationFrame(tlAnimFrameId);
       tlAnimFrameId = null;
@@ -2482,7 +2669,31 @@ function tlAnimLoop() {
     tlAnimFrameId = null;
     return;
   }
-  timelineSeek(audio.currentTime, { fromAudio: true });
+
+  const currTime = audio.currentTime;
+  timelineSeek(currTime, { fromAudio: true });
+
+  // Job 1: Process sound effects crossing the playhead
+  processTimelineSfxCrossing(currTime);
+
+  const mAudio = timelineMusicAudioEl();
+  if (mAudio && mAudio.src) {
+    const secs = segmentSecondsList(currentScriptData);
+    const total = secs.reduce((a, b) => a + b, 0);
+    const proj = (currentScriptData && currentScriptData.project) || {};
+
+    // Job 2: Drive music volume with linear fade-in and fade-out
+    mAudio.volume = musicGainAt(currTime, total, proj);
+
+    // Job 3: Resync music against narration clock if drift exceeds 0.25s deadband
+    if (mAudio.duration && !mAudio.paused) {
+      const check = checkMusicDrift(currTime, mAudio.duration, mAudio.currentTime, 0.25);
+      if (check.needsCorrection) {
+        mAudio.currentTime = check.targetTime;
+      }
+    }
+  }
+
   tlAnimFrameId = requestAnimationFrame(tlAnimLoop);
 }
 
@@ -2495,6 +2706,7 @@ function timelinePauseAudio() {
   if (mAudio && !mAudio.paused) {
     mAudio.pause();
   }
+  stopAllTimelineSfx();
   if (tlAnimFrameId) {
     cancelAnimationFrame(tlAnimFrameId);
     tlAnimFrameId = null;
@@ -2603,6 +2815,7 @@ function renderTimelineScreen() {
   const segs = currentScriptData.segments || [];
   const secs = segmentSecondsList(currentScriptData);
   const total = secs.reduce((a, b) => a + b, 0);
+  buildTimelineSfxSchedule();
   const measured = segs.filter(s => Boolean(s.narration_audio && parseFloat(s.narration_seconds) > 0)).length;
   const width = Math.max(320, total * tlZoom);
 
@@ -2797,6 +3010,15 @@ function timelineSeek(seconds, opts) {
   const mAudio = timelineMusicAudioEl();
   if (mAudio && mAudio.src && mAudio.duration && (!opts || !opts.fromAudio)) {
     mAudio.currentTime = tlPlayhead % mAudio.duration;
+  }
+  if (mAudio && mAudio.src) {
+    const proj = (currentScriptData && currentScriptData.project) || {};
+    mAudio.volume = musicGainAt(tlPlayhead, total, proj);
+  }
+
+  // Job 1: Seeking resets the sound effects cursor without firing
+  if (!opts || !opts.fromAudio) {
+    resetTimelineSfxCursor(tlPlayhead);
   }
 
   const x = tlPlayhead * tlZoom;
@@ -3261,7 +3483,9 @@ async function onTimelineMusicVolumeChange(val) {
   if (valEl) valEl.textContent = `${db} dB`;
   const mAudio = timelineMusicAudioEl();
   if (mAudio) {
-    mAudio.volume = Math.min(1.0, Math.max(0.0, Math.pow(10, db / 20)));
+    const secs = segmentSecondsList(currentScriptData);
+    const total = secs.reduce((a, b) => a + b, 0);
+    mAudio.volume = musicGainAt(tlPlayhead, total, currentScriptData.project);
   }
   await persistCurrentScript();
   renderTimelineScreen();

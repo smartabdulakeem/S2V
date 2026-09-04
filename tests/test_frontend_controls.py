@@ -162,3 +162,59 @@ def test_housekeeping_figures_come_from_the_backend():
 
     retired = re.search(r'"house-retired-count"\)\.textContent\s*=\s*res\.retired_count', js)
     assert retired, "app.js does not write Retired from the backend"
+
+
+def _css_rule_body(css: str, selector: str) -> str:
+    """The declarations inside one CSS rule, so a test can assert on that rule
+    rather than on the whole stylesheet."""
+    at = css.find(selector)
+    assert at != -1, f"selector {selector!r} is not in style.css"
+    open_brace = css.index("{", at)
+    close_brace = css.index("}", open_brace)
+    return css[open_brace + 1:close_brace]
+
+
+def test_timeline_transport_and_tracks_do_not_overlap():
+    """
+    Regression test: adding the Music and Sound effects lanes grew .tl-tracks,
+    and .tl-frame's rigid `aspect-ratio: 16 / 9` refused to give up the space.
+    The tracks were painted over .tl-transport and the Play button could not be
+    clicked.
+
+    What this test can and cannot do, stated plainly: it cannot prove the Play
+    button is clickable. That is computed geometry and needs a live DOM. What it
+    can do is fail when the CSS regresses to the shape that caused the bug, and
+    that is what it asserts - scoped to the specific rules, not to the presence
+    of a string somewhere in a 2,300-line stylesheet.
+
+    The first version of this test asserted `"overflow: hidden" in css` and
+    `"flex-shrink: 0" in css`. Both strings were already in style.css before the
+    fix, so those two assertions could never fail; and restoring
+    `aspect-ratio: 16 / 9` to .tl-frame - the original bug, exactly - still
+    passed. A test that cannot fail is worse than no test.
+    """
+    css_path = os.path.join(REPO_ROOT, "frontend", "style.css")
+    with open(css_path, "r", encoding="utf-8") as f:
+        css = f.read()
+
+    # The pane clips its own content instead of pushing the transport off.
+    pane = _css_rule_body(css, '.pane[data-pane="timeline"]')
+    assert "overflow: hidden" in pane, ".pane[data-pane=timeline] must clip its content"
+    assert "height: 100%" in pane, ".pane[data-pane=timeline] must be bounded to the viewport"
+
+    # The preview yields space. This is the assertion that catches the real bug.
+    frame = _css_rule_body(css, ".tl-frame {")
+    assert "aspect-ratio" not in frame, (
+        ".tl-frame has a rigid aspect-ratio again. That is the original bug: it "
+        "refuses to shrink, so the tracks cover the transport."
+    )
+    assert "flex:" in frame, ".tl-frame must flex to the space that is left"
+    assert "min-height: 0" in frame, (
+        ".tl-frame needs min-height: 0 or the flex item will not shrink below its "
+        "content size, which reintroduces the overflow."
+    )
+
+    # The transport and the tracks both hold their height.
+    for selector in (".tl-transport {", ".tl-tracks {"):
+        body = _css_rule_body(css, selector)
+        assert "flex-shrink: 0" in body, f"{selector.strip(' {{')} must not be squeezed"

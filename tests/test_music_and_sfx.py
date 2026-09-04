@@ -479,3 +479,319 @@ def test_the_audition_reads_the_field_the_insert_writes():
         "previewCurrentSelectedSfx does not read sfx.name — the key a placed "
         "effect actually carries. Reading only sfx.path audits nothing, silently."
     )
+
+
+# ── Slice G Tests: Timeline Live Playback & Audio Sync ────────────────────────
+
+def test_sfx_schedule_construction_roundtrips():
+    """
+    Test 1: Schedule construction. A script with effects in three different
+    segments produces a sorted film-time list whose values round-trip through
+    filmTimeToSfx unchanged.
+    """
+    script = {
+        "segments": [
+            {"narration_seconds": 4.0, "sfx": [{"name": "whoosh.wav", "offset_ms": 1500}]},
+            {"narration_seconds": 6.0, "sfx": [{"name": "bell.wav", "offset_ms": 2000}]},
+            {"narration_seconds": 5.0, "sfx": [{"name": "hit.wav", "offset_ms": 500}]}
+        ]
+    }
+    res = _run_node_expr("""
+    (() => {
+        buildTimelineSfxSchedule();
+        return tlSfxSchedule.map(item => {
+            const mapBack = filmTimeToSfx(item.filmTime);
+            return {
+                name: item.name,
+                filmTime: item.filmTime,
+                origSeg: item.segIndex,
+                origOffset: item.sfxIndex,
+                mappedSeg: mapBack.segmentIndex,
+                mappedOffset: mapBack.offset_ms
+            };
+        });
+    })()
+    """, script)
+
+    assert len(res) == 3
+    # Sorted order by filmTime: 1.5s, 6.0s (4.0 + 2.0), 10.5s (4.0 + 6.0 + 0.5)
+    assert res[0]["filmTime"] == 1.5
+    assert res[1]["filmTime"] == 6.0
+    assert res[2]["filmTime"] == 10.5
+    assert res[0]["mappedSeg"] == 0 and res[0]["mappedOffset"] == 1500
+    assert res[1]["mappedSeg"] == 1 and res[1]["mappedOffset"] == 2000
+    assert res[2]["mappedSeg"] == 2 and res[2]["mappedOffset"] == 500
+
+
+def test_sfx_crossing_fires_once():
+    """
+    Test 2: Crossing fires once. Advancing the playhead across an effect fires it
+    exactly once, not on every subsequent frame.
+    """
+    script = {
+        "segments": [
+            {"narration_seconds": 10.0, "sfx": [{"name": "impact.wav", "offset_ms": 3000}]}
+        ]
+    }
+    res = _run_node_expr("""
+    (() => {
+        buildTimelineSfxSchedule();
+        resetTimelineSfxCursor(0);
+        let fired = [];
+        playTimelineSfx = (name) => { fired.push(name); };
+
+        // Frame 1: t=1.0s (before effect)
+        processTimelineSfxCrossing(1.0);
+        const count1 = fired.length;
+
+        // Frame 2: t=3.05s (crosses effect at 3.0s)
+        processTimelineSfxCrossing(3.05);
+        const count2 = fired.length;
+
+        // Frame 3: t=3.10s (subsequent frame past effect)
+        processTimelineSfxCrossing(3.10);
+        const count3 = fired.length;
+
+        // Frame 4: t=5.0s (farther along)
+        processTimelineSfxCrossing(5.0);
+        const count4 = fired.length;
+
+        return { count1, count2, count3, count4, fired };
+    })()
+    """, script)
+
+    assert res["count1"] == 0
+    assert res["count2"] == 1
+    assert res["count3"] == 1, "Effect fired again on subsequent frame"
+    assert res["count4"] == 1, "Effect fired again long after crossing"
+    assert res["fired"] == ["impact.wav"]
+
+
+def test_seeking_across_two_hundred_effects_fires_none():
+    """
+    Test 3: Seeking fires nothing. Jumping the playhead from before two hundred
+    effects to after them fires zero. This is the machine-gun guard.
+    """
+    segments = []
+    for s in range(10):
+        sfx_list = [{"name": f"sfx_{s}_{i}.wav", "offset_ms": i * 50} for i in range(20)]
+        segments.append({"narration_seconds": 10.0, "sfx": sfx_list})
+    script = {"segments": segments}
+
+    res = _run_node_expr("""
+    (() => {
+        buildTimelineSfxSchedule();
+        resetTimelineSfxCursor(0);
+        let fired = [];
+        playTimelineSfx = (name) => { fired.push(name); };
+
+        // Scrub/seek from 0 to 95.0s across all 200 effects
+        resetTimelineSfxCursor(95.0);
+
+        // Next frame at 95.016s
+        processTimelineSfxCrossing(95.016);
+
+        return {
+            totalScheduled: tlSfxSchedule.length,
+            firedCount: fired.length,
+            cursor: tlSfxCursor
+        };
+    })()
+    """, script)
+
+    assert res["totalScheduled"] == 200
+    assert res["firedCount"] == 0, f"Seeking fired {res['firedCount']} effects instead of 0"
+
+
+def test_seek_then_play_forward_still_fires_later_effects():
+    """
+    The companion to test_seeking_across_two_hundred_effects_fires_none, and the
+    reason that test is not sufficient on its own.
+
+    That test seeks to 95.0s in a 100s fixture where every effect sits before the
+    seek point, so it cannot tell a correctly positioned cursor apart from a
+    cursor parked at the end of the schedule. Both produce zero fires. An
+    implementation that killed every effect after any seek passed all 23 tests in
+    this file, which is the "test that cannot fail" shape ANTIGRAVITY-RULES.md
+    warns about.
+
+    So this seeks into the MIDDLE, where effects exist on both sides, and asserts
+    both halves: nothing fires from the seek itself, and the effects after the
+    seek point still fire when the playhead reaches them.
+    """
+    segments = []
+    for s in range(10):
+        sfx_list = [{"name": f"sfx_{s}_{i}.wav", "offset_ms": i * 500} for i in range(2)]
+        segments.append({"narration_seconds": 10.0, "sfx": sfx_list})
+    script = {"segments": segments}
+
+    res = _run_node_expr("""
+    (() => {
+        buildTimelineSfxSchedule();
+        let fired = [];
+        playTimelineSfx = (name) => { fired.push(name); };
+
+        // Seek into the middle: effects exist before AND after 45.0s.
+        resetTimelineSfxCursor(45.0);
+        const firedBySeek = fired.length;
+        const cursorAfterSeek = tlSfxCursor;
+
+        // Now play forward across the effects at 50.0s and 50.5s.
+        processTimelineSfxCrossing(50.016);
+        processTimelineSfxCrossing(50.6);
+
+        return {
+            totalScheduled: tlSfxSchedule.length,
+            firedBySeek: firedBySeek,
+            cursorAfterSeek: cursorAfterSeek,
+            firedAfterSeek: fired.length,
+            names: fired
+        };
+    })()
+    """, script)
+
+    assert res["totalScheduled"] == 20
+
+    # The seek itself is silent.
+    assert res["firedBySeek"] == 0, f"The seek fired {res['firedBySeek']} effects"
+
+    # The cursor lands on the first effect at or after 45.0s, which is index 10
+    # (segment 5, offset 0). Parking it at 20 is the bug this test exists to catch.
+    assert res["cursorAfterSeek"] == 10, (
+        f"Cursor landed at {res['cursorAfterSeek']}, expected 10. "
+        "A cursor at 20 means seeking silently disabled every later effect."
+    )
+
+    # Playing forward past the seek still fires.
+    assert res["firedAfterSeek"] == 2, (
+        f"Expected the two effects at 50.0s and 50.5s to fire after seeking, "
+        f"got {res['firedAfterSeek']}. Seeking has disabled later playback."
+    )
+    assert res["names"] == ["sfx_5_0.wav", "sfx_5_1.wav"]
+
+
+def test_pause_stops_sfx_in_flight():
+    """
+    Test 4: Pause stops effects in flight. A sound effect still playing when
+    pause is hit is immediately stopped and reset.
+    """
+    res = _run_node_expr("""
+    (() => {
+        let pausedCount = 0;
+        class MockAudio {
+            constructor() {
+                this.paused = false;
+                this.currentTime = 1.2;
+                this.src = "mock.wav";
+            }
+            pause() { this.paused = true; pausedCount++; }
+        }
+        tlActiveSfxElements = [new MockAudio(), new MockAudio()];
+        tlSfxAudioPool = { "bg": new MockAudio() };
+
+        stopAllTimelineSfx();
+        return {
+            activeRemaining: tlActiveSfxElements.length,
+            pausedCount: pausedCount,
+            poolPaused: tlSfxAudioPool["bg"].paused,
+            poolTime: tlSfxAudioPool["bg"].currentTime
+        };
+    })()
+    """)
+
+    assert res["activeRemaining"] == 0
+    assert res["pausedCount"] == 3
+    assert res["poolPaused"] is True
+    assert res["poolTime"] == 0
+
+
+def test_music_gain_fade_in():
+    """
+    Test 5: musicGainAt at t=0 with 2s fade-in returns 0; at t=1 returns about
+    half the base gain; past the fade returns base gain exactly.
+    """
+    res = _run_node_expr("""
+    (() => {
+        const proj = { music_volume_db: -20, music_fade_in: 2, music_fade_out: 0 };
+        const g0 = musicGainAt(0, 100, proj);
+        const g1 = musicGainAt(1, 100, proj);
+        const g3 = musicGainAt(3, 100, proj);
+        const base = Math.pow(10, -20 / 20); // 0.1
+        return { g0, g1, g3, base };
+    })()
+    """)
+
+    base = res["base"]
+    assert res["g0"] == pytest.approx(0.0, abs=1e-4)
+    assert res["g1"] == pytest.approx(base * 0.5, rel=1e-3)
+    assert res["g3"] == pytest.approx(base, rel=1e-3)
+
+
+def test_music_gain_fade_out():
+    """
+    Test 6: With music_fade_out=4 on a 100s film, t=98 is about half base and
+    t=100 is 0.
+    """
+    res = _run_node_expr("""
+    (() => {
+        const proj = { music_volume_db: -20, music_fade_in: 0, music_fade_out: 4 };
+        const g98 = musicGainAt(98, 100, proj);
+        const g100 = musicGainAt(100, 100, proj);
+        const base = Math.pow(10, -20 / 20); // 0.1
+        return { g98, g100, base };
+    })()
+    """)
+
+    base = res["base"]
+    assert res["g98"] == pytest.approx(base * 0.5, rel=1e-3)
+    assert res["g100"] == pytest.approx(0.0, abs=1e-4)
+
+
+def test_music_gain_flat_when_fades_zero():
+    """
+    Test 7: With both fades 0, the function returns the flat dB conversion
+    at every time — current behaviour unchanged.
+    """
+    res = _run_node_expr("""
+    (() => {
+        const proj = { music_volume_db: -12, music_fade_in: 0, music_fade_out: 0 };
+        const base = Math.pow(10, -12 / 20);
+        const times = [0, 10, 50, 99, 100];
+        const gains = times.map(t => musicGainAt(t, 100, proj));
+        return { base, gains };
+    })()
+    """)
+
+    base = res["base"]
+    for g in res["gains"]:
+        assert g == pytest.approx(base, rel=1e-4)
+
+
+def test_music_drift_modulo_and_deadband():
+    """
+    Test 8: Given narration time and shorter looped music duration, the target
+    music position is the modulo, and a delta under the deadband produces no
+    correction.
+    """
+    res = _run_node_expr("""
+    (() => {
+        const musicDur = 30.0;
+        const narrTime = 75.0; // 75 % 30 = 15.0s
+
+        // Within 0.25s deadband (delta = 0.15s)
+        const check1 = checkMusicDrift(narrTime, musicDur, 15.15, 0.25);
+
+        // Outside 0.25s deadband (delta = 0.40s)
+        const check2 = checkMusicDrift(narrTime, musicDur, 15.40, 0.25);
+
+        return { check1, check2 };
+    })()
+    """)
+
+    assert res["check1"]["targetTime"] == pytest.approx(15.0)
+    assert res["check1"]["needsCorrection"] is False
+
+    assert res["check2"]["targetTime"] == pytest.approx(15.0)
+    assert res["check2"]["needsCorrection"] is True
+    assert res["check2"]["drift"] == pytest.approx(0.40)
+

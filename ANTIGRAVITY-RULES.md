@@ -71,9 +71,36 @@ not a description of it.
   never paste its contents into a report.
 - **A stale `cache/` causes phantom failures.** Tests touching `describe_shots` must patch
   `_load_disk_cache` / `_save_disk_cache` rather than read the real `cache/planning/`.
-- **The shot cache key is `v9`** (`composer.py`). If what a shot renders can change, bump it.
+- **The shot cache key is `v10`** (`composer.py`). If what a shot renders can change, bump it.
 - **Inline `style="` in `index.html` is capped at 19** and is currently at 15, all dynamic state.
   Layout goes in `style.css`.
-- **Full suite is ~8 minutes.** Current baseline: **507 passed, 1 xfailed, 0 failures**.
+- **Full suite is ~9 minutes.** Current baseline: **1249 passed, 1 xfailed, 0 failures**.
 - Python is not on PATH: `C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe`.
   Prefix anything printing prompt text with `PYTHONIOENCODING=utf-8`.
+
+---
+
+## Autonomous Relay & Owner-Absence Protocol
+
+1. **Continuous Execution Within Milestones:**
+   The relay does not stop between slices within a milestone. Slices are driven autonomously
+   by the programmatic driver (`tools/relay_loop.py`). Claude reviews, commits, immediately
+   drafts the next slice brief, sets `ready_for: ANTIGRAVITY`, and hands off.
+
+2. **Milestone Boundary Human Gate:**
+   To prevent compounding direction drift, the relay runs non-stop *within* a milestone, but
+   pauses at the completion of an entire milestone (e.g. at Milestone 2 completion). A push
+   notification is sent to the owner's phone. A single owner acknowledgment resumes the next milestone.
+
+3. **Disposable Sessions via Headless CLI:**
+   State lives durably on disk (`RELAY-STATE.json`, `ANTIGRAVITY-RULES.md`, slice briefs, git).
+   Claude sessions are disposable and spawned cleanly per slice (`claude -p`) with fresh context,
+   eliminating quadratic token costs, cache misses, and lossy compaction.
+
+4. **Owner-Absence Protocol (In-Slice Engineering Decisions):**
+   If an ambiguous technical fork arises during a slice and the owner is away:
+   - Send an informational alert via `tools/relay_notify.py`.
+   - Do NOT halt the slice. Antigravity and Claude make the joint engineering call (choosing the
+     safer, non-destructive path aligned with the master plan) and proceed.
+
+

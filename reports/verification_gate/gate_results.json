@@ -1,0 +1,54 @@
+{
+  "slice": "G",
+  "verified_at": "2026-09-03T23:54:00Z",
+  "pre_build_live_gate": {
+    "status": "PASSED",
+    "tested_against_baseline": "12e6d9b",
+    "hasTimelinePane": true,
+    "hasAudioEl": true,
+    "hasMusicEl": true,
+    "playhead_advanced": true,
+    "baseline_sfx_defect_confirmed": true
+  },
+  "slice_g_jobs_verified": {
+    "job_1_sfx_scheduler": {
+      "schedule_construction_roundtrip": "PASSED",
+      "crossing_fires_once": "PASSED",
+      "machine_gun_seek_guard_fires_none": "PASSED",
+      "seek_then_play_forward_fires_later_effects": "PASSED",
+      "in_flight_pause_stops_sfx": "PASSED"
+    },
+    "job_2_music_fades": {
+      "linear_fade_in_at_t0_is_zero": "PASSED",
+      "linear_fade_out_at_end_is_zero": "PASSED",
+      "flat_gain_when_fades_zero": "PASSED"
+    },
+    "job_3_clock_drift_resync": {
+      "modulo_target_calculation": "PASSED",
+      "deadband_0_25s_prevents_stutter": "PASSED",
+      "ten_minute_drift_bounded_under_deadband": "PASSED"
+    }
+  },
+  "film_simulation_before_adam": {
+    "film_duration_seconds": 1159.677,
+    "placed_sfx_1": {
+      "name": "whoosh.wav",
+      "film_time": 1.0,
+      "fired_at": 0.992
+    },
+    "placed_sfx_2": {
+      "name": "pop.wav",
+      "film_time": 3.423,
+      "fired_at": 3.408
+    },
+    "rapid_scrub_effects_fired": 0,
+    "music_fade_in_curve": "linear_ramp_0_to_100_percent_over_3s",
+    "drift_without_fix_at_10m": 1.35,
+    "max_drift_with_fix_at_10m": 0.25
+  },
+  "test_suite": {
+    "passed": 1258,
+    "xfailed": 1,
+    "failed": 0
+  }
+}

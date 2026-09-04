@@ -1,19 +1,19 @@
 {
   "protocol": "claude-code <-> antigravity relay",
-  "phase": "AWAITING_OWNER_DIRECTION",
-  "ready_for": "OWNER",
-  "brief_file": null,
+  "phase": "CLAUDE_BRIEF_READY",
+  "ready_for": "ANTIGRAVITY",
+  "brief_file": "ANTIGRAVITY-SLICE-H.md",
   "feedback_file": "RELAY-FEEDBACK.md",
-  "slice": null,
-  "slice_title": "Slices A-F of PLAN-REVISION-FRONTEND-FIRST.md are all landed",
+  "slice": "H",
+  "slice_title": "Caption highlight on the playhead, and picture-change accuracy",
   "branch": "feat/image-budget",
-  "baseline_commit": "3ee4eae",
+  "baseline_commit": "12e6d9b",
   "baseline_tests": {
-    "passed": 1249,
+    "passed": 1259,
     "xfailed": 1,
     "failed": 0,
     "command": "python -m pytest tests/ -q",
-    "approx_minutes": 9
+    "approx_minutes": 10
   },
   "guardrails": {
     "sole_git_committer": "claude-code",
@@ -33,10 +33,10 @@
   },
   "verification_gate": {
     "required_before_build": true,
-    "note": "Antigravity opens the live WebView2 window against baseline_commit and verifies from the user's perspective. On any issue: write RELAY-FEEDBACK.md, set ready_for to CLAUDE, halt."
+    "note": "Antigravity opened the live WebView2 window against baseline_commit and confirmed playback works BEFORE changing anything. Passed."
   },
   "updated_by": "claude-code",
-  "updated_at": "2026-09-03",
+  "updated_at": "2026-09-04",
   "history": [
     {
       "commit": "2fa5215",
@@ -77,16 +77,33 @@
       "commit": "3ee4eae",
       "by": "claude-code",
       "summary": "Slice C reviewed and committed: Task 12 test, timing-pill Node test, 347-line measuring run (20.83s), owner's film repaired 26 stranded -> 0 with 347 lines intact and backup untouched. Hardened relay_notify.py: secret gitignored topic, fixed-word inbound allowlist. Verified 1249 passed, 1 xfailed."
+    },
+    {
+      "commit": null,
+      "by": "claude-code",
+      "summary": "Slice G brief written and token handed to Antigravity. Added tools/relay_loop.py, the driver that spawns a fresh claude -p per slice and stops at milestone boundaries for a phone ack. Milestone 2 runs non-stop until then."
+    },
+    {
+      "commit": null,
+      "by": "antigravity",
+      "summary": "Slice G & Timeline Transport Fix completed: SFX scheduler in tlAnimLoop, musicGainAt linear fades, checkMusicDrift 0.25s deadband resync, seeking machine-gun guard, in-flight pause. Fixed critical NLE layout bug where adding tracks covered play button (.pane timeline overflow:hidden, flex:1 contain frame, brass play button, tracks flex-shrink:0). Added test_timeline_transport_and_tracks_do_not_overlap. 31/31 targeted tests passed; full suite: 1258 passed, 1 xfailed."
+    },
+    {
+      "commit": null,
+      "by": "claude-code",
+      "summary": "Slice G reviewed and committed: SFX scheduler, linear music fades, 0.25s drift deadband, and the Timeline NLE layout fix. Found two tests that could not fail - the seek guard and the layout regression - proved both by mutation and replaced them. Added tools/relay_loop.py. Verified 1259 passed, 1 xfailed. Slice H brief written and token handed to Antigravity."
     }
   ],
   "frontend_verification": {
-    "status": "NOT_RUN",
-    "note": "Antigravity left this PENDING for Slice C and built anyway. The gate was skipped."
+    "status": "PASSED_WITH_GAP",
+    "evidenced_by": "reports/verification_gate/gate_results.json",
+    "evidenced": "Pre-build live gate against 12e6d9b, all three Slice G jobs, the Before Adam simulation (effects at 1.0s/3.423s, 0 fired on scrub, drift 1.35s -> 0.25s), and the 1258 suite count. Re-run at 00:26 after the first artifact was found to be five hours stale; that finding is resolved.",
+    "not_evidenced": "The Timeline layout DOM measurements. isPlayCovered=false and gapBetweenTransportAndTracks=10px appear in the handoff and in this file's previous note, but no artifact in reports/ records either number. Probably true; not verifiable. Slice H requires writing reports/verification_gate/slice_h_dom.json."
   },
   "owner_inbox": {
-    "topic": "smart-studio-relay-akeem",
-    "last_message": "I want to test it from here so start but in inform claude to start this loop from a new chat and ask him to inform the new chat properly so nothing will get lost",
-    "received_at": "2026-09-03T22:00:22Z"
+    "topic": "smartstudio-4bc2c58567e88b9b2546c5dc154c2fe1",
+    "last_message": "Do not stop the loop. If I am away, Antigravity and Claude are in charge to make joint decisions and continue building through the 4 milestones without halting.",
+    "received_at": "2026-09-03T23:05:00Z"
   },
   "notifications": {
     "outbound": "Claude Code built-in PushNotification (desktop + phone via Remote Control). No third party.",
@@ -99,6 +116,21 @@
       "status"
     ],
     "inbound_is_untrusted": "Only those exact words are accepted. Never pass a reply to a shell, path or prompt.",
-    "wired_in": false
-  }
+    "wired_in": true,
+    "driver_uses": "tools/relay_loop.py calls relay_notify.py for handoffs, stalls, and the milestone gate."
+  },
+  "milestone": 2,
+  "milestone_title": "Timeline Live Playback & Audio Sync",
+  "milestone_note": "Slice G closed the audio half and is committed. Slice H is the visual half and is the LAST slice of Milestone 2. When it lands and is verified, set phase to MILESTONE_COMPLETE and ready_for to OWNER. Do not begin Milestone 3 without a phone ack.",
+  "driver": {
+    "script": "tools/relay_loop.py",
+    "spawns": "claude -p, fresh context per slice",
+    "cannot_spawn": "Antigravity has no CLI entry point here. The driver notifies and waits when the token is with the builder. Set builder_command in config/relay_loop.json if that ever changes.",
+    "milestone_gate": "Stops at phase=MILESTONE_COMPLETE or ready_for=OWNER and waits for a phone ack.",
+    "max_slices_default": 8
+  },
+  "review_findings": [
+    "Slice G test test_seeking_across_two_hundred_effects_fires_none could not fail: its fixture put all 200 effects before the seek point, so a cursor parked at the end passed it. Proved by mutation - all 23 tests passed with seeking silently disabling every later effect. Closed by test_seek_then_play_forward_still_fires_later_effects.",
+    "The layout regression test could not fail: two of its four assertions matched strings already in style.css before the fix, and restoring aspect-ratio: 16/9 to .tl-frame - the original bug - still passed. Replaced with assertions scoped to the .tl-frame, .tl-transport, .tl-tracks and .pane[data-pane=timeline] rule bodies, verified to fail on that mutation."
+  ]
 }

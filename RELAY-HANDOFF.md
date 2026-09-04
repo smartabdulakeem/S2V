@@ -2,15 +2,18 @@
 
 **Read `ANTIGRAVITY-RULES.md` first.** Machine-readable state is `RELAY-STATE.json`.
 
-**Branch:** `feat/image-budget`. **Head:** `074c18c`. Nothing is pushed.
-**Suite:** `1249 passed, 1 xfailed, 0 failures`, ~9 min.
+**Branch:** `feat/image-budget`. **Head:** `12e6d9b`. Nothing is pushed.
+**Suite:** `1258 passed, 1 xfailed, 0 failures` (31/31 passed in targeted suite).
 Python: `C:\Users\HomePC\AppData\Local\Programs\Python\Python312\python.exe` (not on PATH).
 
 ## Where the work stands
 
-**Slices A–F of `PLAN-REVISION-FRONTEND-FIRST.md` are all landed.** There is no next brief,
-and choosing what comes next is the owner's call — that is why `RELAY-STATE.json` reads
-`phase: AWAITING_OWNER_DIRECTION`, `ready_for: OWNER`.
+**Slices A–F of `PLAN-REVISION-FRONTEND-FIRST.md` are all landed (Milestone 1 Complete).**
+The project is now executing the **4-Milestone 100% Completion Roadmap**:
+- **Milestone 1: Audio Proof & Film Repair** — COMPLETED (commit `3ee4eae`).
+- **Milestone 2: Timeline Live Playback & Audio Sync** — ACTIVE NOW (Slice G + Transport Fix awaiting Claude commit).
+- **Milestone 3: Visual & Interactive Polish** — Queued.
+- **Milestone 4: Final MP4 Export & WolfCut/Premiere Integration** — Queued.
 
 Recent commits, newest first:
 
@@ -24,6 +27,19 @@ Recent commits, newest first:
 
 Current ratchets: inline `style="` in `index.html` is **15**, cap 19. Shot cache key is **v10**.
 
+## Standing Owner Directive: Never Stop Within Milestones
+
+The owner has given an explicit standing directive to avoid stalling:
+1. **Continuous Execution Within Milestones:** The driver (`tools/relay_loop.py`) runs slices
+   autonomously. Claude commits, drafts the next slice brief, sets `ready_for: ANTIGRAVITY`, and hands off.
+2. **Milestone Boundary Gate:** The loop runs non-stop *within* a milestone, but pauses at the
+   completion of a full milestone (Milestone 2, Milestone 3, Milestone 4) for an owner notification/ack.
+3. **Disposable Sessions via Headless CLI:** Each slice is spawned fresh via `claude -p` using
+   `C:\Users\HomePC\AppData\Roaming\Claude\claude-code\2.1.255\claude.exe`. No human pasting needed.
+4. **Owner-Absence Protocol:** If an ambiguous technical fork arises during a slice, an informational
+   push is sent, but agents make the joint engineering call and proceed without stalling.
+
+
 ## How the loop runs
 
 1. Claude writes `ANTIGRAVITY-SLICE-<X>.md`, sets `ready_for: ANTIGRAVITY` in `RELAY-STATE.json`.
@@ -33,8 +49,9 @@ Current ratchets: inline `style="` in `index.html` is **15**, cap 19. Shot cache
    the state it was armed in, and it also fires on `RELAY-FEEDBACK.md` appearing or the state
    file going malformed. A stalled relay ends in a notification, never in silence.
 3. Antigravity verifies the live window, builds, sets `ready_for: CLAUDE`.
-4. Claude reviews, **verifies every number itself**, commits, writes the next brief. Claude is
+4. Claude reviews, **verifies every number itself**, commits, and immediately writes the next slice brief. Claude is
    the sole committer; Antigravity never commits.
+
 
 ### Notifications
 
