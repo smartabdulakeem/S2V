@@ -5,7 +5,7 @@
   "brief_file": "ANTIGRAVITY-SLICE-K.md",
   "feedback_file": "RELAY-FEEDBACK.md",
   "slice": "K",
-  "slice_title": "The Live Window: Verification Gate, Zoom Floor & Tail Anchoring",
+  "slice_title": "Zoom Floor (revised: Job 1 done, Job 2 withdrawn)",
   "branch": "feat/image-budget",
   "baseline_commit": "4578f6e",
   "baseline_tests": {
@@ -32,9 +32,9 @@
     ]
   },
   "verification_gate": {
-    "required_before_build": true,
-    "blocking": true,
-    "note": "MANDATORY AND BLOCKING for Slice K. Slices I and J have never been executed by a browser - both were proved only in the Node DOM harness, and the gate was skipped without being reported as skipped on both. Slice K Job 1 must open the live WebView2 window on the owner's real film and write measured DOM values to reports/verification_gate/slice_k_dom.json BEFORE any code changes. If a key or the zoom anchoring fails there, write RELAY-FEEDBACK.md and stop; that failure is worth more than the rest of the brief."
+    "required_before_build": false,
+    "blocking": false,
+    "note": "SATISFIED for Slice K at commit 73fb44e. reports/verification_gate/slice_k_dom.json is the first live WebView2 evidence since Slice H. Every Slice I key passed in the real window and Slice J mid-film anchoring drifts 0.22px. Do not repeat Job 1."
   },
   "updated_by": "claude-code",
   "updated_at": "2026-09-04",
@@ -123,12 +123,18 @@
       "commit": "4578f6e",
       "by": "claude-code",
       "summary": "Slice J reviewed and committed with no code fixes needed - a first for this run. Ten independent mutations were run against the eight new tests and all ten were caught, including hoisting 0 above the timeline gate and disabling the caption auto-scroll. Slice I's null-script crash shape was correctly guarded on every new key. Two process gaps recorded rather than buried: the live verification gate was skipped and not reported as skipped, and Job 4's benchmark left no script and no artifact. One measured limitation, caused by Slice J's brief rather than its code: the [1,60] zoom clamp means Fit cannot fit an 18-minute film (total=1080s, zoom=1, lane=1080px, viewport=800px). Slice K addresses all three. Suite 1283 passed, 1 xfailed."
+    },
+    {
+      "commit": "73fb44e",
+      "by": "claude-code",
+      "summary": "Committed CLAUDE.md and Slice K Job 1 live verification gate. The gate clears the debt Slices I and J carried: every Slice I key passes in the real browser and Slice J anchoring drifts 0.22px. It also confirmed live that Fit does not fit (zoom 1, lanes 1160 vs client 823). Slice K Job 2 WITHDRAWN: the artifact measured scrollLeft_after 68167 against max 68758, so no clamping occurred and the 0.27px drift is sub-pixel rounding, not truncation - the artifact note claiming otherwise contradicts its own numbers. The premise was wrong in principle too, since a clamp to max leaves the playhead at playhead_px - laneWidth + clientWidth, always on screen. Slice K revised down to the zoom floor fix. Antigravity stopped after Job 1 without code changes and without handing the token back; the revised brief spells out the handback steps."
     }
   ],
   "frontend_verification": {
-    "status": "PENDING_FOR_SLICE_I_AND_J",
-    "evidenced_by": "reports/verification_gate/slice_h_dom.json (Slice H, the last live check)",
-    "not_evidenced": "Every keyboard key from Slice I and the whole zoom-anchoring path from Slice J. The Node harness proves handler arithmetic and guards; it cannot prove the real window routes keydown to document, and its scroll mock is a plain unclamped number against a hardcoded clientWidth of 800, so it is structurally blind to the browser clamping scrollLeft to [0, scrollWidth - clientWidth]."
+    "status": "VERIFIED_FOR_SLICE_I_AND_J",
+    "evidenced_by": "reports/verification_gate/slice_k_dom.json",
+    "evidenced": "Live WebView2 on Before Adam (1159.677s). Slice I: Space toggles playback, arrows move exactly 1.0s and 5.0s, picture stepping lands on 14.241 and 31.457, Home/End hit 0 and 1159.677, J/K/L shuttle, focused TEXTAREA leaves playhead at 18.552447 unchanged, key 3 leaves activeElement on tl-scroll. Slice J: mid-film zoom 8->30 drifts 0.22px.",
+    "not_evidenced": "Nothing outstanding for Slices I and J."
   },
   "owner_inbox": {
     "topic": "smartstudio-4bc2c58567e88b9b2546c5dc154c2fe1",
