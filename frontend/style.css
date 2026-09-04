@@ -2493,15 +2493,14 @@ tbody tr:last-child td {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
   width: 10px;
+  transform: translateX(-50%);
   cursor: col-resize;
   z-index: 6;
   touch-action: none;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  padding-left: 1px;
+  justify-content: center;
 }
 
 .tl-clip-handle:focus {

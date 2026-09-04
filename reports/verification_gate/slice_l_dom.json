@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-09-04T11:17:41.549Z",
+  "film": "Before Adam",
+  "zoom_after_fit": 0.6889849501197313,
+  "lanes_scrollWidth": 799,
+  "scroll_clientWidth": 823,
+  "actually_fits": true,
+  "narrowest_clip": {
+    "id": "tl-clip-1",
+    "offsetWidth": 10,
+    "clientWidth": 8,
+    "rectW": 9.791666984558105
+  },
+  "widest_clip": {
+    "id": "tl-clip-7",
+    "offsetWidth": 44,
+    "clientWidth": 43,
+    "rectW": 44.19791793823242
+  },
+  "narrow_handle": null,
+  "handle_count": 32,
+  "clips_count": 33,
+  "overflowing_heads_count": 7,
+  "sample_overflowing_heads": [
+    {
+      "clipId": "tl-clip-1",
+      "clipWidth": 10,
+      "headScrollWidth": 11,
+      "headClientWidth": 10,
+      "isOverflowing": true,
+      "text": "1"
+    },
+    {
+      "clipId": "tl-clip-15",
+      "clipWidth": 15,
+      "headScrollWidth": 17,
+      "headClientWidth": 14,
+      "isOverflowing": true,
+      "text": "15"
+    },
+    {
+      "clipId": "tl-clip-16",
+      "clipWidth": 10,
+      "headScrollWidth": 17,
+      "headClientWidth": 10,
+      "isOverflowing": true,
+      "text": "16"
+    },
+    {
+      "clipId": "tl-clip-18",
+      "clipWidth": 13,
+      "headScrollWidth": 17,
+      "headClientWidth": 12,
+      "isOverflowing": true,
+      "text": "18"
+    },
+    {
+      "clipId": "tl-clip-20",
+      "clipWidth": 13,
+      "headScrollWidth": 17,
+      "headClientWidth": 11,
+      "isOverflowing": true,
+      "text": "20"
+    }
+  ]
+}

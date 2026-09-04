@@ -2925,33 +2925,23 @@ function renderTimelineScreen() {
   ruler.innerHTML = ticks;
 
   // Pictures — one clip per picture, width is the time it holds
-  laneP.innerHTML = pics.map((pic, idx) => {
+  const minHandleHit = 8;
+  const handles = [];
+  let lastRenderedHandleX = Infinity;
+
+  const clipsHtml = pics.map((pic, idx) => {
     const w = Math.max(2, pic.seconds * tlZoom);
     const img = tlImageFor(pic);
     const state = tlStateFor(pic);
     const narrow = w < 78;
-    // role="slider" promises a range, so state the range it can actually reach:
-    // one line past the picture before, one line short of the picture after.
-    const hMin = idx > 0 ? pics[idx - 1].firstLine + 1 : 1;
-    const hMax = idx + 1 < pics.length ? pics[idx + 1].firstLine - 1 : segs.length;
-    const handleHtml = idx > 0
-      ? `<div class="tl-clip-handle"
-              tabindex="0"
-              role="slider"
-              aria-label="Start of picture ${String(pic.number).padStart(2, "0")}, line ${pic.firstLine}"
-              aria-valuenow="${pic.firstLine}"
-              aria-valuemin="${hMin}"
-              aria-valuemax="${hMax}"
-              data-pic="${pic.number}"
-              data-from-line="${pic.firstLine}"
-              onpointerdown="timelineHandlePointerDown(event, ${pic.number})"
-              onpointermove="timelineHandlePointerMove(event)"
-              onpointerup="timelineHandlePointerUp(event)"
-              onpointercancel="timelineHandleCancel(event)"
-              onkeydown="timelineHandleKeyDown(event, ${pic.number})">
-           <span class="tl-handle-bar"></span>
-         </div>`
-      : "";
+    const micro = w < 24;
+
+    const headHtml = micro ? "" : `
+        <span class="tl-clip-head mono">
+          <b>${narrow ? pic.number : `Pic ${String(pic.number).padStart(2, "0")}`}</b>
+          ${narrow ? "" : `<i>${pic.seconds.toFixed(1)}s</i>`}
+        </span>`;
+
     return `
       <div class="tl-clip ${state === "gap" ? "gap" : state === "weak" ? "weak" : ""} ${tlSelected === pic.number ? "sel" : ""}"
            id="tl-clip-${pic.number}"
@@ -2959,14 +2949,42 @@ function renderTimelineScreen() {
            style="left:${(pic.startsAt * tlZoom).toFixed(1)}px; width:${w.toFixed(1)}px"
            onclick="selectTimelinePicture(${pic.number})"
            title="Picture ${pic.number} — ${pic.seconds.toFixed(1)}s — script lines ${pic.firstLine}-${pic.lastLine}">
-        ${handleHtml}
-        <span class="tl-clip-head mono">
-          <b>${narrow ? pic.number : `Pic ${String(pic.number).padStart(2, "0")}`}</b>
-          ${narrow ? "" : `<i>${pic.seconds.toFixed(1)}s</i>`}
-        </span>
+        ${headHtml}
         ${img ? `<img src="${img}" alt=""/>` : `<span class="tl-clip-empty">no image</span>`}
       </div>`;
   }).join("");
+
+  // Boundary handles rendered into lane at clip seams (later handle wins on overlap < 8px)
+  for (let idx = pics.length - 1; idx > 0; idx--) {
+    const pic = pics[idx];
+    const x = pic.startsAt * tlZoom;
+    if (lastRenderedHandleX - x < minHandleHit) {
+      continue; // Overlap suppression: earlier handle dropped so later handle wins
+    }
+    lastRenderedHandleX = x;
+    const hMin = pics[idx - 1].firstLine + 1;
+    const hMax = idx + 1 < pics.length ? pics[idx + 1].firstLine - 1 : segs.length;
+    handles.unshift(`
+      <div class="tl-clip-handle"
+           tabindex="0"
+           role="slider"
+           aria-label="Start of picture ${String(pic.number).padStart(2, "0")}, line ${pic.firstLine}"
+           aria-valuenow="${pic.firstLine}"
+           aria-valuemin="${hMin}"
+           aria-valuemax="${hMax}"
+           data-pic="${pic.number}"
+           data-from-line="${pic.firstLine}"
+           style="left:${x.toFixed(1)}px;"
+           onpointerdown="timelineHandlePointerDown(event, ${pic.number})"
+           onpointermove="timelineHandlePointerMove(event)"
+           onpointerup="timelineHandlePointerUp(event)"
+           onpointercancel="timelineHandleCancel(event)"
+           onkeydown="timelineHandleKeyDown(event, ${pic.number})">
+        <span class="tl-handle-bar"></span>
+      </div>`);
+  }
+
+  laneP.innerHTML = clipsHtml + handles.join("");
 
   // Narration and captions — one block per script line, so a picture's stretch
   // is visible against the lines it actually has to carry.
@@ -3096,6 +3114,19 @@ function fitTimelineToWindow() {
   const scroll = document.getElementById("tl-scroll");
   const clientWidth = (scroll && scroll.clientWidth > 0) ? scroll.clientWidth : 800;
   const wantedZoom = (clientWidth - 24) / total;
+  setTimelineZoom(wantedZoom);
+}
+
+function zoomTimelineToSelection() {
+  if (!tlPictures().length) return;
+  if (!tlSelected) return;
+  const pics = tlPictures();
+  const pic = pics.find(p => p.number === tlSelected);
+  if (!pic || pic.seconds <= 0) return;
+
+  const scroll = document.getElementById("tl-scroll");
+  const clientWidth = (scroll && scroll.clientWidth > 0) ? scroll.clientWidth : 800;
+  const wantedZoom = (clientWidth - 24) / pic.seconds;
   setTimelineZoom(wantedZoom);
 }
 
@@ -3351,6 +3382,10 @@ function timelineHandlePointerMove(e) {
       if (currSub) currSub.textContent = `${currSeconds.toFixed(1)}s`;
     }
 
+    // Slice L moved the handle out of the clip and into the lane, so it no
+    // longer rides along when the clip left edge moves. Move it with the seam,
+    // or the handle you are holding sits still while the edge slides away.
+    tlDragState.handle.style.left = `${(newStartsAt * tlZoom).toFixed(1)}px`;
     tlDragState.handle.setAttribute("aria-valuenow", clampedLine);
     tlDragState.handle.title = `Line ${clampedLine} · holds ${currSeconds.toFixed(1)}s`;
   }
@@ -3950,6 +3985,7 @@ function timelineScrubFrom(event) {
 window.renderTimelineScreen = renderTimelineScreen;
 window.setTimelineZoom = setTimelineZoom;
 window.fitTimelineToWindow = fitTimelineToWindow;
+window.zoomTimelineToSelection = zoomTimelineToSelection;
 window.timelineNudge = timelineNudge;
 window.timelineSeekPicture = timelineSeekPicture;
 window.selectTimelinePicture = selectTimelinePicture;
@@ -4113,6 +4149,12 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "0") {
     e.preventDefault();
     fitTimelineToWindow();
+    return;
+  }
+
+  if (e.key === ".") {
+    e.preventDefault();
+    zoomTimelineToSelection();
     return;
   }
 });
