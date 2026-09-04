@@ -7,7 +7,7 @@
   "slice": "H",
   "slice_title": "Caption highlight on the playhead, and picture-change accuracy",
   "branch": "feat/image-budget",
-  "baseline_commit": "10f7276",
+  "baseline_commit": "45959ac",
   "baseline_tests": {
     "passed": 1265,
     "xfailed": 1,
@@ -99,7 +99,7 @@
       "summary": "Slice H completed: tlActiveCaptionIndex pure function, active caption live highlighting in tlAnimLoop & timelineSeek, DOM guard prevents redundant frame writes, auto-scroll bounds active line, .tl-cap.active styled with brass accent. 6 new contract tests in test_timeline_captions.py verified with deliberate break mutations. Live WebView2 DOM measured and written to reports/verification_gate/slice_h_dom.json (isPlayCovered: false, 10px gap, active caption brass styling confirmed). 3 picture boundaries on Before Adam measured with max delta 16.67ms (0 accumulating drift). Full targeted suite: 37 passed."
     },
     {
-      "commit": null,
+      "commit": "45959ac",
       "by": "claude-code",
       "summary": "Slice H reviewed and committed: tlActiveCaptionIndex, live caption highlight in tlAnimLoop and timelineSeek, DOM guard, auto-scroll, .tl-cap.active brass styling. Tests verified genuine this time - two mutations (boundary off-by-one, DOM guard removed) were each caught, the second by exactly the test written for it. Verified 1265 passed, 1 xfailed. MILESTONE 2 COMPLETE; parked at the owner gate."
     }
