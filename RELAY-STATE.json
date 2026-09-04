@@ -2,18 +2,18 @@
   "protocol": "claude-code <-> antigravity relay",
   "phase": "CLAUDE_REVIEWED_HANDOFF_READY",
   "ready_for": "ANTIGRAVITY",
-  "brief_file": "ANTIGRAVITY-SLICE-K.md",
+  "brief_file": "ANTIGRAVITY-SLICE-L.md",
   "feedback_file": "RELAY-FEEDBACK.md",
-  "slice": "K",
-  "slice_title": "Zoom Floor (revised: Job 1 done, Job 2 withdrawn)",
+  "slice": "L",
+  "slice_title": "The Timeline at Low Zoom: handle hit areas, label thresholds, zoom-to-selection",
   "branch": "feat/image-budget",
-  "baseline_commit": "4578f6e",
+  "baseline_commit": "502e01b",
   "baseline_tests": {
-    "passed": 1283,
+    "passed": 1286,
     "xfailed": 1,
     "failed": 0,
     "command": "python -m pytest tests/ -q",
-    "approx_minutes": 11
+    "approx_minutes": 12
   },
   "guardrails": {
     "sole_git_committer": "claude-code",
@@ -32,9 +32,9 @@
     ]
   },
   "verification_gate": {
-    "required_before_build": false,
+    "required_before_build": true,
     "blocking": false,
-    "note": "SATISFIED for Slice K at commit 73fb44e. reports/verification_gate/slice_k_dom.json is the first live WebView2 evidence since Slice H. Every Slice I key passed in the real window and Slice J mid-film anchoring drifts 0.22px. Do not repeat Job 1."
+    "note": "Slice L Job 1 is a measurement job: open the live window on Before Adam, press 0 to fit, and record clip and handle offsetWidths to reports/verification_gate/slice_l_dom.json before changing anything. The whole slice turns on whether the handle is really being clipped to the clip's width, so measure it rather than assume it. If it is not, say so and Job 2 changes shape."
   },
   "updated_by": "claude-code",
   "updated_at": "2026-09-04",
@@ -128,6 +128,11 @@
       "commit": "73fb44e",
       "by": "claude-code",
       "summary": "Committed CLAUDE.md and Slice K Job 1 live verification gate. The gate clears the debt Slices I and J carried: every Slice I key passes in the real browser and Slice J anchoring drifts 0.22px. It also confirmed live that Fit does not fit (zoom 1, lanes 1160 vs client 823). Slice K Job 2 WITHDRAWN: the artifact measured scrollLeft_after 68167 against max 68758, so no clamping occurred and the 0.27px drift is sub-pixel rounding, not truncation - the artifact note claiming otherwise contradicts its own numbers. The premise was wrong in principle too, since a clamp to max leaves the playhead at playhead_px - laneWidth + clientWidth, always on screen. Slice K revised down to the zoom floor fix. Antigravity stopped after Job 1 without code changes and without handing the token back; the revised brief spells out the handback steps."
+    },
+    {
+      "commit": "502e01b",
+      "by": "claude-code",
+      "summary": "Slice K closed by Claude at the owner's instruction. Job 1 (live verification gate) was Antigravity's and cleared the debt Slices I and J carried. Job 2 was WITHDRAWN - the artifact measured scrollLeft_after 68167 against max 68758, so no clamping occurred and the 0.27px drift was sub-pixel rounding; the premise was wrong in principle too, since a clamp to max leaves the playhead at playhead_px - laneWidth + clientWidth, always on screen. Job 3 shipped: zoom floor 1 -> 0.2 px/s in setTimelineZoom and #tl-zoom's min, plus step=any which solved Job 4 outright by making slider and tlZoom agree exactly. The existing clamp test asserted the old floor and was split rather than relaxed: a 33-minute film must now survive unclamped at 0.4, and a 5000s film must still clamp at 0.2. Three tests added, five mutations run, five caught. Suite 1286 passed, 1 xfailed - 1283 + 3 exactly, no regressions from widening the zoom range."
     }
   ],
   "frontend_verification": {
@@ -157,7 +162,7 @@
   },
   "milestone": 3,
   "milestone_title": "Visual & Interactive Polish",
-  "milestone_note": "Milestone 3 is ACTIVE. Slice I landed keyboard transport, Slice J landed anchored zoom. Slice K is deliberately not a feature slice: it pays down the live-verification debt both slices accumulated, fixes the zoom floor so Fit can actually fit an 18-minute film, and tests tail anchoring where the browser clamps scrollLeft. Clip trim and magnetic snapping move to Slice L.",
+  "milestone_note": "Milestone 3 is ACTIVE. Slice I landed keyboard transport, Slice J anchored zoom, Slice K the live verification gate and the zoom floor. Slice L is the other half of Slice K: dropping the floor to 0.2 px/s fixed the view and broke the controls, so the boundary handle needs a hit area that survives a 3px clip. Magnetic snapping was considered and deliberately dropped - boundaries already quantise to narration lines.",
   "driver": {
     "script": "tools/relay_loop.py",
     "spawns": "claude -p, fresh context per slice",
@@ -166,16 +171,16 @@
     "max_slices_default": 8
   },
   "review_findings": [
-    "Slice J's tests are the strongest of the run: 10 of 10 independent mutations caught, 0 escaped. For contrast, Slice G shipped two tests that could not fail, Slice H one, and Slice I eight passing tests that missed a live crash. The trend is real and worth telling Antigravity.",
-    "The live WebView2 verification gate was not performed for Slice J and was not named as skipped, which ANTIGRAVITY-RULES.md requires. frontend_verification had said PENDING_FOR_SLICE_I since Slice I, the Slice J brief asked for a live zoom check, and reports/verification_gate/ still ends at slice_h_dom.json. Two consecutive slices of keyboard and viewport work now rest entirely on a mock.",
-    "Slice J's Job 4 benchmark (1.09ms at zoom 8, 2.33ms at zoom 60, 59 drag events) left no script and no artifact - only app.js and the test file changed. If it was measured in the Node harness then innerHTML is a string assignment there, so the number measures string concatenation rather than DOM layout and paint, which is the cost the job asked about. The conclusion 'do not optimise' is probably still right, but not for the reason given.",
-    "fitTimelineToWindow cannot fit the owner's real film. (clientWidth - 24) / total is 0.709 px/s for 1080 seconds, below the [1,60] floor, so it clamps to 1 and the lane stays 1080px inside an 800px viewport. Measured in the harness. This is a fault in Slice J's brief, which specified that clamp, not in Slice J's code, which implemented it exactly as written. Slice K Job 3 lowers the floor to 0.2 and moves the slider's min and step with it."
+    "Slice J's tests scored 10 of 10 on independent mutation and Slice K's floor fix scored 5 of 5. Test quality is now consistently high; the Slice G and H pattern of tests that could not fail has not recurred.",
+    "Slice K Job 2's premise was wrong and its own artifact disproved it. Worth noting as a reviewer lesson rather than a builder one: the brief predicted a clamp that the measurement showed never happened, and the artifact's note asserted the clamp anyway, contradicting the numbers printed directly above it. Measurements beat predictions, including the reviewer's.",
+    "Antigravity stopped after Slice K Job 1 without code changes and without setting ready_for back to CLAUDE, so the watcher never fired and the relay sat idle until the owner noticed. Both the revised Slice K brief and Slice L now spell out the handback steps explicitly as a numbered section.",
+    "Lowering the zoom floor to 0.2 px/s is verified safe across the whole suite (1286 passed, 0 failures) but it degrades the mouse controls, which is what Slice L exists for. tlTickInterval was checked across the widened range and holds: 600s ticks at 0.2 px/s is a label every 120px against the 90px it targets."
   ],
   "known_gaps": [
-    "The test scroll mock sets scrollLeft as a plain number against a hardcoded clientWidth of 800. A real browser clamps scrollLeft to [0, scrollWidth - clientWidth], so anchored zoom near the end of a film could be silently truncated and every test would still pass. Slice K Job 2 fixes the mock rather than the assertion.",
-    "setTimelineZoom syncs the slider with slider.value = newZoom, but #tl-zoom has no step attribute so it snaps to whole numbers while tlZoom stays fractional after a fit or a 1.5x keyboard step. Cosmetic - nothing reads the slider as the source of truth - and Slice K Job 3 adds step=0.1.",
-    "The three picture-boundary deltas from Slice H Job 3 were reported but not written to an artifact. Same shape as Slice J's Job 4. If picture drift matters, measure it again and record it.",
+    "The boundary handle is 10px at left:0 inside a clip that sets overflow:hidden, so at low zoom it is clipped to the clip's own width - a 3px clip has a 3px grab target. Slice L Job 2. Measured widths are still to be recorded live.",
+    "Drag resolution is (e.clientX - rect.left) / tlZoom, so at the 0.2 floor one pixel of mouse travel is five seconds. The keyboard path on a focused handle moves one line per press regardless of zoom and is the accessible fallback; Slice L must not regress it.",
+    "The three picture-boundary deltas from Slice H Job 3 were reported but not written to an artifact, and Slice J's Job 4 render benchmark left no script and no artifact - only numbers in a history entry. Same shape twice. If either matters, measure again and record.",
     "The 1/2/3 and transport keys do not check ctrlKey/altKey/metaKey, so Ctrl+1 switches panes. The app binds no modifier shortcuts anywhere and WebView2 has no tab bar, so this is cosmetic. Fix it the next time that listener is opened.",
-    "CLAUDE.md at the repo root is untracked. It is the file whose stated purpose is durable memory, so it is the one file that should not live only in the working tree. Left uncommitted pending the owner's word."
+    "Magnetic snapping is not implemented and was deliberately excluded from Slice L. Boundaries already quantise to narration line starts via tlLineAt/tlLineStartTime. If snapping is wanted, it should snap the playhead to boundaries, not boundaries to the playhead - a separate slice."
   ]
 }
