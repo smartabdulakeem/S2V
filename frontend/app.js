@@ -2791,6 +2791,8 @@ async function timelineTogglePlay() {
     return;
   }
 
+  if (!tlPictures().length) return;
+
   const secs = segmentSecondsList(currentScriptData);
   const total = secs.reduce((a, b) => a + b, 0);
   if (tlPlayhead >= total - 0.05) {
@@ -3945,7 +3947,8 @@ window.timelineHandleKeyDown = timelineHandleKeyDown;
 window.timelineHandleCancel = timelineHandleCancel;
 window.moveTimelinePictureBoundary = moveTimelinePictureBoundary;
 
-// Spacebar toggles playback; Escape cancels drag; Delete/Backspace deletes selected SFX
+// Spacebar toggles playback; Escape cancels drag; Delete/Backspace deletes selected SFX;
+// 1/2/3 stage navigation; Arrows/Home/End/JKL NLE timeline transport
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && tlDragState) {
     e.preventDefault();
@@ -3957,6 +3960,28 @@ document.addEventListener("keydown", (e) => {
   const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el && el.isContentEditable);
   if (isInput) return;
 
+  // 3-Stage Navigation (Global when not focused in input/editable)
+  if (e.key === "1") {
+    e.preventDefault();
+    switchPane("script");
+    return;
+  }
+  if (e.key === "2") {
+    e.preventDefault();
+    switchPane("board");
+    return;
+  }
+  if (e.key === "3") {
+    e.preventDefault();
+    switchPane("timeline");
+    const scrollEl = document.getElementById("tl-scroll") || document.getElementById("tl-lanes");
+    if (scrollEl) {
+      if (!scrollEl.hasAttribute("tabindex")) scrollEl.setAttribute("tabindex", "-1");
+      scrollEl.focus();
+    }
+    return;
+  }
+
   if (e.key === "Delete" || e.key === "Backspace") {
     if (tlSelectedType === "sfx" && tlSelectedSfx) {
       e.preventDefault();
@@ -3965,12 +3990,75 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
+  // Timeline-specific controls (only active when Timeline pane is on)
+  const timelinePane = document.querySelector('.pane[data-pane="timeline"]');
+  const isTimelineActive = timelinePane && timelinePane.getAttribute("data-on") === "1";
+  if (!isTimelineActive) return;
+
   if (e.key === " " || e.code === "Space") {
-    const timelinePane = document.querySelector('.pane[data-pane="timeline"]');
-    if (timelinePane && timelinePane.getAttribute("data-on") === "1") {
-      e.preventDefault();
-      timelineTogglePlay();
-    }
+    e.preventDefault();
+    timelineTogglePlay();
+    return;
+  }
+
+  if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    const delta = e.shiftKey ? -5 : -1;
+    timelineNudge(delta);
+    return;
+  }
+
+  if (e.key === "ArrowRight") {
+    e.preventDefault();
+    const delta = e.shiftKey ? 5 : 1;
+    timelineNudge(delta);
+    return;
+  }
+
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    timelineSeekPicture(-1);
+    return;
+  }
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    timelineSeekPicture(1);
+    return;
+  }
+
+  if (e.key === "Home") {
+    e.preventDefault();
+    timelineSeek(0);
+    return;
+  }
+
+  if (e.key === "End") {
+    e.preventDefault();
+    if (!tlPictures().length) return;
+    const secs = segmentSecondsList(currentScriptData);
+    const total = secs.reduce((a, b) => a + b, 0);
+    timelineSeek(total);
+    return;
+  }
+
+  // J / K / L shuttle keys
+  if (e.key === "k" || e.key === "K") {
+    e.preventDefault();
+    timelinePauseAudio();
+    return;
+  }
+
+  if (e.key === "l" || e.key === "L") {
+    e.preventDefault();
+    timelineTogglePlay();
+    return;
+  }
+
+  if (e.key === "j" || e.key === "J") {
+    e.preventDefault();
+    timelineNudge(-2);
+    return;
   }
 });
 
@@ -4184,6 +4272,13 @@ async function openTimelineFromBoard() {
   }
   switchPane("timeline");
   renderTimelineScreen();
+  const scrollEl = document.getElementById("tl-scroll") || document.getElementById("tl-lanes");
+  if (scrollEl) {
+    if (!scrollEl.hasAttribute("tabindex")) {
+      scrollEl.setAttribute("tabindex", "-1");
+    }
+    scrollEl.focus();
+  }
 }
 
 window.openTimelineFromBoard = openTimelineFromBoard;

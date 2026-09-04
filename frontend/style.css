@@ -2191,6 +2191,28 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
+.tl-shortcuts-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: help;
+  user-select: none;
+  white-space: nowrap;
+  border-radius: 3px;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.tl-shortcuts-hint:hover {
+  color: var(--brass);
+  border-color: var(--brass);
+  background: var(--surface-3);
+}
+
 .tl-inspector {
   display: flex;
   flex-direction: column;
