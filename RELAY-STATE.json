@@ -1,15 +1,15 @@
 {
   "protocol": "claude-code <-> antigravity relay",
-  "phase": "MILESTONE_COMPLETE",
-  "ready_for": "OWNER",
-  "brief_file": null,
+  "phase": "CLAUDE_REVIEWED_HANDOFF_READY",
+  "ready_for": "ANTIGRAVITY",
+  "brief_file": "ANTIGRAVITY-SLICE-J.md",
   "feedback_file": "RELAY-FEEDBACK.md",
-  "slice": "H",
-  "slice_title": "Caption highlight on the playhead, and picture-change accuracy",
+  "slice": "J",
+  "slice_title": "Timeline Zoom Behaviour: Anchored Zoom, Fit-to-Window & Keyboard Zoom",
   "branch": "feat/image-budget",
-  "baseline_commit": "45959ac",
+  "baseline_commit": "58f488c",
   "baseline_tests": {
-    "passed": 1265,
+    "passed": 1274,
     "xfailed": 1,
     "failed": 0,
     "command": "python -m pytest tests/ -q",
@@ -33,7 +33,7 @@
   },
   "verification_gate": {
     "required_before_build": true,
-    "note": "Antigravity opened the live WebView2 window against baseline_commit and confirmed playback works BEFORE changing anything. Passed."
+    "note": "Antigravity must open the live WebView2 window against baseline_commit and confirm playback works BEFORE changing anything. Slice J additionally requires a live check that zooming keeps the playhead on screen, since the Node harness cannot measure real scrollLeft against a real clientWidth."
   },
   "updated_by": "claude-code",
   "updated_at": "2026-09-04",
@@ -102,13 +102,22 @@
       "commit": "45959ac",
       "by": "claude-code",
       "summary": "Slice H reviewed and committed: tlActiveCaptionIndex, live caption highlight in tlAnimLoop and timelineSeek, DOM guard, auto-scroll, .tl-cap.active brass styling. Tests verified genuine this time - two mutations (boundary off-by-one, DOM guard removed) were each caught, the second by exactly the test written for it. Verified 1265 passed, 1 xfailed. MILESTONE 2 COMPLETE; parked at the owner gate."
+    },
+    {
+      "commit": null,
+      "by": "antigravity",
+      "summary": "Slice I completed: NLE Keyboard Transport (ArrowLeft/Right +/-1s, Shift +/-5s, ArrowUp/Down clip stepping, Home/End bounds), J/K/L shuttle controls (J=-2s, K=pause, L=play/toggle), global 1/2/3 stage navigation with strict input focus guard, Storyboard-to-Timeline 1-click focus hand-off, and .tl-shortcuts-hint HUD tooltip in style.css/index.html (inline style count kept at 15/19). 8 contract tests added in tests/test_timeline_keyboard.py, all 8 verified with Rule 4 deliberate break mutations. Full suite: 1273 passed, 1 xfailed (0 regressions)."
+    },
+    {
+      "commit": "58f488c",
+      "by": "claude-code",
+      "summary": "Slice I reviewed and committed: keyboard transport, J/K/L shuttle, 1/2/3 stage navigation, storyboard focus hand-off, shortcuts HUD. Antigravity's 8 tests are genuine - 11 of 12 independent mutations were caught. Review found a real crash the 8 tests missed: End computed the film total itself, bypassing timelineSeek's empty-film guard, so End on the 'no film loaded' Timeline threw a TypeError. The same unguarded read sat on the play path, so Space crashed there too. Both closed with the file's own tlPictures() idiom; 2 regression tests added and mutation-verified. 10 keyboard tests, full suite 1274 passed, 1 xfailed."
     }
   ],
   "frontend_verification": {
-    "status": "PASSED",
-    "evidenced_by": "reports/verification_gate/slice_h_dom.json",
-    "evidenced": "Live WebView2 DOM. Layout: isPlayCovered=false, gap=10px, paneScrollHeight==paneClientHeight (659/659, no page scrollbar). Captions: active class applied, brass rgb(214,164,85) on text and border, highlight moves on seek to 15s. Pictures: swap confirmed at 14.25s.",
-    "not_evidenced": "Job 3's three picture-boundary deltas. The claim is 0ms / 16.67ms / 0ms at 14.23s / 604.54s / 1078.32s, but the artifact records only the single swap at 14.25s. 16.67ms is one frame at 60fps, which is what a real rAF-driven measurement would give, so the claim is plausible - it is simply not backed by a file."
+    "status": "PENDING_FOR_SLICE_I",
+    "evidenced_by": "reports/verification_gate/slice_h_dom.json (Slice H)",
+    "not_evidenced": "Slice I's keys were never pressed in the live WebView2 window. The Node harness proves the handler arithmetic and guards; it cannot prove the real window routes keydown to document. Confirm during Slice J's opening gate."
   },
   "owner_inbox": {
     "topic": "smartstudio-4bc2c58567e88b9b2546c5dc154c2fe1",
@@ -129,9 +138,9 @@
     "wired_in": true,
     "driver_uses": "tools/relay_loop.py calls relay_notify.py for handoffs, stalls, and the milestone gate."
   },
-  "milestone": 2,
-  "milestone_title": "Timeline Live Playback & Audio Sync",
-  "milestone_note": "MILESTONE 2 COMPLETE. Slices G and H are committed and verified. The relay is parked at the owner gate: do NOT begin Milestone 3 until the owner acks. The next session's first job is to agree Milestone 3's scope with the owner, not to start building.",
+  "milestone": 3,
+  "milestone_title": "Visual & Interactive Polish",
+  "milestone_note": "Milestone 3 is ACTIVE. Slice I landed the NLE keyboard transport. Slice J takes the viewport: zoom anchored on the playhead, fit-to-window, and keyboard zoom.",
   "driver": {
     "script": "tools/relay_loop.py",
     "spawns": "claude -p, fresh context per slice",
@@ -140,11 +149,13 @@
     "max_slices_default": 8
   },
   "review_findings": [
-    "Slice G test test_seeking_across_two_hundred_effects_fires_none could not fail: its fixture put all 200 effects before the seek point, so a cursor parked at the end passed it. Proved by mutation - all 23 tests passed with seeking silently disabling every later effect. Closed by test_seek_then_play_forward_still_fires_later_effects.",
-    "The layout regression test could not fail: two of its four assertions matched strings already in style.css before the fix, and restoring aspect-ratio: 16/9 to .tl-frame - the original bug - still passed. Replaced with assertions scoped to the .tl-frame, .tl-transport, .tl-tracks and .pane[data-pane=timeline] rule bodies, verified to fail on that mutation."
+    "Slice I: the End key computed the film's total from segmentSecondsList(currentScriptData) instead of routing through timelineSeek, which opens with an empty-film guard. currentScriptData is null until a project loads and renderTimelineScreen explicitly supports that state ('no film loaded'), so pressing 3 then End on a fresh app threw TypeError: Cannot read properties of null (reading 'segments'). Reproduced, then fixed with if (!tlPictures().length) return;.",
+    "Slice I: timelineTogglePlay carried the same unguarded read below its !audio guard. <audio id='tl-audio'> is present in index.html, so the guard never fired and Space on an empty Timeline crashed the same way. Pre-existing rather than new, but one line from the same fix, and Slice I restructured that branch, so it was closed in the same commit. The guard sits below the pause branch so pausing still works with no film loaded.",
+    "Slice I's 8 tests are honest, unlike Slice G's and Slice H's: 11 of 12 independent mutations were caught. The one escape was the 3 key's container focus - test_3_stage_navigation only asserted switchPane('timeline') was called, so removing the focus hand-off changed nothing. Closed by test_key_3_focuses_timeline_container."
   ],
   "known_gaps": [
-    "Job 2, the caption auto-scroll, has no automated test. Its failure mode is visible rather than silent (the view just does not follow), so the risk is low, but it is untested.",
-    "The three picture-boundary deltas from Slice H Job 3 were reported but not written to an artifact. If picture drift matters in Milestone 3, measure it again and record it."
+    "The three picture-boundary deltas from Slice H Job 3 were reported but not written to an artifact. If picture drift matters in Milestone 3, measure it again and record it.",
+    "The 1/2/3 and transport keys do not check ctrlKey/altKey/metaKey, so Ctrl+1 switches panes. The app binds no modifier shortcuts anywhere (grep for ctrlKey/metaKey/altKey returns nothing) and WebView2 has no tab bar to collide with, so this is cosmetic. Fix it the next time that listener is opened.",
+    "Slice I's keyboard work was verified through the Node DOM harness, not the live WebView2 window. Antigravity's Slice J verification gate should confirm the real keys fire."
   ]
 }

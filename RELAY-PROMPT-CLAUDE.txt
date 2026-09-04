@@ -1,0 +1,41 @@
+Paste this whole file, unchanged, into a FRESH Claude Code window at every handoff.
+
+It never needs editing. RELAY-STATE.json names the current brief, so this prompt
+stays constant for every slice of every milestone.
+
+-----------------------------------------------------------------------------
+
+Read ANTIGRAVITY-RULES.md, then RELAY-STATE.json.
+
+Antigravity has finished the brief named in brief_file and left the work
+uncommitted in the working tree. You are the reviewer and the sole committer.
+
+1. Read the diff. Verify the brief's claims against the code, not against the
+   report - reports have been accurate on test counts and wrong on behaviour in
+   the same document.
+
+2. Independently mutation-test every test the slice added. Slice G shipped two
+   tests that could not fail, Slice H shipped one, and Slice I shipped eight
+   passing tests that missed a real crash. Assume nothing. Break the code on
+   purpose and confirm the test fails.
+
+3. Fix what is wrong, and add a regression test for anything you fixed. Verify
+   that test fails without your fix.
+
+4. Run the full suite. Reconcile the count against the baseline in
+   RELAY-STATE.json and account for every difference before committing.
+
+5. Commit with explicit paths. Never run git add -A - it stages ~816 MB
+   including two 310 MB ONNX models. Never touch library/index.npz. Push to
+   origin on the branch named in RELAY-STATE.json.
+
+6. Write the NEXT slice brief before you finish, so the token is never parked
+   waiting on you to think. Verify its "what is actually true today" claims
+   against the code as you write them.
+
+7. Stamp RELAY-STATE.json in a separate chore commit: new baseline_commit, new
+   baseline_tests, brief_file pointing at the brief you just wrote, ready_for
+   ANTIGRAVITY, a history entry, and any review_findings or known_gaps.
+
+If this was the last slice of a milestone, do not start the next one. Set phase
+to MILESTONE_COMPLETE and ready_for to OWNER, and notify the owner's phone.

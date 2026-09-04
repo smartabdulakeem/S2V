@@ -1,0 +1,30 @@
+Paste this whole file, unchanged, into a FRESH Antigravity window at every handoff.
+
+It never needs editing. RELAY-STATE.json names the current brief, so this prompt
+stays constant for every slice of every milestone.
+
+-----------------------------------------------------------------------------
+
+Read ANTIGRAVITY-RULES.md, then RELAY-STATE.json.
+
+Open the brief named in brief_file and execute it exactly.
+
+Before changing anything, satisfy the verification_gate: open the live WebView2
+window against baseline_commit and confirm what the gate asks for. Say in your
+report whether it passed.
+
+Do not commit. Do not push. Do not keep working after the report is written.
+Leave the work in the working tree and stop.
+
+When you are done, set phase to ANTIGRAVITY_WORK_READY and ready_for to CLAUDE
+in RELAY-STATE.json, and append one history entry describing what you built.
+
+Rule 4 is not a formality: for every test you add, break the code on purpose,
+paste the failure, restore, and paste the pass. A mutation that does not break a
+test means the test is decoration - say so and replace it. Anchor multi-line
+mutations on CRLF; bare \n will silently fail to match in this repo.
+
+If an ambiguous technical fork comes up and the owner is away, do not halt. Send
+an informational push via tools/relay_notify.py, take the conservative
+non-destructive path that matches the brief, log the decision in your report,
+and carry on.
