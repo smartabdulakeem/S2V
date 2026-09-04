@@ -3060,8 +3060,43 @@ function renderTimelineScreen() {
 }
 
 function setTimelineZoom(value) {
-  tlZoom = Math.max(1, Math.min(60, parseFloat(value) || 8));
+  const oldZoom = tlZoom;
+  const newZoom = Math.max(1, Math.min(60, parseFloat(value) || 8));
+  const scroll = document.getElementById("tl-scroll");
+  let offsetPx = null;
+  if (scroll && scroll.clientWidth > 0) {
+    const viewW = scroll.clientWidth;
+    const playheadPx = tlPlayhead * oldZoom;
+    if (playheadPx >= scroll.scrollLeft && playheadPx <= scroll.scrollLeft + viewW) {
+      offsetPx = playheadPx - scroll.scrollLeft;
+    } else {
+      offsetPx = viewW * 0.5;
+    }
+  }
+
+  tlZoom = newZoom;
+  const slider = document.getElementById("tl-zoom");
+  if (slider && parseFloat(slider.value) !== newZoom) {
+    slider.value = newZoom;
+  }
+
   renderTimelineScreen();
+
+  if (scroll && offsetPx !== null) {
+    scroll.scrollLeft = Math.max(0, (tlPlayhead * newZoom) - offsetPx);
+  }
+}
+
+function fitTimelineToWindow() {
+  if (!tlPictures().length) return;
+  const secs = segmentSecondsList(currentScriptData);
+  const total = secs.reduce((a, b) => a + b, 0);
+  if (total <= 0) return;
+
+  const scroll = document.getElementById("tl-scroll");
+  const clientWidth = (scroll && scroll.clientWidth > 0) ? scroll.clientWidth : 800;
+  const wantedZoom = (clientWidth - 24) / total;
+  setTimelineZoom(wantedZoom);
 }
 
 /** Move the playhead, and show whichever picture is on screen at that moment. */
@@ -3914,6 +3949,7 @@ function timelineScrubFrom(event) {
 
 window.renderTimelineScreen = renderTimelineScreen;
 window.setTimelineZoom = setTimelineZoom;
+window.fitTimelineToWindow = fitTimelineToWindow;
 window.timelineNudge = timelineNudge;
 window.timelineSeekPicture = timelineSeekPicture;
 window.selectTimelinePicture = selectTimelinePicture;
@@ -4058,6 +4094,25 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "j" || e.key === "J") {
     e.preventDefault();
     timelineNudge(-2);
+    return;
+  }
+
+  // Zoom shortcuts: + / = zoom in, - / _ zoom out, 0 fit to window
+  if (e.key === "+" || e.key === "=") {
+    e.preventDefault();
+    setTimelineZoom(tlZoom * 1.5);
+    return;
+  }
+
+  if (e.key === "-" || e.key === "_") {
+    e.preventDefault();
+    setTimelineZoom(tlZoom / 1.5);
+    return;
+  }
+
+  if (e.key === "0") {
+    e.preventDefault();
+    fitTimelineToWindow();
     return;
   }
 });
