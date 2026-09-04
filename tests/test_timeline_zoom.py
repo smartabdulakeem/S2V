@@ -227,7 +227,7 @@ def test_zoom_centering_when_playhead_outside_viewport():
 def test_fit_timeline_to_window_calculation_and_clamping():
     """
     Test 3 & 4: fitTimelineToWindow computes (clientWidth - 24) / total,
-    clamps to [1, 60], and updates the slider.
+    clamps to [0.2, 60], and updates the slider.
     """
     res = _run_node("""
     currentScriptData = {
@@ -250,10 +250,22 @@ def test_fit_timeline_to_window_calculation_and_clamping():
     fitTimelineToWindow();
     const fitClampedMax = tlZoom;
 
-    // Test lower clamp: 2000s film in 824px window -> (824-24)/2000 = 0.4 -> clamped to 1
+    // A 33-minute film in an 824px window wants (824-24)/2000 = 0.4 px/s.
+    // The old floor of 1 clamped that away, which is why Fit did not fit.
+    // It must now survive unclamped.
     currentScriptData = {
       segments: [
         { narration_seconds: "2000.0", shots: [{ shot_id: "s1" }] }
+      ]
+    };
+    mockScroll.clientWidth = 824;
+    fitTimelineToWindow();
+    const fitLongFilm = tlZoom;
+
+    // A floor still exists, just lower: (824-24)/5000 = 0.16 -> clamped to 0.2
+    currentScriptData = {
+      segments: [
+        { narration_seconds: "5000.0", shots: [{ shot_id: "s1" }] }
       ]
     };
     mockScroll.clientWidth = 824;
@@ -264,6 +276,7 @@ def test_fit_timeline_to_window_calculation_and_clamping():
       fitExact: fitExact,
       sliderExact: sliderExact,
       fitClampedMax: fitClampedMax,
+      fitLongFilm: fitLongFilm,
       fitClampedMin: fitClampedMin
     }));
     """)
@@ -273,8 +286,10 @@ def test_fit_timeline_to_window_calculation_and_clamping():
     assert res["sliderExact"] == pytest.approx(8.0)
     # (804 - 24) / 3.0 = 260 -> clamped to 60
     assert res["fitClampedMax"] == 60.0
-    # (824 - 24) / 2000.0 = 0.4 -> clamped to 1
-    assert res["fitClampedMin"] == 1.0
+    # (824 - 24) / 2000.0 = 0.4, under the old floor of 1 and now unclamped
+    assert res["fitLongFilm"] == pytest.approx(0.4)
+    # (824 - 24) / 5000.0 = 0.16 -> clamped to the new floor of 0.2
+    assert res["fitClampedMin"] == pytest.approx(0.2)
 
 
 def test_fit_timeline_empty_timeline_safe_noop():
@@ -482,3 +497,76 @@ def test_html_and_css_hud_spec():
     # Inline style ratchet: cap 19 (baseline was 15)
     inline_styles = html.count('style="')
     assert inline_styles <= 19, f"Inline style count {inline_styles} exceeds budget of 19"
+def test_zoom_floor_allows_sub_one_pixels_per_second():
+    """
+    Test 9: The zoom floor is 0.2 px/s, not 1. A film longer than about 13 minutes
+    needs sub-1 px/s to fit an 800px window at all, so a floor of 1 made Fit a lie.
+    Measured live on the owner's film before this fix: tlZoom 1, lanes_scrollWidth
+    1160, scroll_clientWidth 823 (reports/verification_gate/slice_k_dom.json).
+    """
+    res = _run_node("""
+    currentScriptData = { segments: [{ narration_seconds: "100.0", shots: [{ shot_id: "s1" }] }] };
+    const out = {};
+    setTimelineZoom(0.5);   out.half = tlZoom;
+    setTimelineZoom(0.2);   out.atFloor = tlZoom;
+    setTimelineZoom(0.05);  out.belowFloor = tlZoom;
+    setTimelineZoom(999);   out.aboveCeiling = tlZoom;
+    console.log(JSON.stringify(out));
+    """)
+
+    assert res["half"] == pytest.approx(0.5), "0.5 px/s must survive; the old floor clamped it to 1"
+    assert res["atFloor"] == pytest.approx(0.2)
+    assert res["belowFloor"] == pytest.approx(0.2), "the floor still exists, it is just lower"
+    assert res["aboveCeiling"] == 60.0, "the ceiling is untouched"
+
+
+def test_fit_actually_fits_the_owners_film():
+    """
+    Test 10: The regression this slice exists for. Before Adam is 1159.677s. Fit must
+    leave the lane no wider than the viewport, which is what "fit" means.
+    """
+    res = _run_node("""
+    // 1159.677s, the owner's real film, in 66 segments.
+    const segs = [];
+    for (let i = 0; i < 66; i++) segs.push({ narration_seconds: "17.571", shots: [{ shot_id: "s" + i }] });
+    currentScriptData = { segments: segs };
+    mockScroll.clientWidth = 823;   // measured in the live window
+
+    fitTimelineToWindow();
+    const total = segmentSecondsList(currentScriptData).reduce((a, b) => a + b, 0);
+    console.log(JSON.stringify({
+      total: total,
+      zoom: tlZoom,
+      laneWidthPx: total * tlZoom,
+      viewportPx: 823,
+      fits: (total * tlZoom) <= 823,
+      tickInterval: tlTickInterval()
+    }));
+    """)
+
+    assert res["fits"] is True, (
+        f"Fit left a {res['laneWidthPx']:.0f}px lane in an 823px window at zoom {res['zoom']}"
+    )
+    assert res["zoom"] < 1.0, "an 18-minute film needs sub-1 px/s; if this passes at >=1 the film is too short"
+    # 90 / 0.689 = 131 -> the existing table's 300s entry. Ticks must not collapse.
+    assert res["tickInterval"] >= 60, f"ticks would crowd at {res['tickInterval']}s spacing"
+
+
+def test_slider_can_reach_what_the_setter_allows():
+    """
+    Test 11: The slider and setTimelineZoom must share one floor, or the mouse cannot
+    reach what the keyboard and Fit can. The mock cannot catch this - its .value is a
+    plain property with no min/step validation - so this reads the markup, the same way
+    the inline-style budget is enforced.
+    """
+    with open(INDEX_HTML, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    start = html.index('id="tl-zoom"')
+    tag = html[html.rindex("<input", 0, start):html.index(">", start) + 1]
+
+    assert 'min="0.2"' in tag, f"slider floor must match setTimelineZoom's 0.2; got: {tag}"
+    assert 'max="60"' in tag, f"slider ceiling must stay 60; got: {tag}"
+    # Without a fractional step the slider snaps to whole numbers while tlZoom stays
+    # fractional after a fit, so the thumb and the real zoom silently disagree.
+    assert 'step="any"' in tag, f"slider needs step=\"any\" to express fractional zoom; got: {tag}"

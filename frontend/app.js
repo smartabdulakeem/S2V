@@ -3061,7 +3061,7 @@ function renderTimelineScreen() {
 
 function setTimelineZoom(value) {
   const oldZoom = tlZoom;
-  const newZoom = Math.max(1, Math.min(60, parseFloat(value) || 8));
+  const newZoom = Math.max(0.2, Math.min(60, parseFloat(value) || 8));
   const scroll = document.getElementById("tl-scroll");
   let offsetPx = null;
   if (scroll && scroll.clientWidth > 0) {
