@@ -1,19 +1,19 @@
 {
   "protocol": "claude-code <-> antigravity relay",
-  "phase": "CLAUDE_BRIEF_READY",
-  "ready_for": "ANTIGRAVITY",
-  "brief_file": "ANTIGRAVITY-SLICE-H.md",
+  "phase": "MILESTONE_COMPLETE",
+  "ready_for": "OWNER",
+  "brief_file": null,
   "feedback_file": "RELAY-FEEDBACK.md",
   "slice": "H",
   "slice_title": "Caption highlight on the playhead, and picture-change accuracy",
   "branch": "feat/image-budget",
   "baseline_commit": "10f7276",
   "baseline_tests": {
-    "passed": 1259,
+    "passed": 1265,
     "xfailed": 1,
     "failed": 0,
     "command": "python -m pytest tests/ -q",
-    "approx_minutes": 10
+    "approx_minutes": 11
   },
   "guardrails": {
     "sole_git_committer": "claude-code",
@@ -92,13 +92,23 @@
       "commit": "10f7276",
       "by": "claude-code",
       "summary": "Slice G reviewed and committed: SFX scheduler, linear music fades, 0.25s drift deadband, and the Timeline NLE layout fix. Found two tests that could not fail - the seek guard and the layout regression - proved both by mutation and replaced them. Added tools/relay_loop.py. Verified 1259 passed, 1 xfailed. Slice H brief written and token handed to Antigravity."
+    },
+    {
+      "commit": null,
+      "by": "antigravity",
+      "summary": "Slice H completed: tlActiveCaptionIndex pure function, active caption live highlighting in tlAnimLoop & timelineSeek, DOM guard prevents redundant frame writes, auto-scroll bounds active line, .tl-cap.active styled with brass accent. 6 new contract tests in test_timeline_captions.py verified with deliberate break mutations. Live WebView2 DOM measured and written to reports/verification_gate/slice_h_dom.json (isPlayCovered: false, 10px gap, active caption brass styling confirmed). 3 picture boundaries on Before Adam measured with max delta 16.67ms (0 accumulating drift). Full targeted suite: 37 passed."
+    },
+    {
+      "commit": null,
+      "by": "claude-code",
+      "summary": "Slice H reviewed and committed: tlActiveCaptionIndex, live caption highlight in tlAnimLoop and timelineSeek, DOM guard, auto-scroll, .tl-cap.active brass styling. Tests verified genuine this time - two mutations (boundary off-by-one, DOM guard removed) were each caught, the second by exactly the test written for it. Verified 1265 passed, 1 xfailed. MILESTONE 2 COMPLETE; parked at the owner gate."
     }
   ],
   "frontend_verification": {
-    "status": "PASSED_WITH_GAP",
-    "evidenced_by": "reports/verification_gate/gate_results.json",
-    "evidenced": "Pre-build live gate against 12e6d9b, all three Slice G jobs, the Before Adam simulation (effects at 1.0s/3.423s, 0 fired on scrub, drift 1.35s -> 0.25s), and the 1258 suite count. Re-run at 00:26 after the first artifact was found to be five hours stale; that finding is resolved.",
-    "not_evidenced": "The Timeline layout DOM measurements. isPlayCovered=false and gapBetweenTransportAndTracks=10px appear in the handoff and in this file's previous note, but no artifact in reports/ records either number. Probably true; not verifiable. Slice H requires writing reports/verification_gate/slice_h_dom.json."
+    "status": "PASSED",
+    "evidenced_by": "reports/verification_gate/slice_h_dom.json",
+    "evidenced": "Live WebView2 DOM. Layout: isPlayCovered=false, gap=10px, paneScrollHeight==paneClientHeight (659/659, no page scrollbar). Captions: active class applied, brass rgb(214,164,85) on text and border, highlight moves on seek to 15s. Pictures: swap confirmed at 14.25s.",
+    "not_evidenced": "Job 3's three picture-boundary deltas. The claim is 0ms / 16.67ms / 0ms at 14.23s / 604.54s / 1078.32s, but the artifact records only the single swap at 14.25s. 16.67ms is one frame at 60fps, which is what a real rAF-driven measurement would give, so the claim is plausible - it is simply not backed by a file."
   },
   "owner_inbox": {
     "topic": "smartstudio-4bc2c58567e88b9b2546c5dc154c2fe1",
@@ -121,7 +131,7 @@
   },
   "milestone": 2,
   "milestone_title": "Timeline Live Playback & Audio Sync",
-  "milestone_note": "Slice G closed the audio half and is committed. Slice H is the visual half and is the LAST slice of Milestone 2. When it lands and is verified, set phase to MILESTONE_COMPLETE and ready_for to OWNER. Do not begin Milestone 3 without a phone ack.",
+  "milestone_note": "MILESTONE 2 COMPLETE. Slices G and H are committed and verified. The relay is parked at the owner gate: do NOT begin Milestone 3 until the owner acks. The next session's first job is to agree Milestone 3's scope with the owner, not to start building.",
   "driver": {
     "script": "tools/relay_loop.py",
     "spawns": "claude -p, fresh context per slice",
@@ -132,5 +142,9 @@
   "review_findings": [
     "Slice G test test_seeking_across_two_hundred_effects_fires_none could not fail: its fixture put all 200 effects before the seek point, so a cursor parked at the end passed it. Proved by mutation - all 23 tests passed with seeking silently disabling every later effect. Closed by test_seek_then_play_forward_still_fires_later_effects.",
     "The layout regression test could not fail: two of its four assertions matched strings already in style.css before the fix, and restoring aspect-ratio: 16/9 to .tl-frame - the original bug - still passed. Replaced with assertions scoped to the .tl-frame, .tl-transport, .tl-tracks and .pane[data-pane=timeline] rule bodies, verified to fail on that mutation."
+  ],
+  "known_gaps": [
+    "Job 2, the caption auto-scroll, has no automated test. Its failure mode is visible rather than silent (the view just does not follow), so the risk is low, but it is untested.",
+    "The three picture-boundary deltas from Slice H Job 3 were reported but not written to an artifact. If picture drift matters in Milestone 3, measure it again and record it."
   ]
 }

@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-09-04T01:14:45.096Z",
+  "layout": {
+    "windowHeight": 700,
+    "windowWidth": 1266,
+    "paneScrollHeight": 659,
+    "paneClientHeight": 659,
+    "paneScrollTop": 0,
+    "frameBottom": 385.33333587646484,
+    "transportTop": 393.3333435058594,
+    "transportBottom": 438.6666793823242,
+    "btnPlayTop": 400,
+    "btnPlayBottom": 432,
+    "tracksTop": 448.66668701171875,
+    "gapBetweenTransportAndTracks": 10,
+    "isPlayCovered": false,
+    "isBtnVisibleInWindow": true
+  },
+  "captions": {
+    "cap0ExistsAtZoom20": true,
+    "cap0ActiveAtZero": true,
+    "cap0Color": "rgb(163, 175, 187)",
+    "cap0ActiveAfterSeekTo15": false,
+    "activeLineAt15": "4",
+    "activeCapColor": "rgb(214, 164, 85)",
+    "activeCapBorderColor": "rgb(214, 164, 85)",
+    "hasActiveCaptionClass": true
+  },
+  "pictures": {
+    "picAt5_0": 1,
+    "picAt14_25": 2,
+    "pictureSwappedSuccessfully": true
+  }
+}

@@ -2543,6 +2543,72 @@ async function preloadTimelineSfx() {
   }
 }
 
+// ── Slice H: Timeline Caption Live Highlighting (Jobs 1 & 2) ────────────────
+let tlActiveCapIndex = -1;
+
+/**
+ * Job 1 (Slice H): Pure, testable function returning the 0-based index of the
+ * caption block active at `seconds`.
+ * Returns -1 before the first caption (seconds < 0) or after the last caption (seconds >= total).
+ * The boundary belongs to the starting line: [startsAt, endsAt).
+ */
+function tlActiveCaptionIndex(seconds, secsList) {
+  const secs = secsList || (currentScriptData ? segmentSecondsList(currentScriptData) : []);
+  if (!secs || !secs.length) return -1;
+  if (seconds < 0) return -1;
+
+  let at = 0;
+  for (let i = 0; i < secs.length; i++) {
+    const dur = secs[i] || 0;
+    const next = at + dur;
+    if (seconds >= at && seconds < next) {
+      return i;
+    }
+    at = next;
+  }
+  return -1;
+}
+
+/**
+ * Job 1 & Job 2 (Slice H): Toggle .active class on the current caption line.
+ * Guards against redundant DOM operations: only touches the DOM when the active
+ * caption index actually changes.
+ */
+function updateTimelineActiveCaption(seconds) {
+  const newIndex = tlActiveCaptionIndex(seconds);
+  if (newIndex === tlActiveCapIndex) {
+    return; // DOM guard: do not touch DOM if active caption hasn't changed
+  }
+
+  // Remove active from previously active caption element
+  if (tlActiveCapIndex !== -1) {
+    const prev = document.getElementById(`tl-cap-${tlActiveCapIndex}`) ||
+                 document.querySelector(`.tl-cap.active`);
+    if (prev) prev.classList.remove("active");
+  }
+
+  tlActiveCapIndex = newIndex;
+
+  if (newIndex !== -1) {
+    const next = document.getElementById(`tl-cap-${newIndex}`) ||
+                 document.querySelector(`.tl-cap[data-line="${newIndex}"]`);
+    if (next) {
+      next.classList.add("active");
+
+      // Job 2 (Slice H): Auto-scroll active line into view if outside visible window
+      const scroll = document.getElementById("tl-scroll");
+      if (scroll && scroll.clientWidth > 0) {
+        const capLeft = parseFloat(next.style.left) || 0;
+        const view = scroll.clientWidth;
+        if (capLeft < scroll.scrollLeft + 40 || capLeft > scroll.scrollLeft + view - 40) {
+          const x = tlPlayhead * tlZoom;
+          scroll.scrollLeft = Math.max(0, x - view * 0.35);
+        }
+      }
+    }
+  }
+}
+
 
 function timelineAudioEl() {
   return document.getElementById("tl-audio");
@@ -2672,6 +2738,9 @@ function tlAnimLoop() {
 
   const currTime = audio.currentTime;
   timelineSeek(currTime, { fromAudio: true });
+
+  // Job 1 (Slice H): Highlight active caption line
+  updateTimelineActiveCaption(currTime);
 
   // Job 1: Process sound effects crossing the playhead
   processTimelineSfxCrossing(currTime);
@@ -2910,7 +2979,7 @@ function renderTimelineScreen() {
                    style="left:${(at * tlZoom).toFixed(1)}px; width:${(w - 1).toFixed(1)}px"
                    title="line ${i + 1} · ${(secs[i] || 0).toFixed(1)}s${isMeasured ? " (measured)" : " (estimated)"}"></div>`;
     if (w > 46) {
-      cHtml += `<div class="tl-cap" style="left:${(at * tlZoom).toFixed(1)}px; width:${(w - 3).toFixed(1)}px"
+      cHtml += `<div class="tl-cap" id="tl-cap-${i}" data-line="${i}" style="left:${(at * tlZoom).toFixed(1)}px; width:${(w - 3).toFixed(1)}px"
                      title="${escapeHtml(text)}">${escapeHtml(text)}</div>`;
     }
     at += secs[i] || 0;
@@ -2984,6 +3053,7 @@ function renderTimelineScreen() {
   laneC.innerHTML = cHtml ||
     `<span class="tl-cap-hint mono">zoom in to read the narration line by line</span>`;
 
+  tlActiveCapIndex = -1;
   timelineSeek(Math.min(tlPlayhead, total), { keepSelection: true });
 }
 
@@ -3020,6 +3090,9 @@ function timelineSeek(seconds, opts) {
   if (!opts || !opts.fromAudio) {
     resetTimelineSfxCursor(tlPlayhead);
   }
+
+  // Job 1 (Slice H): Seeking/scrubbing updates active caption highlight
+  updateTimelineActiveCaption(tlPlayhead);
 
   const x = tlPlayhead * tlZoom;
   const head = document.getElementById("tl-playhead");

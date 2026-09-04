@@ -2425,6 +2425,15 @@ tbody tr:last-child td {
   text-overflow: ellipsis;
 }
 
+.tl-cap.active {
+  color: var(--brass);
+  background: var(--surface-2);
+  border-color: var(--brass);
+  box-shadow: 0 0 0 1px var(--brass-soft);
+  font-weight: 500;
+  z-index: 2;
+}
+
 .tl-cap-hint {
   position: sticky;
   left: 0;
