@@ -12,11 +12,12 @@ is already awake. So a completed slice sat at ready_for=CLAUDE with no one
 looking at it, and the owner had to notice and say so by hand. This is the
 missing transport.
 
-Arming mid-cycle is safe. The state file is fingerprinted at startup and the
-watcher only fires on a *change*, so arming it while the token already says
-CLAUDE will not fire on the state that is already being worked on. The normal
-sequence is: Claude hands off (ready_for=ANTIGRAVITY, first change, no fire),
-Antigravity finishes (ready_for=CLAUDE, second change, fires).
+Order matters. The watcher checks the state file ONCE before it starts polling,
+and exits immediately if ready_for already equals --target. So set the state
+file FIRST, then arm: hand off (ready_for=ANTIGRAVITY), then arm --target CLAUDE.
+Arm before writing the hand-off and it reports an instant false hand-back.
+After that first check it fires only on a *change*, so a mid-cycle arm against a
+target that does not match is safe and will wait as expected.
 
 Silence is not success, so it also fires on the ways the loop can break rather
 than complete: an unreadable or malformed state file, and RELAY-FEEDBACK.md
@@ -70,28 +71,39 @@ def emit(line: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--interval", type=float, default=30.0)
-    ap.add_argument("--timeout", type=float, default=0.0)
+    ap.add_argument("--interval", type=float, default=10.0,
+                    help="seconds between state polls")
+    ap.add_argument("--timeout", type=float, default=0.0,
+                    help="seconds before giving up; 0 means never")
+    ap.add_argument("--target", type=str, default="CLAUDE",
+                    help="Which agent to wait for (CLAUDE or ANTIGRAVITY)")
     args = ap.parse_args()
 
+    target = args.target.strip().upper()
     start = time.time()
     baseline = fingerprint(STATE_PATH)
     feedback_at_start = os.path.exists(FEEDBACK_PATH)
 
+    # Check if state is ALREADY with target before waiting
+    state, err = read_state()
+    if state and str(state.get("ready_for", "")).strip().upper() == target:
+        phase = state.get("phase", "?")
+        slice_id = state.get("slice", "?")
+        emit(f"RELAY: token is already with {target}. phase={phase} slice={slice_id}.")
+        return 0
+
     while True:
         if args.timeout and (time.time() - start) > args.timeout:
             emit(
-                f"RELAY STALLED: no hand-back after {int(args.timeout)}s. "
-                "The token has not returned to Claude. Check whether Antigravity is still running."
+                f"RELAY STALLED: no hand-back to {target} after {int(args.timeout)}s."
             )
             return 0
 
         current = fingerprint(STATE_PATH)
 
-        # A new RELAY-FEEDBACK.md means Antigravity halted to report a problem.
-        # That is a hand-back even if the state file has not caught up.
+        # A new RELAY-FEEDBACK.md means builder halted to report a problem.
         if os.path.exists(FEEDBACK_PATH) and not feedback_at_start:
-            emit("RELAY: RELAY-FEEDBACK.md appeared — Antigravity halted with a problem to read.")
+            emit("RELAY: RELAY-FEEDBACK.md appeared — builder halted with a problem.")
             return 0
 
         if current != baseline:
@@ -104,14 +116,12 @@ def main() -> int:
             phase = state.get("phase", "?")
             slice_id = state.get("slice", "?")
 
-            if ready_for == "CLAUDE":
+            if ready_for == target:
                 emit(
-                    f"RELAY: token is back with Claude. phase={phase} slice={slice_id}. "
-                    "Review the working tree, run the suite, commit, write the next brief."
+                    f"RELAY: token is back with {target}. phase={phase} slice={slice_id}."
                 )
                 return 0
 
-            # Some other write (usually Claude's own hand-off). Re-baseline and keep waiting.
             baseline = current
 
         time.sleep(args.interval)
