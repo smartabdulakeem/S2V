@@ -1,0 +1,84 @@
+{
+  "timestamp": "2026-09-04T10:39:25Z",
+  "film": "Before Adam",
+  "totalDuration": 1159.6770000000006,
+  "slice_i": {
+    "space_playback": {
+      "paused_before": true,
+      "paused_after": false,
+      "paused_restored": true,
+      "success": true
+    },
+    "arrow_right": {
+      "initial": 10,
+      "after_1s_nudge": 11,
+      "after_5s_nudge": 16,
+      "delta_1s": 1,
+      "delta_5s": 5,
+      "success": true
+    },
+    "picture_stepping": {
+      "pic0_startsAt": 0,
+      "pic1_startsAt": 14.240999999999998,
+      "pic2_startsAt": 31.457,
+      "picBack_startsAt": 14.240999999999998,
+      "success": true
+    },
+    "home_and_end": {
+      "home_playhead": 0,
+      "end_playhead": 1159.6770000000006,
+      "total": 1159.6770000000006,
+      "success": true
+    },
+    "jkl_shuttle": {
+      "initial_20s": 20.0,
+      "after_j": 18,
+      "l_playing": true,
+      "k_paused": true,
+      "success": true
+    },
+    "input_guard": {
+      "active_element": "TEXTAREA",
+      "playhead_before": 18.552447,
+      "playhead_after": 18.552447,
+      "success": true
+    },
+    "key_3_stage_nav": {
+      "active_element_id": "tl-scroll",
+      "timeline_data_on": "1",
+      "success": true
+    }
+  },
+  "slice_j": {
+    "mid_film_zoom_anchoring": {
+      "playhead": 579.8385000000003,
+      "zoom_before": 8,
+      "zoom_after": 30,
+      "scrollLeft_before": 4350.66650390625,
+      "scrollLeft_after": 17107.333984375,
+      "screen_x_before": 288.04149609375236,
+      "screen_x_after": 287.82101562500975,
+      "drift_px": 0.22048046874260763,
+      "success": true
+    },
+    "key_0_fit": {
+      "resulting_tlZoom": 1,
+      "lanes_scrollWidth": 1160,
+      "scroll_clientWidth": 823,
+      "actually_fits": false,
+      "note": "Fit clamped to 1.0 due to [1, 60] floor; Slice K Job 3 fixes this by lowering floor to 0.2"
+    }
+  },
+  "job_2_tail_drift_baseline": {
+    "playhead": 1149.6770000000006,
+    "zoom_from": 1,
+    "zoom_to": 60,
+    "scrollLeft_before": 336.6666564941406,
+    "scrollLeft_after": 68167.3359375,
+    "max_scrollLeft_possible": 68758,
+    "screen_x_before": 813.01034350586,
+    "screen_x_after": 813.284062500039,
+    "drift_px": 0.2737189941790348,
+    "note": "Browser clamped scrollLeft to scrollWidth - clientWidth, causing playhead screen position to drift. Slice K Job 2 addresses this."
+  }
+}
