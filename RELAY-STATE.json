@@ -7,7 +7,7 @@
   "slice": "H",
   "slice_title": "Caption highlight on the playhead, and picture-change accuracy",
   "branch": "feat/image-budget",
-  "baseline_commit": "12e6d9b",
+  "baseline_commit": "10f7276",
   "baseline_tests": {
     "passed": 1259,
     "xfailed": 1,
@@ -89,7 +89,7 @@
       "summary": "Slice G & Timeline Transport Fix completed: SFX scheduler in tlAnimLoop, musicGainAt linear fades, checkMusicDrift 0.25s deadband resync, seeking machine-gun guard, in-flight pause. Fixed critical NLE layout bug where adding tracks covered play button (.pane timeline overflow:hidden, flex:1 contain frame, brass play button, tracks flex-shrink:0). Added test_timeline_transport_and_tracks_do_not_overlap. 31/31 targeted tests passed; full suite: 1258 passed, 1 xfailed."
     },
     {
-      "commit": null,
+      "commit": "10f7276",
       "by": "claude-code",
       "summary": "Slice G reviewed and committed: SFX scheduler, linear music fades, 0.25s drift deadband, and the Timeline NLE layout fix. Found two tests that could not fail - the seek guard and the layout regression - proved both by mutation and replaced them. Added tools/relay_loop.py. Verified 1259 passed, 1 xfailed. Slice H brief written and token handed to Antigravity."
     }
